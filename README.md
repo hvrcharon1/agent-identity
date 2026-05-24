@@ -1,4 +1,22 @@
-# Agent Identity & Auth Patterns
+<p align="center">
+  <img src="assets/logo.svg" alt="Agent Identity — by Datacules LLC" width="520"/>
+</p>
+
+<p align="center">
+  <strong>Agent Identity & Auth Patterns</strong><br/>
+  <sub>A provider-agnostic framework by <a href="https://datacules.com">Datacules LLC</a></sub>
+</p>
+
+<p align="center">
+  <a href="LICENSE">
+    <img src="https://img.shields.io/badge/license-Datacules%20Open%20Source-black?style=flat-square" alt="License"/>
+  </a>
+  <a href="https://github.com/hvrcharon1/agent-identity/stargazers">
+    <img src="https://img.shields.io/github/stars/hvrcharon1/agent-identity?style=flat-square&color=black" alt="Stars"/>
+  </a>
+</p>
+
+---
 
 A provider-agnostic framework for AI agents that act on behalf of users and services — with precise, auditable credential routing.
 
@@ -25,6 +43,8 @@ This app makes those decisions explicit, configurable, and auditable — across 
 
 ```
 agent-identity/
+├── assets/
+│   └── logo.svg              # Datacules brand mark
 ├── src/
 │   ├── app/                  # Next.js app router pages
 │   │   ├── layout.tsx
@@ -100,3 +120,7 @@ Adapters in `src/lib/providers.ts` normalize credential injection across provide
 - The AI model layer never receives raw credentials
 - Every agent action is tagged with the resolved identity for audit
 - Least-privilege: user-delegated tokens are scoped to what that user already has
+
+## License
+
+Copyright © 2026 Datacules LLC. Released under the [Datacules Open Source License](LICENSE) — permissive, commercial-friendly, no copyleft requirement.
