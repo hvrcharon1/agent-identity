@@ -1,0 +1,110 @@
+Datacules Agent Identity License — Version 1.0
+Copyright (c) 2026 Datacules LLC. All rights reserved.
+
+─────────────────────────────────────────────────────────────────────────────
+PREAMBLE
+─────────────────────────────────────────────────────────────────────────────
+
+This software — Agent Identity & Auth Patterns — is developed and owned by
+Datacules LLC. It is made available to the public as open-source software
+under the permissive terms below, which are modelled after the Python
+Software Foundation (PSF) License Version 2.
+
+Datacules LLC retains ownership and authorship of this software while
+granting broad, royalty-free rights for anyone to use, copy, modify, and
+distribute it — in commercial or non-commercial contexts — without requiring
+that derivative works also become open source.
+
+─────────────────────────────────────────────────────────────────────────────
+TERMS AND CONDITIONS
+─────────────────────────────────────────────────────────────────────────────
+
+1. PERMISSION TO USE
+
+   Permission is hereby granted, free of charge, to any person or
+   organization obtaining a copy of this software and associated
+   documentation files (the "Software"), to use, copy, modify, merge,
+   publish, distribute, sublicense, and/or sell copies of the Software,
+   and to permit persons to whom the Software is furnished to do so,
+   subject to the conditions below.
+
+2. ATTRIBUTION
+
+   a. Redistributions of source code must retain this copyright notice,
+      this list of conditions, and the disclaimer below.
+
+   b. Redistributions in binary form or as a product must reproduce this
+      copyright notice, this list of conditions, and the disclaimer in the
+      documentation and/or other materials provided with the distribution.
+
+   c. Neither the name "Datacules LLC" nor the names of its contributors
+      may be used to endorse or promote products derived from this Software
+      without prior written permission from Datacules LLC.
+
+3. COMMERCIAL USE
+
+   Use of this Software in commercial products, SaaS platforms, internal
+   enterprise tools, or any revenue-generating context is explicitly
+   permitted without royalty, fee, or additional licensing agreement,
+   provided that the conditions in Section 2 (Attribution) are met.
+
+4. NO COPYLEFT / NO VIRAL REQUIREMENT
+
+   This license does NOT require that derivative works, modifications,
+   or software that uses or embeds this Software be made open source.
+   You may incorporate this Software into proprietary or closed-source
+   products under your own license terms.
+
+5. MODIFICATIONS
+
+   Modified versions of the Software may be distributed under the same
+   terms as this license or under any other permissive open-source
+   license (e.g. MIT, Apache 2.0, BSD), provided that:
+
+   a. The original copyright notice of Datacules LLC is preserved.
+   b. Modifications are clearly documented and distinguished from the
+      original work.
+
+6. COMPATIBILITY
+
+   This license is compatible with other permissive open-source licenses
+   such as MIT, BSD 2-Clause, BSD 3-Clause, and Apache License 2.0. It
+   is also GPL-compatible — this Software may coexist with GPL-licensed
+   code, though this Software itself is not distributed under the GPL.
+
+─────────────────────────────────────────────────────────────────────────────
+DISCLAIMER
+─────────────────────────────────────────────────────────────────────────────
+
+THIS SOFTWARE IS PROVIDED BY DATACULES LLC AND CONTRIBUTORS "AS IS" AND
+ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE,
+AND NON-INFRINGEMENT ARE DISCLAIMED.
+
+IN NO EVENT SHALL DATACULES LLC OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT,
+INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+(INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
+ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
+THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+─────────────────────────────────────────────────────────────────────────────
+SUMMARY (non-binding)
+─────────────────────────────────────────────────────────────────────────────
+
+  ✔  Use freely — commercial, proprietary, or open-source projects
+  ✔  Modify and distribute with or without changes
+  ✔  Sell products built on this Software
+  ✔  No royalties or fees
+  ✔  No requirement to open-source your own code
+  ✔  Attribution to Datacules LLC required in source and binary distributions
+  ✗  Do not use "Datacules LLC" to endorse derived products without permission
+
+─────────────────────────────────────────────────────────────────────────────
+CONTACT
+─────────────────────────────────────────────────────────────────────────────
+
+Datacules LLC
+For licensing enquiries: legal@datacules.com
+Product: https://github.com/hvrcharon1/agent-identity
