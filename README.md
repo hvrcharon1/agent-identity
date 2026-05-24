@@ -20,6 +20,32 @@
 
 ---
 
+## 🔍 Picture this
+
+> Your AI agent just modified 47 files, sent 3 emails, and closed 2 Linear tickets.
+>
+> Something went wrong. Your manager asks: **who authorised that?**
+>
+> You check the logs.
+>
+> *The agent did it.*
+>
+> ...That's it. That's all the trail you have.
+
+**This is the identity gap in agentic AI — and it's sitting quietly inside most production agent systems right now.**
+
+When an AI agent acts on behalf of a user, it needs to know three things:
+
+- **Whose identity am I carrying?**
+- **Which credential is appropriate for this specific resource?**
+- **Can I be audited, traced, and held accountable for this action?**
+
+Without explicit answers, you get silent privilege escalation, raw credentials in context windows, and action chains that are completely anonymous across multi-agent pipelines.
+
+So we built something to solve it: **`agent-identity`** — open-source, provider-agnostic, built for production.
+
+---
+
 > **AI agents are executing real actions — merging code, modifying databases, sending emails, calling APIs on behalf of real people. The question of *who* the agent is acting as, and *with which credentials*, is no longer academic. It is a production-grade engineering concern.**
 
 A provider-agnostic framework for AI agents that act on behalf of users and services — with precise, auditable credential routing. Works with OpenAI, Anthropic, Gemini, Mistral, and local models out of the box.
@@ -47,17 +73,19 @@ Without an explicit answer to all three, you get one of these failure modes in p
 
 ## The two patterns that cover most real-world cases
 
-### Pattern 1 — Fixed credential (shared resource access)
+### 🔴 Pattern 1 — Fixed credential (shared resource access)
 
 ```
 User 1 ─┐
-User 2 ──▶  [ AI Agent ]  ──▶  Fixed Auth  ──▶  Linear board
+User 2 ──▶  [ AI Agent ]  ──▶  Fixed Auth  ──▶  Shared task board
 User 3 ─┘                                        (all users have same access)
 ```
 
-All users interact through the same agent, which authenticates to the downstream resource using a single shared service account. The right choice when all users are peers — shared task boards, internal wikis, analytics dashboards. Simple, low-overhead, but supplement with request-level audit logging since the credential itself carries no per-user signal.
+One agent, one shared credential, one downstream resource. All users are equal. Perfect for shared tools — task boards, internal wikis, analytics dashboards. Zero per-user complexity.
 
-### Pattern 2 — Individual user auth (variable access)
+Simple and low-overhead, but supplement with request-level audit logging since the credential itself carries no per-user signal.
+
+### 🟢 Pattern 2 — Individual user auth (variable access)
 
 ```
 User 1 ──[ User 1 Auth ]─┐
@@ -65,13 +93,26 @@ User 2 ──[ User 2 Auth ]──▶  [ AI Agent ]  ──▶  Individual User 
 User 3 ──[ User 3 Auth ]─┘                                                   (variable document access)
 ```
 
-Each user brings their own token. The agent forwards or scopes it — it cannot do more than that user is already permitted to do. The right choice wherever users have different entitlements: personal files, role-gated documents, HR systems, financial data. More credential management overhead, but the only architecturally sound choice when access levels differ.
+Each user brings their own token. The agent can only do what that user is already allowed to do. Perfect for anything with variable access — knowledge bases, personal data, financial systems.
+
+More credential management overhead, but the only architecturally sound choice when access levels differ.
 
 These two patterns, plus **hybrid / context-switched** (both in one workflow) and **token exchange / impersonation** (OAuth STS), cover the full space of real-world agentic auth requirements.
 
 ---
 
+## The framework wraps both patterns in a credential routing engine that
+
+- 🔒 **Never exposes raw credentials to the model layer**
+- 🏷️ **Tags every agent action with a traceable human principal**
+- ⚖️ **Enforces least-privilege by architecture, not by convention**
+- 🔌 **Plugs into OpenAI, Anthropic, Gemini, Mistral, or any local model**
+
+---
+
 ## Why this matters right now
+
+> The teams who build the identity and accountability layer now will be the ones who scale confidently — while others scramble to retrofit governance onto systems that were never designed for it.
 
 ### The pace of agentic AI adoption is outrunning its infrastructure
 
@@ -154,7 +195,7 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000).
 
-The Decision Helper wizard (`/decide`) walks you through three questions — variable access levels, mixed resource types, per-user audit requirements — and recommends the right auth pattern for your use case.
+The Decision Helper wizard walks you through three questions — variable access levels, mixed resource types, per-user audit requirements — and recommends the right auth pattern for your use case.
 
 ---
 
@@ -174,16 +215,17 @@ agent-identity/
 │   │   └── decide/               # Decision helper wizard
 │   ├── components/
 │   │   ├── ui/                   # Shared UI primitives
-│   │   ├── IdentityCard.tsx
-│   │   ├── PatternRow.tsx
 │   │   ├── FlowDiagram.tsx
-│   │   ├── CredentialVault.tsx
-│   │   └── DecisionHelper.tsx
+│   │   ├── IdentitiesTab.tsx
+│   │   ├── PatternsTab.tsx
+│   │   ├── CredentialsTab.tsx
+│   │   └── DecisionTab.tsx
 │   ├── lib/
 │   │   ├── types.ts              # Core type definitions
 │   │   ├── patterns.ts           # Auth pattern definitions
 │   │   ├── credentials.ts        # Credential store abstraction
 │   │   ├── router.ts             # Credential routing engine
+│   │   ├── decision.ts           # Decision helper logic
 │   │   └── providers.ts          # AI provider adapters
 │   └── hooks/
 │       ├── useIdentity.ts
@@ -211,10 +253,10 @@ import type { RoutingRule } from '@/lib/types';
 
 const rule: RoutingRule = {
   id: 'rule-personal-docs',
-  resourceKind: 'personal',        // 'shared' | 'personal'
+  resourceKind: 'personal',         // 'shared' | 'personal'
   credentialKind: 'user-delegated', // 'fixed' | 'user-delegated'
   credentialRef: 'user-oauth-ref',  // opaque slot identifier — never a raw secret
-  description: 'Use the calling user\'s own token for personal document access.',
+  description: "Use the calling user's own token for personal document access.",
 };
 ```
 
@@ -233,6 +275,14 @@ The router matches on `resourceKind`, resolves the credential ref server-side, i
 | Local models | `local` | `examples/hybrid-routing/` |
 
 Implement `ProviderAdapter` to add any provider in minutes.
+
+---
+
+## Star it. Fork it. Tell us what pattern you're missing.
+
+Built at **Datacules LLC** 🤖 — [datacules.com](https://datacules.com)
+
+`#AIAgents` `#OpenSource` `#AgentIdentity` `#LLMSecurity` `#MultiAgentSystems` `#AIEngineering` `#FutureOfAI` `#DevSecOps` `#Accountability` `#TrustInAI`
 
 ---
 
