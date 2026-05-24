@@ -55,3 +55,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - CI pipeline: type-check, lint, build, smoke test
 - Datacules open-source license
 - Logo and branding assets
+
+---
+
+<!-- ci: triggered May 25 2026 — verify all 14 enhancement findings -->
