@@ -4,7 +4,7 @@
  * Run with: npm test
  * Watch mode: npm run test:watch
  */
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { createRouter } from './router';
 import { DEFAULT_CREDENTIALS, DEFAULT_ROUTING_RULES } from './credentials';
 import type { AgentRequestContext, Credential, RoutingRule } from './types';
@@ -101,10 +101,10 @@ describe('CredentialRouter — multi-field matching & priority (Finding #2)', ()
     expect(result?.credentialId).toBe('cred-read');
   });
 
-  it('returns null when action does not match any rule', () => {
+  it('falls back to read rule when action=delete (write rule does not match)', () => {
     const result = router.resolve(ctx({ resourceKind: 'shared', action: 'delete' }));
-    // rule-read has no matchAction so it still matches — only rule-write has matchAction:'write'
-    // rule-read (priority 10) matches, rule-write does not (write != delete)
+    // rule-write has matchAction:'write' so it does NOT match 'delete'
+    // rule-read has no matchAction so it matches any action
     expect(result?.credentialId).toBe('cred-read');
   });
 });
@@ -118,7 +118,7 @@ describe('CredentialRouter — expired credential (Finding #7)', () => {
       scope: 'all',
       status: 'active',
       ref: 'expired-ref',
-      expiresAt: '2020-01-01T00:00:00.000Z', // definitely in the past
+      expiresAt: '2020-01-01T00:00:00.000Z',
     },
   ];
 
