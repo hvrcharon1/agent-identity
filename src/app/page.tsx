@@ -1,42 +1,83 @@
 'use client';
 
 import { useState } from 'react';
-import { Shield, Key, GitBranch, HelpCircle, Cpu } from 'lucide-react';
 import { IdentitiesTab } from '@/components/IdentitiesTab';
 import { PatternsTab } from '@/components/PatternsTab';
 import { CredentialsTab } from '@/components/CredentialsTab';
 import { DecisionTab } from '@/components/DecisionTab';
 import type { SupportedProvider } from '@/lib/types';
 
+// ─── Inline SVG tab icons — no lucide-react needed ──────────────────────────
+function IconShield({ className }: { className?: string }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
+      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+    </svg>
+  );
+}
+function IconKey({ className }: { className?: string }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
+      <circle cx="7.5" cy="15.5" r="5.5"/><path d="m21 2-9.6 9.6"/><path d="m15.5 7.5 3 3L22 7l-3-3"/>
+    </svg>
+  );
+}
+function IconGitBranch({ className }: { className?: string }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
+      <line x1="6" y1="3" x2="6" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/>
+    </svg>
+  );
+}
+function IconHelpCircle({ className }: { className?: string }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
+      <circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+    </svg>
+  );
+}
+function IconCpu({ className }: { className?: string }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
+      <rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/>
+      <line x1="9" y1="1" x2="9" y2="4"/><line x1="15" y1="1" x2="15" y2="4"/>
+      <line x1="9" y1="20" x2="9" y2="23"/><line x1="15" y1="20" x2="15" y2="23"/>
+      <line x1="20" y1="9" x2="23" y2="9"/><line x1="20" y1="14" x2="23" y2="14"/>
+      <line x1="1" y1="9" x2="4" y2="9"/><line x1="1" y1="14" x2="4" y2="14"/>
+    </svg>
+  );
+}
+
 const TABS = [
-  { id: 'identities', label: 'Identity types', icon: Shield },
-  { id: 'patterns', label: 'Auth patterns', icon: GitBranch },
-  { id: 'credentials', label: 'Credentials', icon: Key },
-  { id: 'decide', label: 'Decision helper', icon: HelpCircle },
+  { id: 'identities', label: 'Identity types',   Icon: IconShield    },
+  { id: 'patterns',   label: 'Auth patterns',     Icon: IconGitBranch },
+  { id: 'credentials',label: 'Credentials',       Icon: IconKey       },
+  { id: 'decide',     label: 'Decision helper',   Icon: IconHelpCircle},
 ] as const;
 
 type TabId = (typeof TABS)[number]['id'];
 
 const PROVIDERS: { id: SupportedProvider; label: string }[] = [
-  { id: 'openai', label: 'OpenAI' },
-  { id: 'anthropic', label: 'Anthropic' },
-  { id: 'gemini', label: 'Gemini' },
-  { id: 'mistral', label: 'Mistral' },
-  { id: 'local', label: 'Local / self-hosted' },
+  { id: 'openai',    label: 'OpenAI'            },
+  { id: 'anthropic', label: 'Anthropic'         },
+  { id: 'gemini',    label: 'Gemini'            },
+  { id: 'mistral',   label: 'Mistral'           },
+  { id: 'local',     label: 'Local / self-hosted'},
 ];
 
 export default function Home() {
-  const [activeTab, setActiveTab] = useState<TabId>('identities');
+  const [activeTab, setActiveTab]           = useState<TabId>('identities');
   const [activeProvider, setActiveProvider] = useState<SupportedProvider | 'any'>('any');
 
   return (
     <main className="min-h-screen">
       <div className="max-w-3xl mx-auto px-6 py-10">
+
         {/* Header */}
         <div className="mb-8">
           <div className="flex items-center gap-3 mb-3">
             <div className="w-9 h-9 rounded-lg bg-brand-600 flex items-center justify-center">
-              <Cpu className="w-5 h-5 text-white" />
+              <IconCpu className="w-5 h-5 text-white" />
             </div>
             <h1 className="text-2xl font-semibold tracking-tight">Agent identity &amp; auth</h1>
           </div>
@@ -77,11 +118,12 @@ export default function Home() {
 
         {/* Tabs */}
         <div className="border-b border-gray-200 mb-6">
-          <nav className="flex gap-1">
-            {TABS.map(({ id, label, icon: Icon }) => (
+          <nav className="flex gap-1" aria-label="Main navigation">
+            {TABS.map(({ id, label, Icon }) => (
               <button
                 key={id}
                 onClick={() => setActiveTab(id)}
+                aria-current={activeTab === id ? 'page' : undefined}
                 className={`flex items-center gap-1.5 px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
                   activeTab === id
                     ? 'border-gray-900 text-gray-900'
@@ -96,10 +138,11 @@ export default function Home() {
         </div>
 
         {/* Tab content */}
-        {activeTab === 'identities' && <IdentitiesTab />}
-        {activeTab === 'patterns' && <PatternsTab />}
+        {activeTab === 'identities'  && <IdentitiesTab />}
+        {activeTab === 'patterns'    && <PatternsTab />}
         {activeTab === 'credentials' && <CredentialsTab />}
-        {activeTab === 'decide' && <DecisionTab />}
+        {activeTab === 'decide'      && <DecisionTab />}
+
       </div>
     </main>
   );
