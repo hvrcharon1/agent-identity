@@ -25,18 +25,30 @@ import type {
 // ─── In-memory CredentialStore (default for local dev) ───────────────────────
 
 export class MemoryCredentialStore implements CredentialStore {
-  constructor(private credentials: Credential[]) {}
+  private readonly creds: Credential[];
+
+  constructor(credentials: Credential[]) {
+    this.creds = credentials;
+  }
+
+  /**
+   * Synchronous lookup used by CredentialRouter.resolve() for the in-memory path.
+   * Returns null when not found or when the credential is inactive.
+   */
+  findByRefSync(ref: string): Credential | null {
+    return this.creds.find((c) => c.ref === ref && c.status === 'active') ?? null;
+  }
 
   async findByRef(ref: string): Promise<Credential | null> {
-    return this.credentials.find((c) => c.ref === ref) ?? null;
+    return this.findByRefSync(ref);
   }
 
   async listActive(): Promise<Credential[]> {
-    return this.credentials.filter((c) => c.status === 'active');
+    return this.creds.filter((c) => c.status === 'active');
   }
 
   async listByKind(kind: Credential['kind']): Promise<Credential[]> {
-    return this.credentials.filter((c) => c.kind === kind);
+    return this.creds.filter((c) => c.kind === kind);
   }
 }
 
@@ -53,6 +65,9 @@ export class CredentialRouter {
    * Resolve the correct credential for an agent request.
    * Returns null if no rule matches or the matched credential is expired/inactive.
    * Rules are scored by priority (highest wins) after all match predicates pass.
+   *
+   * Note: This method is synchronous. It works with MemoryCredentialStore (which
+   * exposes findByRefSync). For async stores (Vault, DB), use POST /api/resolve.
    */
   resolve(ctx: AgentRequestContext): ResolvedCredential | null {
     // Sort matching rules by priority descending — highest-priority rule wins
@@ -63,12 +78,17 @@ export class CredentialRouter {
     const rule = matching[0];
     if (!rule) return null;
 
-    // Synchronous resolve from in-memory store (async stores use the API route)
+    // Use the sync lookup path on MemoryCredentialStore.
     // For async stores, use the /api/resolve route instead.
-    const creds = (this.store as MemoryCredentialStore)['credentials'] as Credential[] | undefined;
-    const cred = creds?.find(
-      (c) => c.ref === rule.credentialRef && c.status === 'active'
-    );
+    if (!(this.store instanceof MemoryCredentialStore)) {
+      console.warn(
+        '[CredentialRouter] resolve() is synchronous but store is not a MemoryCredentialStore. ' +
+        'Use POST /api/resolve for async credential stores.'
+      );
+      return null;
+    }
+
+    const cred = this.store.findByRefSync(rule.credentialRef);
     if (!cred) return null;
 
     // Finding #7: Reject expired credentials

@@ -9,7 +9,7 @@
  *   Browser → POST /api/resolve → Server resolves ref → encrypted store → AI provider
  */
 import { NextRequest, NextResponse } from 'next/server';
- import { createRouter } from '@/lib/router';
+import { createRouter } from '@/lib/router';
 import { getServerCredentials, getServerRules } from '@/lib/server/credentialStore';
 import type { AgentRequestContext } from '@/lib/types';
 
