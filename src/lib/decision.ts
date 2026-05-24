@@ -11,7 +11,7 @@ export function computeDecision(answers: DecisionAnswers): DecisionResult | null
       pattern: 'context-switched',
       label: 'Hybrid (context-switched)',
       explanation:
-        'Your agent needs both fixed credentials for shared resources and user-delegated tokens for personal data. Set explicit routing rules so the agent always knows which to use.',
+        "Your agent needs both fixed credentials for shared resources and user-delegated tokens for personal data. Set explicit routing rules so the agent always knows which to use.",
     };
   }
 
@@ -20,7 +20,7 @@ export function computeDecision(answers: DecisionAnswers): DecisionResult | null
       pattern: 'individual-user-auth',
       label: 'Individual user auth',
       explanation:
-        'Users have different access levels, so each request must carry that user's own token. The agent passes it through; the downstream resource enforces the ACL.',
+        "Users have different access levels, so each request must carry that user's own token. The agent passes it through; the downstream resource enforces the ACL.",
     };
   }
 
@@ -29,7 +29,7 @@ export function computeDecision(answers: DecisionAnswers): DecisionResult | null
       pattern: 'fixed-credential',
       label: 'Fixed credential',
       explanation:
-        'All users are equal and audit trail isn't critical. A single service account keeps setup simple. Store the key encrypted; never pass it to the model layer.',
+        "All users are equal and audit trail isn't critical. A single service account keeps setup simple. Store the key encrypted; never pass it to the model layer.",
     };
   }
 
@@ -38,7 +38,7 @@ export function computeDecision(answers: DecisionAnswers): DecisionResult | null
       pattern: 'fixed-credential',
       label: 'Fixed credential + request tagging',
       explanation:
-        'Use a shared service account, but tag each request with the calling user's ID in your own logs. Gives you the simplicity of a fixed credential with an audit trail layer above it.',
+        "Use a shared service account, but tag each request with the calling user's ID in your own logs. Gives you the simplicity of a fixed credential with an audit trail layer above it.",
     };
   }
 
