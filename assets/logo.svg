@@ -1,0 +1,62 @@
+<svg width="640" height="240" viewBox="0 0 640 240" xmlns="http://www.w3.org/2000/svg" role="img">
+  <title>Agent Identity — by Datacules LLC</title>
+  <desc>Geometric hexagonal identity mark with nested rings and a central lock node, beside the wordmark agent identity and by Datacules LLC.</desc>
+
+  <g transform="translate(110,120)">
+
+    <polygon points="0,-88 76,-44 76,44 0,88 -76,44 -76,-44"
+      fill="none" stroke="#cccccc" stroke-width="1"/>
+
+    <polygon points="0,-64 55,-32 55,32 0,64 -55,32 -55,-32"
+      fill="none" stroke="#b0b0b0" stroke-width="1"/>
+
+    <polygon points="0,-40 35,-20 35,20 0,40 -35,20 -35,-20"
+      fill="#f4f4f4" stroke="#aaaaaa" stroke-width="1"/>
+
+    <line x1="0" y1="-88" x2="0" y2="-64" stroke="#cccccc" stroke-width="0.5"/>
+    <line x1="76" y1="-44" x2="55" y2="-32" stroke="#cccccc" stroke-width="0.5"/>
+    <line x1="76" y1="44" x2="55" y2="32" stroke="#cccccc" stroke-width="0.5"/>
+    <line x1="0" y1="88" x2="0" y2="64" stroke="#cccccc" stroke-width="0.5"/>
+    <line x1="-76" y1="44" x2="-55" y2="32" stroke="#cccccc" stroke-width="0.5"/>
+    <line x1="-76" y1="-44" x2="-55" y2="-32" stroke="#cccccc" stroke-width="0.5"/>
+
+    <circle cx="0" cy="-88" r="5" fill="#1a1a1a"/>
+    <circle cx="76" cy="-44" r="5" fill="#1a1a1a"/>
+    <circle cx="76" cy="44" r="5" fill="#1a1a1a"/>
+    <circle cx="0" cy="88" r="5" fill="#1a1a1a"/>
+    <circle cx="-76" cy="44" r="5" fill="#1a1a1a"/>
+    <circle cx="-76" cy="-44" r="5" fill="#1a1a1a"/>
+
+    <circle cx="0" cy="-64" r="3.5" fill="#1a1a1a"/>
+    <circle cx="55" cy="-32" r="3.5" fill="#1a1a1a"/>
+    <circle cx="55" cy="32" r="3.5" fill="#1a1a1a"/>
+    <circle cx="0" cy="64" r="3.5" fill="#1a1a1a"/>
+    <circle cx="-55" cy="32" r="3.5" fill="#1a1a1a"/>
+    <circle cx="-55" cy="-32" r="3.5" fill="#1a1a1a"/>
+
+    <rect x="-10" y="-14" width="20" height="17" rx="2" fill="#1a1a1a"/>
+    <path d="M-6,-14 L-6,-19 Q0,-25 6,-19 L6,-14"
+      fill="none" stroke="#1a1a1a" stroke-width="2.5" stroke-linecap="round"/>
+    <circle cx="0" cy="-5" r="2.5" fill="#f4f4f4"/>
+    <rect x="-0.8" y="-5" width="1.6" height="5" rx="0.8" fill="#f4f4f4"/>
+
+  </g>
+
+  <line x1="222" y1="44" x2="222" y2="196" stroke="#e0e0e0" stroke-width="0.5"/>
+
+  <text x="244" y="102"
+    font-family="'Inter','Helvetica Neue',Arial,sans-serif"
+    font-size="38" font-weight="300" letter-spacing="-0.5"
+    fill="#111111">agent</text>
+
+  <text x="244" y="148"
+    font-family="'Inter','Helvetica Neue',Arial,sans-serif"
+    font-size="38" font-weight="600" letter-spacing="-0.5"
+    fill="#111111">identity</text>
+
+  <text x="245" y="174"
+    font-family="'Inter','Helvetica Neue',Arial,sans-serif"
+    font-size="13" font-weight="400" letter-spacing="3"
+    fill="#999999">BY DATACULES LLC</text>
+
+</svg>
