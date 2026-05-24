@@ -4,36 +4,38 @@ import { useState } from 'react';
 import { FlowDiagram } from './FlowDiagram';
 import type { IdentityType, FlowNode } from '@/lib/types';
 
-// Inline SVG icon components — no lucide-react dependency needed at runtime
-function IconUserCheck({ className }: { className?: string }) {
+type IconProps = { className?: string };
+
+function IconUserCheck({ className }: IconProps) {
   return (
     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
       <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><polyline points="16 11 18 13 22 9"/>
     </svg>
   );
 }
-function IconLock({ className }: { className?: string }) {
+function IconLock({ className }: IconProps) {
   return (
     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
       <rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
     </svg>
   );
 }
-function IconArrows({ className }: { className?: string }) {
+function IconArrows({ className }: IconProps) {
   return (
     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
       <path d="M8 3 4 7l4 4"/><path d="M4 7h16"/><path d="m16 21 4-4-4-4"/><path d="M20 17H4"/>
     </svg>
   );
 }
-function IconBot({ className }: { className?: string }) {
+function IconBot({ className }: IconProps) {
   return (
     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
-      <path d="M12 8V4H8"/><rect width="16" height="12" x="4" y="8" rx="2"/><path d="M2 14h2"/><path d="M20 14h2"/><path d="M15 13v2"/><path d="M9 13v2"/>
+      <path d="M12 8V4H8"/><rect width="16" height="12" x="4" y="8" rx="2"/>
+      <path d="M2 14h2"/><path d="M20 14h2"/><path d="M15 13v2"/><path d="M9 13v2"/>
     </svg>
   );
 }
-function IconInfo({ className }: { className?: string }) {
+function IconInfo({ className }: IconProps) {
   return (
     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
       <circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/>
@@ -48,7 +50,7 @@ interface IdentityDef {
   description: string;
   useTags: string[];
   avoidTags: string[];
-  Icon: ({ className }: { className?: string }) => JSX.Element;
+  Icon: (props: IconProps) => React.ReactElement;
   iconBg: string;
   iconColor: string;
   flowLabel: string;
@@ -61,86 +63,78 @@ const IDENTITIES: IdentityDef[] = [
     type: 'user-delegated',
     name: 'User-delegated',
     kind: 'Per-user auth',
-    description:
-      "Agent authenticates as the individual user. Each user's tokens, OAuth grants, or API keys are scoped to their own account.",
+    description: "Agent authenticates as the individual user. Each user's tokens, OAuth grants, or API keys are scoped to their own account.",
     useTags: ['Variable access', 'Audit trail'],
     avoidTags: ['More setup'],
     Icon: IconUserCheck,
     iconBg: 'bg-blue-50',
     iconColor: 'text-blue-600',
-    flowLabel: 'Auth flow — user-delegated',
+    flowLabel: 'Auth flow - user-delegated',
     flowNodes: [
-      { label: 'User N', sublabel: 'initiates', variant: 'blue' },
-      { label: 'User N Auth', sublabel: 'individual token', variant: 'blue' },
-      { label: 'Agent', sublabel: 'routes cred', variant: 'default' },
-      { label: 'Auth check', sublabel: 'per-user ACL', variant: 'default' },
-      { label: 'Resource', sublabel: "user's scope", variant: 'green' },
+      { label: 'User N',      sublabel: 'initiates',        variant: 'blue'    },
+      { label: 'User N Auth', sublabel: 'individual token', variant: 'blue'    },
+      { label: 'Agent',       sublabel: 'routes cred',      variant: 'default' },
+      { label: 'Auth check',  sublabel: 'per-user ACL',     variant: 'default' },
+      { label: 'Resource',    sublabel: "user's scope",     variant: 'green'   },
     ],
-    alert:
-      "User-delegated auth is best when users have different permissions — each user sees only what they're entitled to.",
+    alert: "User-delegated auth is best when users have different permissions - each user sees only what they're entitled to.",
   },
   {
     type: 'fixed-service',
     name: 'Fixed service',
     kind: 'Shared credential',
-    description:
-      'Agent uses a single service account or API key. All users share identical access permissions via the agent.',
+    description: 'Agent uses a single service account or API key. All users share identical access permissions via the agent.',
     useTags: ['Simple setup'],
     avoidTags: ['Uniform access', 'Less traceability'],
     Icon: IconLock,
     iconBg: 'bg-red-50',
     iconColor: 'text-red-600',
-    flowLabel: 'Auth flow — fixed service account',
+    flowLabel: 'Auth flow - fixed service account',
     flowNodes: [
-      { label: 'Any user', sublabel: 'any identity', variant: 'default' },
-      { label: 'Agent', sublabel: 'single cred', variant: 'default' },
-      { label: 'Fixed Auth', sublabel: 'shared key', variant: 'red' },
-      { label: 'Shared tool', sublabel: 'same access all', variant: 'green' },
+      { label: 'Any user',    sublabel: 'any identity',    variant: 'default' },
+      { label: 'Agent',       sublabel: 'single cred',     variant: 'default' },
+      { label: 'Fixed Auth',  sublabel: 'shared key',      variant: 'red'     },
+      { label: 'Shared tool', sublabel: 'same access all', variant: 'green'   },
     ],
-    alert:
-      'Fixed credentials are ideal for tools where all users are equal — e.g. a shared task board or internal wiki.',
+    alert: 'Fixed credentials are ideal for tools where all users are equal - e.g. a shared task board or internal wiki.',
   },
   {
     type: 'hybrid',
     name: 'Hybrid',
     kind: 'Context-switched',
-    description:
-      "Agent holds both fixed and user-delegated credentials. It selects which to present based on the task — service account for shared resources, user token for personal data.",
+    description: "Agent holds both fixed and user-delegated credentials. It selects which to present based on the task.",
     useTags: ['Precise', 'Flexible'],
     avoidTags: ['Complex'],
     Icon: IconArrows,
     iconBg: 'bg-amber-50',
     iconColor: 'text-amber-600',
-    flowLabel: 'Auth flow — hybrid (context-switched)',
+    flowLabel: 'Auth flow - hybrid (context-switched)',
     flowNodes: [
-      { label: 'User N', sublabel: 'initiates', variant: 'blue' },
-      { label: 'Agent', sublabel: 'inspects task', variant: 'amber' },
-      { label: 'Route decision', sublabel: 'fixed or delegated?', variant: 'amber' },
-      { label: 'Correct cred', sublabel: 'right tool, right key', variant: 'green' },
+      { label: 'User N',         sublabel: 'initiates',             variant: 'blue'    },
+      { label: 'Agent',          sublabel: 'inspects task',          variant: 'amber'   },
+      { label: 'Route decision', sublabel: 'fixed or delegated?',    variant: 'amber'   },
+      { label: 'Correct cred',   sublabel: 'right tool, right key',  variant: 'green'   },
     ],
-    alert:
-      'Hybrid is the most precise pattern — the agent explicitly decides which credential to use per task.',
+    alert: 'Hybrid is the most precise pattern - the agent explicitly decides which credential to use per task.',
   },
   {
     type: 'agent-as-service',
     name: 'Agent-as-service',
     kind: 'Machine identity',
-    description:
-      'The agent has its own first-class identity — not a user proxy, not a service account. Used in agent-to-agent or multi-agent pipelines.',
+    description: 'The agent has its own first-class identity - not a user proxy, not a service account. Used in multi-agent pipelines.',
     useTags: ['Agent pipelines', 'Non-human flows'],
     avoidTags: ['Niche use'],
     Icon: IconBot,
     iconBg: 'bg-green-50',
     iconColor: 'text-green-600',
-    flowLabel: 'Auth flow — agent-as-service (machine identity)',
+    flowLabel: 'Auth flow - agent-as-service (machine identity)',
     flowNodes: [
-      { label: 'Upstream agent', sublabel: 'caller', variant: 'default' },
-      { label: 'Agent identity', sublabel: 'own principal', variant: 'green' },
-      { label: 'Agent-to-agent auth', sublabel: 'machine token', variant: 'green' },
-      { label: 'Downstream agent', sublabel: 'or API', variant: 'default' },
+      { label: 'Upstream agent',      sublabel: 'caller',         variant: 'default' },
+      { label: 'Agent identity',      sublabel: 'own principal',  variant: 'green'   },
+      { label: 'Agent-to-agent auth', sublabel: 'machine token',  variant: 'green'   },
+      { label: 'Downstream agent',    sublabel: 'or API',         variant: 'default' },
     ],
-    alert:
-      'Agent-as-service identity is used in multi-agent pipelines where no human is the direct principal.',
+    alert: 'Agent-as-service identity is used in multi-agent pipelines where no human is the direct principal.',
   },
 ];
 
