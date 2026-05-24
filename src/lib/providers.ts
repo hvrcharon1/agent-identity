@@ -1,23 +1,12 @@
 import type { ProviderAdapter, ResolvedCredential, SupportedProvider } from './types';
 
-/**
- * Provider adapters normalize how a resolved credential is injected
- * into each AI provider's request format.
- *
- * SECURITY: These adapters receive a credential *reference*, not the
- * raw secret. Your credential vault resolves the ref → actual secret
- * server-side and injects it here. Never log resolved secrets.
- */
-
 const openaiAdapter: ProviderAdapter = {
   id: 'openai',
   label: 'OpenAI',
-  injectCredential(request, credential) {
-    // Attach user identity as a metadata field for audit
+  injectCredential(request: Record<string, unknown>, credential: ResolvedCredential) {
     return {
       ...request,
       user: credential.resolvedFor,
-      // In production: Authorization header is set server-side from credential.ref
       _credentialRef: credential.ref,
     };
   },
@@ -26,12 +15,11 @@ const openaiAdapter: ProviderAdapter = {
 const anthropicAdapter: ProviderAdapter = {
   id: 'anthropic',
   label: 'Anthropic',
-  injectCredential(request, credential) {
+  injectCredential(request: Record<string, unknown>, credential: ResolvedCredential) {
     return {
       ...request,
       metadata: {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        ...(request.metadata as any),
+        ...(request.metadata as Record<string, unknown>),
         user_id: credential.resolvedFor,
         credential_ref: credential.ref,
       },
@@ -42,14 +30,12 @@ const anthropicAdapter: ProviderAdapter = {
 const geminiAdapter: ProviderAdapter = {
   id: 'gemini',
   label: 'Gemini',
-  injectCredential(request, credential) {
+  injectCredential(request: Record<string, unknown>, credential: ResolvedCredential) {
     return {
       ...request,
       generationConfig: {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        ...(request.generationConfig as any),
+        ...(request.generationConfig as Record<string, unknown>),
       },
-      // Credential injected via server-side header resolution
       _meta: { credentialRef: credential.ref, resolvedFor: credential.resolvedFor },
     };
   },
@@ -58,7 +44,7 @@ const geminiAdapter: ProviderAdapter = {
 const mistralAdapter: ProviderAdapter = {
   id: 'mistral',
   label: 'Mistral',
-  injectCredential(request, credential) {
+  injectCredential(request: Record<string, unknown>, credential: ResolvedCredential) {
     return {
       ...request,
       _meta: { credentialRef: credential.ref, resolvedFor: credential.resolvedFor },
@@ -69,7 +55,7 @@ const mistralAdapter: ProviderAdapter = {
 const localAdapter: ProviderAdapter = {
   id: 'local',
   label: 'Local / self-hosted',
-  injectCredential(request, credential) {
+  injectCredential(request: Record<string, unknown>, credential: ResolvedCredential) {
     return {
       ...request,
       _meta: { credentialRef: credential.ref, resolvedFor: credential.resolvedFor },

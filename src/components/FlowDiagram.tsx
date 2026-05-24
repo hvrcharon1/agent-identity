@@ -1,5 +1,4 @@
 import type { FlowNode } from '@/lib/types';
-import { ArrowRight } from 'lucide-react';
 
 const variantClasses: Record<FlowNode['variant'], string> = {
   default: 'bg-gray-100 text-gray-700 border-gray-200',
@@ -26,7 +25,21 @@ export function FlowDiagram({ label, nodes }: FlowDiagramProps) {
               <p className="text-[10px] opacity-60 whitespace-nowrap">{node.sublabel}</p>
             </div>
             {i < nodes.length - 1 && (
-              <ArrowRight className="w-3.5 h-3.5 text-gray-300 flex-shrink-0" />
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="#d1d5db"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className="flex-shrink-0"
+                aria-hidden="true"
+              >
+                <path d="M5 12h14M12 5l7 7-7 7" />
+              </svg>
             )}
           </div>
         ))}

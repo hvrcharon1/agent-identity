@@ -83,7 +83,7 @@ export function DecisionTab() {
 
       {result && (
         <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
-          <p className="text-sm font-semibold text-blue-900 mb-1">✦ {result.label}</p>
+          <p className="text-sm font-semibold text-blue-900 mb-1">✶ {result.label}</p>
           <p className="text-xs text-blue-700 leading-relaxed">{result.explanation}</p>
         </div>
       )}

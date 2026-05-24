@@ -1,16 +1,44 @@
 'use client';
 
 import { useState } from 'react';
-import { UserCheck, Lock, ArrowLeftRight, Key } from 'lucide-react';
 import { AUTH_PATTERNS } from '@/lib/patterns';
 import { FlowDiagram } from './FlowDiagram';
 import type { AuthPatternType } from '@/lib/types';
 
-const ICONS: Record<AuthPatternType, React.FC<{ className?: string }>> = {
-  'individual-user-auth': UserCheck,
-  'fixed-credential': Lock,
-  'context-switched': ArrowLeftRight,
-  'token-exchange': Key,
+function IconUserCheck({ className }: { className?: string }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
+      <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><polyline points="16 11 18 13 22 9"/>
+    </svg>
+  );
+}
+function IconLock({ className }: { className?: string }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
+      <rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+    </svg>
+  );
+}
+function IconArrows({ className }: { className?: string }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
+      <path d="M8 3 4 7l4 4"/><path d="M4 7h16"/><path d="m16 21 4-4-4-4"/><path d="M20 17H4"/>
+    </svg>
+  );
+}
+function IconKey({ className }: { className?: string }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
+      <circle cx="7.5" cy="15.5" r="5.5"/><path d="m21 2-9.6 9.6"/><path d="m15.5 7.5 3 3L22 7l-3-3"/>
+    </svg>
+  );
+}
+
+const ICONS: Record<AuthPatternType, ({ className }: { className?: string }) => JSX.Element> = {
+  'individual-user-auth': IconUserCheck,
+  'fixed-credential': IconLock,
+  'context-switched': IconArrows,
+  'token-exchange': IconKey,
 };
 
 const ICON_BG: Record<AuthPatternType, string> = {

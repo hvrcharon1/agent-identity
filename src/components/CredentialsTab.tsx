@@ -1,16 +1,51 @@
-import { Info, Database, Mail, CheckCircle2, Clock } from 'lucide-react';
 import { DEFAULT_CREDENTIALS, DEFAULT_ROUTING_RULES } from '@/lib/credentials';
 import type { Credential } from '@/lib/types';
 
-const CRED_ICONS: Record<string, React.FC<{ className?: string }>> = {
-  Linear: ({ className }) => <span className={`text-sm font-bold ${className}`}>L</span>,
-  PostgreSQL: Database,
-  Notion: ({ className }) => <span className={`text-sm font-bold ${className}`}>N</span>,
-  Google: Mail,
+function IconInfo({ className }: { className?: string }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
+      <circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/>
+    </svg>
+  );
+}
+function IconDatabase({ className }: { className?: string }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
+      <ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5V19A9 3 0 0 0 21 19V5"/><path d="M3 12A9 3 0 0 0 21 12"/>
+    </svg>
+  );
+}
+function IconMail({ className }: { className?: string }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
+      <rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>
+    </svg>
+  );
+}
+function IconCheck({ className }: { className?: string }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
+      <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>
+    </svg>
+  );
+}
+function IconClock({ className }: { className?: string }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
+      <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+    </svg>
+  );
+}
+
+const PROVIDER_ICONS: Record<string, ({ className }: { className?: string }) => JSX.Element> = {
+  Linear: ({ className }) => <span className={`text-sm font-bold leading-none ${className ?? ''}`}>L</span>,
+  PostgreSQL: IconDatabase,
+  Notion: ({ className }) => <span className={`text-sm font-bold leading-none ${className ?? ''}`}>N</span>,
+  Google: IconMail,
 };
 
 function CredRow({ cred }: { cred: Credential }) {
-  const Icon = CRED_ICONS[cred.provider ?? ''] ?? Database;
+  const Icon = PROVIDER_ICONS[cred.provider ?? ''] ?? IconDatabase;
   return (
     <div className="flex items-center gap-3 bg-white border border-gray-200 rounded-lg px-4 py-3">
       <div
@@ -27,12 +62,12 @@ function CredRow({ cred }: { cred: Credential }) {
       <div className="flex items-center gap-1.5 text-xs">
         {cred.status === 'active' ? (
           <>
-            <CheckCircle2 className="w-3.5 h-3.5 text-green-500" />
+            <IconCheck className="text-green-500" />
             <span className="text-gray-400">Active</span>
           </>
         ) : (
           <>
-            <Clock className="w-3.5 h-3.5 text-gray-400" />
+            <IconClock className="text-gray-400" />
             <span className="text-gray-400">Pending</span>
           </>
         )}
@@ -48,7 +83,7 @@ export function CredentialsTab() {
   return (
     <div className="space-y-5">
       <div className="flex gap-2 p-3 rounded-lg bg-blue-50 text-blue-700">
-        <Info className="w-4 h-4 flex-shrink-0 mt-0.5" />
+        <IconInfo className="w-4 h-4 flex-shrink-0 mt-0.5" />
         <p className="text-xs leading-relaxed">
           Credentials are stored encrypted and never passed to the model. The agent resolves which credential to attach to each outbound call at routing time.
         </p>
