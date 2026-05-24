@@ -3,38 +3,25 @@
 import { useState } from 'react';
 import { AUTH_PATTERNS } from '@/lib/patterns';
 import { FlowDiagram } from './FlowDiagram';
-import type { AuthPatternType } from '@/lib/types';
+// Finding #8: Icons imported from shared source
+import { IconUserCheck, IconLock, IconArrows, IconKey } from '@/components/icons';
+import type { AuthPatternType, SupportedProvider } from '@/lib/types';
 
 type IconProps = { className?: string };
 
-function IconUserCheck({ className }: IconProps) {
-  return (
-    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
-      <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><polyline points="16 11 18 13 22 9"/>
-    </svg>
-  );
+// Finding #6: Accept activeProvider prop
+interface PatternsTabProps {
+  provider?: SupportedProvider | 'any';
 }
-function IconLock({ className }: IconProps) {
-  return (
-    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
-      <rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
-    </svg>
-  );
-}
-function IconArrows({ className }: IconProps) {
-  return (
-    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
-      <path d="M8 3 4 7l4 4"/><path d="M4 7h16"/><path d="m16 21 4-4-4-4"/><path d="M20 17H4"/>
-    </svg>
-  );
-}
-function IconKey({ className }: IconProps) {
-  return (
-    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
-      <circle cx="7.5" cy="15.5" r="5.5"/><path d="m21 2-9.6 9.6"/><path d="m15.5 7.5 3 3L22 7l-3-3"/>
-    </svg>
-  );
-}
+
+// Finding #6: Per-provider injection notes shown when a provider is selected
+const PROVIDER_NOTES: Partial<Record<SupportedProvider, string>> = {
+  openai:    'Inject via Authorization: Bearer header (server-side) + user field in request body for per-user audit.',
+  anthropic: 'Inject via x-api-key header (server-side) + metadata.user_id field for per-user audit trail.',
+  gemini:    'Inject via x-goog-api-key header (server-side). Use labels.user_id in the request body for user tracking.',
+  mistral:   'Inject via Authorization: Bearer header (server-side). Log resolvedFor server-side against the request ID.',
+  local:     'Auth mechanism varies by runtime (Ollama, vLLM, LM Studio). Use network-level controls and server-side logging.',
+};
 
 const ICONS: Record<AuthPatternType, (props: IconProps) => React.ReactElement> = {
   'individual-user-auth': IconUserCheck,
@@ -57,12 +44,24 @@ const ICON_COLOR: Record<AuthPatternType, string> = {
   'token-exchange':       'text-green-600',
 };
 
-export function PatternsTab() {
+export function PatternsTab({ provider = 'any' }: PatternsTabProps) {
   const [selected, setSelected] = useState<AuthPatternType>('individual-user-auth');
   const active = AUTH_PATTERNS.find((p) => p.id === selected)!;
 
+  const providerNote = provider !== 'any' ? PROVIDER_NOTES[provider] : null;
+
   return (
     <div className="space-y-3">
+      {/* Finding #6: Show provider-specific injection note when a provider is selected */}
+      {providerNote && (
+        <div className="flex gap-2 p-3 rounded-lg bg-amber-50 text-amber-800 border border-amber-200">
+          <span className="text-xs font-semibold uppercase tracking-wide flex-shrink-0 mt-0.5">
+            {provider?.toUpperCase()}
+          </span>
+          <p className="text-xs leading-relaxed">{providerNote}</p>
+        </div>
+      )}
+
       {AUTH_PATTERNS.map((pattern) => {
         const Icon = ICONS[pattern.id];
         const isSelected = selected === pattern.id;

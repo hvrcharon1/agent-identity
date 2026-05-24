@@ -4,7 +4,8 @@ import { useState } from 'react';
 import { computeDecision } from '@/lib/decision';
 import type { DecisionAnswers } from '@/lib/types';
 
-const QUESTIONS: { key: keyof DecisionAnswers; text: string; yes: string; no: string }[] = [
+// Finding #9: Added Q4 for token-exchange surface
+const QUESTIONS: { key: keyof DecisionAnswers; text: string; yes: string; no: string; showIf?: (a: DecisionAnswers) => boolean }[] = [
   {
     key:  'variableAccess',
     text: 'Do different users need different levels of access to the same resource?',
@@ -23,28 +24,48 @@ const QUESTIONS: { key: keyof DecisionAnswers; text: string; yes: string; no: st
     yes:  'Critical - we need to know which user caused each action',
     no:   'Not needed - agent-level logging is enough',
   },
+  {
+    // Finding #9: Q4 only shown when variableAccess=true to surface token-exchange
+    key:  'longTermTokenStorage',
+    text: 'Can you store per-user tokens long-term (e.g. in an encrypted DB)?',
+    yes:  'Yes - we can persist user tokens securely',
+    no:   'No - tokens must be obtained at request time only',
+    showIf: (a) => a.variableAccess === true,
+  },
 ];
 
 export function DecisionTab() {
   const [answers, setAnswers] = useState<DecisionAnswers>({
-    variableAccess: null,
-    mixedResources: null,
-    auditRequired:  null,
+    variableAccess:       null,
+    mixedResources:       null,
+    auditRequired:        null,
+    longTermTokenStorage: null,
   });
 
   const result = computeDecision(answers);
 
   function pick(key: keyof DecisionAnswers, value: boolean) {
-    setAnswers((prev) => ({ ...prev, [key]: value }));
+    setAnswers((prev) => {
+      const next = { ...prev, [key]: value };
+      // Reset Q4 if variableAccess is flipped to false
+      if (key === 'variableAccess' && !value) {
+        next.longTermTokenStorage = null;
+      }
+      return next;
+    });
   }
+
+  const visibleQuestions = QUESTIONS.filter(
+    (q) => !q.showIf || q.showIf(answers)
+  );
 
   return (
     <div className="space-y-4">
       <p className="text-sm text-gray-500">
-        Answer three questions and the helper tells you which pattern to use and why.
+        Answer the questions below and the helper tells you which pattern to use and why.
       </p>
 
-      {QUESTIONS.map(({ key, text, yes, no }) => (
+      {visibleQuestions.map(({ key, text, yes, no }) => (
         <div key={key} className="bg-white border border-gray-200 rounded-xl p-4">
           <p className="text-sm font-medium mb-3">{text}</p>
           <div className="space-y-2">

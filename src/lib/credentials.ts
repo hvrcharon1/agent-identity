@@ -10,6 +10,7 @@ export const DEFAULT_CREDENTIALS: Credential[] = [
     status: 'active',
     provider: 'Linear',
     ref: 'linear-service-account-slot',
+    rotationIntervalDays: 90,
   },
   {
     id: 'cred-analytics-db',
@@ -19,6 +20,7 @@ export const DEFAULT_CREDENTIALS: Credential[] = [
     status: 'active',
     provider: 'PostgreSQL',
     ref: 'analytics-db-readonly-slot',
+    rotationIntervalDays: 180,
   },
   {
     id: 'cred-knowledge-base',
@@ -28,6 +30,8 @@ export const DEFAULT_CREDENTIALS: Credential[] = [
     status: 'active',
     provider: 'Notion',
     ref: 'knowledge-base-user-slot',
+    // OAuth access tokens expire in 1h — set expiresAt at token-issue time in production
+    rotationIntervalDays: 0, // OAuth; refreshed on demand via refreshTokenRef
   },
   {
     id: 'cred-gmail',
@@ -37,24 +41,31 @@ export const DEFAULT_CREDENTIALS: Credential[] = [
     status: 'pending',
     provider: 'Google',
     ref: 'gmail-oauth-user-slot',
+    rotationIntervalDays: 0,
   },
 ];
 
+/**
+ * Default routing rules — enhanced with priority and multi-field matching.
+ * Higher priority wins when multiple rules match (Finding #2).
+ */
 export const DEFAULT_ROUTING_RULES: RoutingRule[] = [
   {
     id: 'rule-shared-tools',
-    resourceKind: 'shared',
-    credentialKind: 'fixed',
-    credentialRef: 'linear-service-account-slot',
     description:
       "If task targets a shared tool (Linear, analytics) - use fixed credential. Agent never escalates beyond the credential's own permissions.",
+    matchResourceKind: 'shared',
+    credentialKind: 'fixed',
+    credentialRef: 'linear-service-account-slot',
+    priority: 10,
   },
   {
     id: 'rule-personal-resources',
-    resourceKind: 'personal',
-    credentialKind: 'user-delegated',
-    credentialRef: 'knowledge-base-user-slot',
     description:
       "If task touches personal or variable-access resource - use user-delegated token. Token is resolved from the calling user's identity context at runtime.",
+    matchResourceKind: 'personal',
+    credentialKind: 'user-delegated',
+    credentialRef: 'knowledge-base-user-slot',
+    priority: 10,
   },
 ];

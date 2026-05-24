@@ -1,0 +1,62 @@
+name: Feature request
+description: Propose a new feature or improvement
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for proposing an improvement! Please fill out the sections below.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem description
+      description: What problem does this feature solve? Who is affected?
+      placeholder: As a developer building an agent, I want to ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed solution
+      description: How would you solve it? Include API sketches, type signatures, or UI mockups if helpful.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: What other approaches did you consider, and why did you reject them?
+    validations:
+      required: false
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Affected auth pattern or identity type
+      options:
+        - Individual user auth
+        - Fixed credential
+        - Context-switched / hybrid
+        - Token exchange / impersonation
+        - Agent-as-service
+        - General / cross-cutting
+    validations:
+      required: false
+
+  - type: dropdown
+    id: provider
+    attributes:
+      label: Affected AI provider (if relevant)
+      options:
+        - Not applicable
+        - OpenAI
+        - Anthropic
+        - Gemini
+        - Mistral
+        - Local / self-hosted
+        - All providers
+    validations:
+      required: false

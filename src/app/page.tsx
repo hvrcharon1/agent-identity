@@ -7,7 +7,7 @@ import { CredentialsTab } from '@/components/CredentialsTab';
 import { DecisionTab } from '@/components/DecisionTab';
 import type { SupportedProvider } from '@/lib/types';
 
-// ─── Inline SVG tab icons — no lucide-react needed ──────────────────────────
+// ─── Inline SVG tab icons ────────────────────────────────────────────────────
 function IconShield({ className }: { className?: string }) {
   return (
     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
@@ -137,10 +137,10 @@ export default function Home() {
           </nav>
         </div>
 
-        {/* Tab content */}
+        {/* Tab content — Finding #6: activeProvider wired to PatternsTab + CredentialsTab */}
         {activeTab === 'identities'  && <IdentitiesTab />}
-        {activeTab === 'patterns'    && <PatternsTab />}
-        {activeTab === 'credentials' && <CredentialsTab />}
+        {activeTab === 'patterns'    && <PatternsTab provider={activeProvider} />}
+        {activeTab === 'credentials' && <CredentialsTab provider={activeProvider} />}
         {activeTab === 'decide'      && <DecisionTab />}
 
       </div>

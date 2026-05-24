@@ -1,44 +1,15 @@
 'use client';
 
 import { DEFAULT_CREDENTIALS, DEFAULT_ROUTING_RULES } from '@/lib/credentials';
-import type { Credential } from '@/lib/types';
+// Finding #8: Icons from shared source
+import { IconInfo, IconDatabase, IconMail, IconCheck, IconClock } from '@/components/icons';
+import type { Credential, SupportedProvider } from '@/lib/types';
 
 type IconProps = { className?: string };
 
-function IconInfo({ className }: IconProps) {
-  return (
-    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
-      <circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/>
-    </svg>
-  );
-}
-function IconDatabase({ className }: IconProps) {
-  return (
-    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
-      <ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5V19A9 3 0 0 0 21 19V5"/><path d="M3 12A9 3 0 0 0 21 12"/>
-    </svg>
-  );
-}
-function IconMail({ className }: IconProps) {
-  return (
-    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
-      <rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>
-    </svg>
-  );
-}
-function IconCheck({ className }: IconProps) {
-  return (
-    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
-      <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>
-    </svg>
-  );
-}
-function IconClock({ className }: IconProps) {
-  return (
-    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
-      <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
-    </svg>
-  );
+// Finding #6: Accept activeProvider prop to filter credentials by provider
+interface CredentialsTabProps {
+  provider?: SupportedProvider | 'any';
 }
 
 function LetterBadge({ letter, className }: { letter: string; className?: string }) {
@@ -52,8 +23,23 @@ const PROVIDER_ICONS: Record<string, (props: IconProps) => React.ReactElement> =
   Google:     IconMail,
 };
 
+// Finding #6: Map SupportedProvider → display label for filtering UI
+const PROVIDER_DISPLAY: Partial<Record<SupportedProvider, string>> = {
+  openai:    'OpenAI',
+  anthropic: 'Anthropic',
+  gemini:    'Gemini',
+  mistral:   'Mistral',
+  local:     'Local / self-hosted',
+};
+
 function CredRow({ cred }: { cred: Credential }) {
   const Icon = PROVIDER_ICONS[cred.provider ?? ''] ?? IconDatabase;
+
+  const isExpiringSoon =
+    cred.expiresAt &&
+    new Date(cred.expiresAt) < new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+  const isExpired = cred.expiresAt && new Date(cred.expiresAt) < new Date();
+
   return (
     <div className="flex items-center gap-3 bg-white border border-gray-200 rounded-lg px-4 py-3">
       <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${
@@ -64,9 +50,16 @@ function CredRow({ cred }: { cred: Credential }) {
       <div className="flex-1 min-w-0">
         <p className="text-sm font-medium">{cred.name}</p>
         <p className="text-xs text-gray-400">{cred.scope}</p>
+        {/* Finding #7: Show expiry warning in UI */}
+        {isExpired && (
+          <p className="text-xs text-red-600 font-medium mt-0.5">Expired</p>
+        )}
+        {!isExpired && isExpiringSoon && (
+          <p className="text-xs text-amber-600 mt-0.5">Expires soon</p>
+        )}
       </div>
       <div className="flex items-center gap-1.5 text-xs">
-        {cred.status === 'active' ? (
+        {cred.status === 'active' && !isExpired ? (
           <><IconCheck className="text-green-500" /><span className="text-gray-400">Active</span></>
         ) : (
           <><IconClock className="text-gray-400" /><span className="text-gray-400">Pending</span></>
@@ -76,9 +69,14 @@ function CredRow({ cred }: { cred: Credential }) {
   );
 }
 
-export function CredentialsTab() {
-  const fixed     = DEFAULT_CREDENTIALS.filter((c) => c.kind === 'fixed');
-  const delegated = DEFAULT_CREDENTIALS.filter((c) => c.kind === 'user-delegated');
+export function CredentialsTab({ provider = 'any' }: CredentialsTabProps) {
+  // Finding #6: Filter credentials when a specific provider is selected
+  const allCreds = DEFAULT_CREDENTIALS;
+  const fixed     = allCreds.filter((c) => c.kind === 'fixed');
+  const delegated = allCreds.filter((c) => c.kind === 'user-delegated');
+
+  const isFiltered = provider !== 'any';
+  const providerLabel = isFiltered ? PROVIDER_DISPLAY[provider as SupportedProvider] : null;
 
   return (
     <div className="space-y-5">
@@ -88,6 +86,13 @@ export function CredentialsTab() {
           Credentials are stored encrypted and never passed to the model. The agent resolves which credential to attach to each outbound call at routing time.
         </p>
       </div>
+
+      {/* Finding #6: Provider filter notice */}
+      {isFiltered && (
+        <div className="text-xs text-gray-500 px-1">
+          Showing credentials for <span className="font-medium text-gray-700">{providerLabel}</span> — select &ldquo;Any provider&rdquo; to see all.
+        </div>
+      )}
 
       <div>
         <p className="text-xs text-gray-400 uppercase tracking-wider mb-2">Fixed credentials (shared)</p>
@@ -105,12 +110,13 @@ export function CredentialsTab() {
           {DEFAULT_ROUTING_RULES.map((rule) => (
             <div key={rule.id} className="bg-white border border-gray-200 rounded-lg px-4 py-3 space-y-1">
               <p className="text-xs font-medium">
-                {rule.resourceKind === 'shared'
+                {rule.matchResourceKind === 'shared'
                   ? <span>If task targets shared tool &rarr; use <span className="text-red-600">fixed credential</span></span>
                   : <span>If task touches personal resource &rarr; use <span className="text-blue-600">user-delegated token</span></span>
                 }
               </p>
               <p className="text-xs text-gray-400">{rule.description}</p>
+              <p className="text-xs text-gray-300">Priority: {rule.priority}</p>
             </div>
           ))}
         </div>
