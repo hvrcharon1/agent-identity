@@ -9,13 +9,10 @@ import type { ProviderAdapter, ResolvedCredential, SupportedProvider } from './t
 const openaiAdapter: ProviderAdapter = {
   id: 'openai',
   label: 'OpenAI',
-  injectCredential(request: Record<string, unknown>, credential: ResolvedCredential) {
-    // OpenAI: `user` field is the correct place for per-user tracking (abuse prevention).
-    // API key goes in Authorization: Bearer header — set server-side, never here.
+  injectCredential(request: Record<string, unknown>, credential: ResolvedCredential): Record<string, unknown> {
     return {
       ...request,
       user: credential.resolvedFor,
-      // _credentialRef is for server-side logging only — strip before sending to OpenAI
       _agentIdentityMeta: {
         credentialRef: credential.ref,
         resolvedFor: credential.resolvedFor,
@@ -23,7 +20,7 @@ const openaiAdapter: ProviderAdapter = {
       },
     };
   },
-  validate(request) {
+  validate(request: Record<string, unknown>): void {
     if (!request.model) throw new Error('[openai] request.model is required');
   },
 };
@@ -31,15 +28,12 @@ const openaiAdapter: ProviderAdapter = {
 const anthropicAdapter: ProviderAdapter = {
   id: 'anthropic',
   label: 'Anthropic',
-  injectCredential(request: Record<string, unknown>, credential: ResolvedCredential) {
-    // Anthropic: metadata.user_id is the correct field for per-user audit.
-    // API key goes in x-api-key header — set server-side only.
+  injectCredential(request: Record<string, unknown>, credential: ResolvedCredential): Record<string, unknown> {
     return {
       ...request,
       metadata: {
         ...(request.metadata as Record<string, unknown>),
         user_id: credential.resolvedFor,
-        // credential_ref is for server-side logging — strip before sending to Anthropic
         _agentIdentityMeta: {
           credentialRef: credential.ref,
           injectionPoint: 'x-api-key header (server-side)',
@@ -47,7 +41,7 @@ const anthropicAdapter: ProviderAdapter = {
       },
     };
   },
-  validate(request) {
+  validate(request: Record<string, unknown>): void {
     if (!request.model) throw new Error('[anthropic] request.model is required');
     if (!request.messages) throw new Error('[anthropic] request.messages is required');
   },
@@ -56,10 +50,7 @@ const anthropicAdapter: ProviderAdapter = {
 const geminiAdapter: ProviderAdapter = {
   id: 'gemini',
   label: 'Gemini',
-  injectCredential(request: Record<string, unknown>, credential: ResolvedCredential) {
-    // TODO: Real Gemini auth — API key goes in `x-goog-api-key` header (server-side only).
-    // The generationConfig body field does NOT carry auth.
-    // For user tracking: add request.labels = { user_id: credential.resolvedFor }
+  injectCredential(request: Record<string, unknown>, credential: ResolvedCredential): Record<string, unknown> {
     return {
       ...request,
       labels: {
@@ -73,7 +64,7 @@ const geminiAdapter: ProviderAdapter = {
       },
     };
   },
-  validate(request) {
+  validate(request: Record<string, unknown>): void {
     if (!request.contents) throw new Error('[gemini] request.contents is required');
   },
 };
@@ -81,10 +72,7 @@ const geminiAdapter: ProviderAdapter = {
 const mistralAdapter: ProviderAdapter = {
   id: 'mistral',
   label: 'Mistral',
-  injectCredential(request: Record<string, unknown>, credential: ResolvedCredential) {
-    // TODO: Real Mistral auth — API key goes in Authorization: Bearer header (server-side).
-    // Mistral does not currently have a first-class user-tracking field.
-    // Best practice: log credential.resolvedFor server-side against the request ID.
+  injectCredential(request: Record<string, unknown>, credential: ResolvedCredential): Record<string, unknown> {
     return {
       ...request,
       _agentIdentityMeta: {
@@ -94,7 +82,7 @@ const mistralAdapter: ProviderAdapter = {
       },
     };
   },
-  validate(request) {
+  validate(request: Record<string, unknown>): void {
     if (!request.model) throw new Error('[mistral] request.model is required');
     if (!request.messages) throw new Error('[mistral] request.messages is required');
   },
@@ -103,13 +91,7 @@ const mistralAdapter: ProviderAdapter = {
 const localAdapter: ProviderAdapter = {
   id: 'local',
   label: 'Local / self-hosted',
-  injectCredential(request: Record<string, unknown>, credential: ResolvedCredential) {
-    // TODO: Auth mechanism depends on your self-hosted setup (Ollama, vLLM, LM Studio).
-    // Common options:
-    //   - Ollama: no auth by default; use network-level controls
-    //   - vLLM: optional API key via --api-key flag; inject in Authorization: Bearer header
-    //   - LM Studio: basic auth or API key depending on version
-    // Track user server-side via your own middleware.
+  injectCredential(request: Record<string, unknown>, credential: ResolvedCredential): Record<string, unknown> {
     return {
       ...request,
       _agentIdentityMeta: {

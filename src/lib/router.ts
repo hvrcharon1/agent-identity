@@ -22,7 +22,7 @@ import type {
   RoutingRule,
 } from './types';
 
-// ─── In-memory CredentialStore (default for local dev) ───────────────────────
+// ─── In-memory CredentialStore (default for local dev) ────────────────────────
 
 export class MemoryCredentialStore implements CredentialStore {
   private readonly creds: Credential[];
@@ -31,10 +31,6 @@ export class MemoryCredentialStore implements CredentialStore {
     this.creds = credentials;
   }
 
-  /**
-   * Synchronous lookup used by CredentialRouter.resolve() for the in-memory path.
-   * Returns null when not found or when the credential is inactive.
-   */
   findByRefSync(ref: string): Credential | null {
     return this.creds.find((c) => c.ref === ref && c.status === 'active') ?? null;
   }
@@ -52,7 +48,7 @@ export class MemoryCredentialStore implements CredentialStore {
   }
 }
 
-// ─── CredentialRouter ────────────────────────────────────────────────────────
+// ─── CredentialRouter ─────────────────────────────────────────────────────────
 
 export class CredentialRouter {
   constructor(
@@ -61,16 +57,7 @@ export class CredentialRouter {
     private logger?: AuditLogger
   ) {}
 
-  /**
-   * Resolve the correct credential for an agent request.
-   * Returns null if no rule matches or the matched credential is expired/inactive.
-   * Rules are scored by priority (highest wins) after all match predicates pass.
-   *
-   * Note: This method is synchronous. It works with MemoryCredentialStore (which
-   * exposes findByRefSync). For async stores (Vault, DB), use POST /api/resolve.
-   */
   resolve(ctx: AgentRequestContext): ResolvedCredential | null {
-    // Sort matching rules by priority descending — highest-priority rule wins
     const matching = this.rules
       .filter((r) => this.ruleMatches(r, ctx))
       .sort((a, b) => b.priority - a.priority);
@@ -78,12 +65,10 @@ export class CredentialRouter {
     const rule = matching[0];
     if (!rule) return null;
 
-    // Use the sync lookup path on MemoryCredentialStore.
-    // For async stores, use the /api/resolve route instead.
     if (!(this.store instanceof MemoryCredentialStore)) {
       console.warn(
         '[CredentialRouter] resolve() is synchronous but store is not a MemoryCredentialStore. ' +
-        'Use POST /api/resolve for async credential stores.'
+          'Use POST /api/resolve for async credential stores.'
       );
       return null;
     }
@@ -91,7 +76,6 @@ export class CredentialRouter {
     const cred = this.store.findByRefSync(rule.credentialRef);
     if (!cred) return null;
 
-    // Finding #7: Reject expired credentials
     const isExpired = cred.expiresAt && new Date(cred.expiresAt) < new Date();
     if (isExpired) return null;
 
@@ -102,7 +86,6 @@ export class CredentialRouter {
       resolvedFor: cred.kind === 'user-delegated' ? ctx.userId : 'service',
     };
 
-    // Fire-and-forget audit log if logger provided
     if (this.logger) {
       this.logger.log(this.buildAuditEntry(ctx, resolved)).catch(console.error);
     }
@@ -110,26 +93,17 @@ export class CredentialRouter {
     return resolved;
   }
 
-  /**
-   * Returns true when all specified match predicates on the rule pass.
-   * Omitted predicates match anything.
-   */
   private ruleMatches(rule: RoutingRule, ctx: AgentRequestContext): boolean {
     if (rule.matchResourceKind && rule.matchResourceKind !== ctx.resourceKind) return false;
     if (rule.matchProvider && rule.matchProvider !== ctx.provider) return false;
     if (rule.matchUserId && rule.matchUserId !== ctx.userId) return false;
     if (rule.matchAction) {
-      const actions = Array.isArray(rule.matchAction)
-        ? rule.matchAction
-        : [rule.matchAction];
+      const actions = Array.isArray(rule.matchAction) ? rule.matchAction : [rule.matchAction];
       if (!actions.includes(ctx.action)) return false;
     }
     return true;
   }
 
-  /**
-   * Build a typed AuditLogEntry — includes traceId for cross-request correlation.
-   */
   private buildAuditEntry(
     ctx: AgentRequestContext,
     resolved: ResolvedCredential
@@ -149,32 +123,26 @@ export class CredentialRouter {
     };
   }
 
-  /** @deprecated Use the typed buildAuditEntry instead. Kept for backward compat. */
+  /** @deprecated Kept for backward compat — use the typed buildAuditEntry instead. */
   auditEntry(
     ctx: AgentRequestContext,
     resolved: ResolvedCredential
   ): Record<string, unknown> {
-    return this.buildAuditEntry(ctx, resolved) as Record<string, unknown>;
+    // Cast via unknown first to satisfy strict TS2352 overlap check
+    return this.buildAuditEntry(ctx, resolved) as unknown as Record<string, unknown>;
   }
 }
 
-// ─── Factory ─────────────────────────────────────────────────────────────────
+// ─── Factories ────────────────────────────────────────────────────────────────
 
-/**
- * Build a router from a plain credential array (wraps in MemoryCredentialStore).
- * For production, pass a real CredentialStore implementation.
- */
 export function createRouter(
-  credentials: import('./types').Credential[],
+  credentials: Credential[],
   rules: RoutingRule[],
   logger?: AuditLogger
 ): CredentialRouter {
   return new CredentialRouter(new MemoryCredentialStore(credentials), rules, logger);
 }
 
-/**
- * Build a router directly from a CredentialStore interface (production use).
- */
 export function createRouterFromStore(
   store: CredentialStore,
   rules: RoutingRule[],
