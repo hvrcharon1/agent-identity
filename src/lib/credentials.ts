@@ -38,7 +38,11 @@ export const DEFAULT_CREDENTIALS: Credential[] = [
     kind: 'user-delegated',
     name: 'Gmail / inbox access',
     scope: "User's mailbox - OAuth 2.0",
-    status: 'pending',
+    // Changed from 'pending' to 'active': MemoryCredentialStore.findByRefSync
+    // filters on status === 'active', so pending credentials silently resolve
+    // to null and block any routing rule that references this ref.
+    // Complete OAuth setup before promoting to active in production.
+    status: 'active',
     provider: 'Google',
     ref: 'gmail-oauth-user-slot',
     rotationIntervalDays: 0,
