@@ -168,3 +168,32 @@ describe('CredentialRouter — revoked credential', () => {
     expect(router.resolve(ctx({ resourceKind: 'shared' }))).toBeNull();
   });
 });
+
+describe('CredentialRouter — pending credential', () => {
+  const pendingCreds: Credential[] = [
+    {
+      id: 'cred-pending',
+      kind: 'user-delegated',
+      name: 'Pending credential',
+      scope: 'all',
+      status: 'pending',
+      ref: 'pending-ref',
+    },
+  ];
+
+  const rules: RoutingRule[] = [
+    {
+      id: 'rule-pending',
+      description: 'Rule pointing to pending cred',
+      credentialRef: 'pending-ref',
+      credentialKind: 'user-delegated',
+      priority: 10,
+      matchResourceKind: 'personal',
+    },
+  ];
+
+  it('returns null for a pending credential (store filters on active only)', () => {
+    const router = createRouter(pendingCreds, rules);
+    expect(router.resolve(ctx({ resourceKind: 'personal' }))).toBeNull();
+  });
+});
