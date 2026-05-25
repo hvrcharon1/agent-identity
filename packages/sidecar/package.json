@@ -1,0 +1,24 @@
+{
+  "name": "@datacules/agent-identity-sidecar",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Standalone HTTP sidecar server exposing the agent-identity credential router",
+  "main": "./dist/server.js",
+  "scripts": {
+    "build": "tsup src/server.ts --format cjs --out-dir dist --no-splitting",
+    "start": "node dist/server.js",
+    "dev": "tsx src/server.ts",
+    "type-check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@datacules/agent-identity": "workspace:*",
+    "express": "^4.18.0"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.21",
+    "@types/node": "^20",
+    "tsup": "^8.0.0",
+    "tsx": "^4.0.0",
+    "typescript": "^5"
+  }
+}
