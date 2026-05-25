@@ -1,0 +1,35 @@
+{
+  "name": "@datacules/agent-identity-store-aws",
+  "version": "0.1.0",
+  "private": false,
+  "description": "AWS Secrets Manager + DynamoDB CredentialStore for @datacules/agent-identity",
+  "license": "MIT",
+  "main": "./dist/index.js",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": ["dist", "src"],
+  "scripts": {
+    "build": "tsup src/index.ts --format esm,cjs --dts --out-dir dist",
+    "type-check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@aws-sdk/client-secrets-manager": "^3",
+    "@aws-sdk/client-dynamodb": "^3",
+    "@datacules/agent-identity": "workspace:*"
+  },
+  "devDependencies": {
+    "tsup": "^8.0.0",
+    "typescript": "^5"
+  },
+  "peerDependencies": {
+    "@aws-sdk/client-dynamodb": "^3",
+    "@aws-sdk/client-secrets-manager": "^3"
+  }
+}
