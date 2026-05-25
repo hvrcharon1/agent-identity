@@ -4,7 +4,8 @@
   "private": true,
   "workspaces": [
     "packages/*",
-    "packages/stores/*"
+    "packages/stores/*",
+    "packages/integrations/*"
   ],
   "scripts": {
     "dev": "next dev",
@@ -14,7 +15,7 @@
     "type-check": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "packages:build": "npm run build --workspace=packages/core --workspace=packages/audit --workspace=packages/stores/aws --workspace=packages/stores/vault"
+    "packages:build": "npm run build --workspace=packages/core --workspace=packages/audit --workspace=packages/stores/aws --workspace=packages/stores/vault --workspace=packages/integrations/langchain --workspace=packages/integrations/nestjs --workspace=packages/integrations/express --workspace=packages/integrations/fastify"
   },
   "dependencies": {
     "next": "14.2.3",
