@@ -1,2 +1,1 @@
-# CI diagnostics — round 2
-Pointing at main commit 2be233d
+# CI diagnostics round 3 — checking main at 2be233d
