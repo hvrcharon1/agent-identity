@@ -1,0 +1,59 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "agent-identity"
+version = "0.1.0"
+description = "Python client for the agent-identity credential router"
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.9"
+authors = [{ name = "Datacules LLC" }]
+keywords = ["ai", "agents", "credentials", "identity", "llm"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.9",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Software Development :: Libraries",
+]
+dependencies = [
+  "httpx>=0.27.0",
+  "pydantic>=2.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.0",
+  "pytest-asyncio>=0.23",
+  "respx>=0.21",       # httpx request mocking
+  "ruff>=0.4",
+  "mypy>=1.10",
+]
+
+[project.scripts]
+agent-identity = "agent_identity.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/hvrcharon1/agent-identity"
+Repository = "https://github.com/hvrcharon1/agent-identity"
+"Bug Tracker" = "https://github.com/hvrcharon1/agent-identity/issues"
+
+[tool.hatch.build.targets.wheel]
+packages = ["agent_identity"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py39"
+
+[tool.mypy]
+strict = true
+python_version = "3.9"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
