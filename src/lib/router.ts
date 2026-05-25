@@ -11,6 +11,8 @@
  * - Finding #7: Rejects expired credentials
  * - Finding #11: traceId included in audit entries
  * - Migration: matchPhase matching, readOnly scope guard, resolvePair()
+ * - Fix: replaced instanceof guard with duck-type check (findByRefSync) so
+ *   vitest module isolation no longer causes resolve() to silently return null.
  */
 
 import type {
@@ -25,11 +27,30 @@ import type {
   RoutingRule,
 } from './types';
 
+// ─── Synchronous credential store interface ───────────────────────────────────
+
+/**
+ * Optional extension of CredentialStore for stores that support synchronous
+ * credential lookup. MemoryCredentialStore implements this; async-only stores
+ * (e.g. database-backed) do not.
+ *
+ * resolve() duck-types on this rather than using instanceof so that vitest
+ * module isolation (which gives each module its own class object) does not
+ * cause a false negative.
+ */
+interface SyncCapableStore extends CredentialStore {
+  findByRefSync(ref: string): Credential | null;
+}
+
+function isSyncCapable(store: CredentialStore): store is SyncCapableStore {
+  return typeof (store as SyncCapableStore).findByRefSync === 'function';
+}
+
 // ─── In-memory CredentialStore (default for local dev) ────────────────────────
 
 export class MemoryCredentialStore implements CredentialStore {
   private readonly creds: Credential[];
-  /** migrationId → Set of reserved refs */
+  /** ref → reservation metadata */
   private readonly reservations = new Map<string, { migrationId: string; expiresAt: number }>();
 
   constructor(credentials: Credential[]) {
@@ -94,10 +115,12 @@ export class CredentialRouter {
     const rule = matching[0];
     if (!rule) return null;
 
-    if (!(this.store instanceof MemoryCredentialStore)) {
+    // Duck-type check instead of instanceof so vitest module isolation does not
+    // cause a false negative (each module instance gets its own class object).
+    if (!isSyncCapable(this.store)) {
       console.warn(
-        '[CredentialRouter] resolve() is synchronous but store is not a MemoryCredentialStore. ' +
-          'Use POST /api/resolve for async credential stores.'
+        '[CredentialRouter] resolve() requires a store with findByRefSync(). ' +
+          'Use POST /api/resolve for async-only credential stores.'
       );
       return null;
     }
