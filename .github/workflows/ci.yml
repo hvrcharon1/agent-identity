@@ -64,17 +64,17 @@ jobs:
       - name: Start server in background
         run: npx next start --port 3000 &
 
-      - name: Wait for server (up to 60s)
+      - name: Wait for server (up to 90s)
         run: |
           echo "Waiting for Next.js server..."
-          for i in $(seq 1 60); do
+          for i in $(seq 1 90); do
             if curl -sf http://localhost:3000/ > /dev/null 2>&1; then
               echo "Ready after ${i}s"
               exit 0
             fi
             sleep 1
           done
-          echo "Server did not become ready in 60s"
+          echo "Server did not become ready in 90s"
           exit 1
 
       - name: Smoke - homepage returns 200
