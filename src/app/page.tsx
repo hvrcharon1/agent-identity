@@ -5,6 +5,7 @@ import { IdentitiesTab } from '@/components/IdentitiesTab';
 import { PatternsTab } from '@/components/PatternsTab';
 import { CredentialsTab } from '@/components/CredentialsTab';
 import { DecisionTab } from '@/components/DecisionTab';
+import { MigrationTab } from '@/components/MigrationTab';
 import type { SupportedProvider } from '@/lib/types';
 
 // ─── Inline SVG tab icons ────────────────────────────────────────────────────
@@ -47,22 +48,30 @@ function IconCpu({ className }: { className?: string }) {
     </svg>
   );
 }
+function IconArrowLeftRight({ className }: { className?: string }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
+      <path d="M8 3 4 7l4 4"/><path d="M4 7h16"/><path d="m16 21 4-4-4-4"/><path d="M20 17H4"/>
+    </svg>
+  );
+}
 
 const TABS = [
-  { id: 'identities', label: 'Identity types',   Icon: IconShield    },
-  { id: 'patterns',   label: 'Auth patterns',     Icon: IconGitBranch },
-  { id: 'credentials',label: 'Credentials',       Icon: IconKey       },
-  { id: 'decide',     label: 'Decision helper',   Icon: IconHelpCircle},
+  { id: 'identities',  label: 'Identity types',   Icon: IconShield        },
+  { id: 'patterns',    label: 'Auth patterns',     Icon: IconGitBranch     },
+  { id: 'credentials', label: 'Credentials',       Icon: IconKey           },
+  { id: 'decide',      label: 'Decision helper',   Icon: IconHelpCircle    },
+  { id: 'migration',   label: 'Data migration',    Icon: IconArrowLeftRight },
 ] as const;
 
 type TabId = (typeof TABS)[number]['id'];
 
 const PROVIDERS: { id: SupportedProvider; label: string }[] = [
-  { id: 'openai',    label: 'OpenAI'            },
-  { id: 'anthropic', label: 'Anthropic'         },
-  { id: 'gemini',    label: 'Gemini'            },
-  { id: 'mistral',   label: 'Mistral'           },
-  { id: 'local',     label: 'Local / self-hosted'},
+  { id: 'openai',    label: 'OpenAI'             },
+  { id: 'anthropic', label: 'Anthropic'          },
+  { id: 'gemini',    label: 'Gemini'             },
+  { id: 'mistral',   label: 'Mistral'            },
+  { id: 'local',     label: 'Local / self-hosted' },
 ];
 
 export default function Home() {
@@ -118,13 +127,13 @@ export default function Home() {
 
         {/* Tabs */}
         <div className="border-b border-gray-200 mb-6">
-          <nav className="flex gap-1" aria-label="Main navigation">
+          <nav className="flex gap-1 overflow-x-auto" aria-label="Main navigation">
             {TABS.map(({ id, label, Icon }) => (
               <button
                 key={id}
                 onClick={() => setActiveTab(id)}
                 aria-current={activeTab === id ? 'page' : undefined}
-                className={`flex items-center gap-1.5 px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
+                className={`flex items-center gap-1.5 px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors whitespace-nowrap ${
                   activeTab === id
                     ? 'border-gray-900 text-gray-900'
                     : 'border-transparent text-gray-500 hover:text-gray-700'
@@ -137,11 +146,12 @@ export default function Home() {
           </nav>
         </div>
 
-        {/* Tab content — Finding #6: activeProvider wired to PatternsTab + CredentialsTab */}
+        {/* Tab content */}
         {activeTab === 'identities'  && <IdentitiesTab />}
         {activeTab === 'patterns'    && <PatternsTab provider={activeProvider} />}
         {activeTab === 'credentials' && <CredentialsTab provider={activeProvider} />}
         {activeTab === 'decide'      && <DecisionTab />}
+        {activeTab === 'migration'   && <MigrationTab />}
 
       </div>
     </main>
