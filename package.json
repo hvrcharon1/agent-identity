@@ -2,6 +2,10 @@
   "name": "agent-identity",
   "version": "0.1.0",
   "private": true,
+  "workspaces": [
+    "packages/*",
+    "packages/stores/*"
+  ],
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -9,7 +13,8 @@
     "lint": "next lint",
     "type-check": "tsc --noEmit",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "packages:build": "npm run build --workspace=packages/core --workspace=packages/audit --workspace=packages/stores/aws --workspace=packages/stores/vault"
   },
   "dependencies": {
     "next": "14.2.3",

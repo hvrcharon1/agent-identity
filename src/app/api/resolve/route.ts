@@ -1,41 +1,32 @@
 /**
- * POST /api/resolve — Server-side credential resolution (Finding #1).
+ * POST /api/resolve — Server-side credential resolution.
  *
- * The client sends an AgentRequestContext. The server resolves the credential
- * from an encrypted store and injects it into the outbound AI call.
- * The client NEVER sees the credential ref or secret.
- *
- * Architecture:
- *   Browser → POST /api/resolve → Server resolves ref → encrypted store → AI provider
+ * Upgraded to use Zod schema validation (Task 7).
+ * Replaces manual field-by-field checks with AgentRequestContextSchema.safeParse().
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { createRouter } from '@/lib/router';
 import { getServerCredentials, getServerRules } from '@/lib/server/credentialStore';
-import type { AgentRequestContext } from '@/lib/types';
+import { AgentRequestContextSchema } from '@/lib/schemas';
 
 export async function POST(req: NextRequest) {
-  let ctx: AgentRequestContext;
+  let rawBody: unknown;
 
   try {
-    ctx = await req.json();
+    rawBody = await req.json();
   } catch {
     return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
   }
 
-  // Validate required fields
-  const required: (keyof AgentRequestContext)[] = [
-    'userId', 'resourceId', 'resourceKind', 'provider', 'model', 'action',
-    'traceId', 'requestedAt',
-  ];
-  for (const field of required) {
-    if (!ctx[field]) {
-      return NextResponse.json(
-        { error: `Missing required field: ${field}` },
-        { status: 400 }
-      );
-    }
+  const parsed = AgentRequestContextSchema.safeParse(rawBody);
+  if (!parsed.success) {
+    return NextResponse.json(
+      { error: parsed.error.flatten() },
+      { status: 400 }
+    );
   }
 
+  const ctx = parsed.data;
   const credentials = await getServerCredentials();
   const rules = await getServerRules();
   const router = createRouter(credentials, rules);
@@ -56,6 +47,10 @@ export async function POST(req: NextRequest) {
   //   const aiResponse = await callAIProvider(ctx.provider, injectedRequest, resolved.ref);
   //   return NextResponse.json(aiResponse);
 
-  // Placeholder response until AI provider call is wired up:
-  return NextResponse.json({ ok: true, resolvedFor: resolved.resolvedFor });
+  return NextResponse.json({
+    ok:          true,
+    resolvedFor: resolved.resolvedFor,
+    // expiresAt is returned so clients (and useAgentIdentity hook) can schedule refresh
+    expiresAt:   undefined, // populated once real store is wired
+  });
 }
