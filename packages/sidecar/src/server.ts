@@ -16,25 +16,17 @@
  *   AGENT_IDENTITY_CREDENTIALS_JSON  — JSON array of Credential objects
  *   AGENT_IDENTITY_RULES_JSON        — JSON array of RoutingRule objects
  *   PORT                             — HTTP port (default: 3001)
- *
- * For production, replace loadCredentials() and loadRules() with calls
- * to your actual store (AwsCredentialStore, VaultCredentialStore, etc.).
  */
 import express, { Request, Response, NextFunction } from 'express';
+import { createRouter } from '@datacules/agent-identity';
+// Schemas live on the dedicated subpath — NOT the root barrel
 import {
-  createRouter,
   AgentRequestContextSchema,
   MigrateResolveRequestSchema,
-} from '@datacules/agent-identity';
+} from '@datacules/agent-identity/schemas';
 import type { Credential, RoutingRule, MigrationContext } from '@datacules/agent-identity';
 
-// Re-export schemas from the same package for the sidecar
-const { AgentRequestContextSchema: ARC, MigrateResolveRequestSchema: MRR } = {
-  AgentRequestContextSchema,
-  MigrateResolveRequestSchema,
-};
-
-// ─── Config loader ──────────────────────────────────────────────────────────────
+// ─── Config loader ────────────────────────────────────────────────────────────
 
 function loadCredentials(): Credential[] {
   const raw = process.env.AGENT_IDENTITY_CREDENTIALS_JSON;
@@ -62,13 +54,13 @@ function loadRules(): RoutingRule[] {
   }
 }
 
-// ─── Build router once at startup ────────────────────────────────────────────────
+// ─── Build router once at startup ─────────────────────────────────────────────
 
 const credentials = loadCredentials();
 const rules = loadRules();
 const router = createRouter(credentials, rules);
 
-// ─── Express app ────────────────────────────────────────────────────────────────
+// ─── Express app ──────────────────────────────────────────────────────────────
 
 const app = express();
 app.use(express.json());
@@ -80,7 +72,7 @@ app.get('/health', (_req: Request, res: Response) => {
 
 // POST /api/resolve
 app.post('/api/resolve', (req: Request, res: Response) => {
-  const parsed = ARC.safeParse(req.body);
+  const parsed = AgentRequestContextSchema.safeParse(req.body);
   if (!parsed.success) {
     return res.status(400).json({ error: parsed.error.flatten() });
   }
@@ -95,7 +87,7 @@ app.post('/api/resolve', (req: Request, res: Response) => {
 
 // POST /api/migrate/resolve
 app.post('/api/migrate/resolve', (req: Request, res: Response) => {
-  const parsed = MRR.safeParse(req.body);
+  const parsed = MigrateResolveRequestSchema.safeParse(req.body);
   if (!parsed.success) {
     return res.status(400).json({ error: parsed.error.flatten() });
   }
@@ -149,7 +141,7 @@ app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
   res.status(500).json({ error: 'Internal server error' });
 });
 
-// ─── Start ──────────────────────────────────────────────────────────────────────────
+// ─── Start ────────────────────────────────────────────────────────────────────
 
 const PORT = Number(process.env.PORT ?? 3001);
 app.listen(PORT, () => {
@@ -161,4 +153,4 @@ app.listen(PORT, () => {
   console.log(`  Migrate resolve    : POST /api/migrate/resolve`);
 });
 
-export { app }; // for testing
+export { app };
