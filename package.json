@@ -10,7 +10,8 @@
     "packages/stores/azure",
     "packages/integrations/express",
     "packages/integrations/fastify",
-    "packages/integrations/langchain"
+    "packages/integrations/langchain",
+    "packages/integrations/nestjs"
   ],
   "scripts": {
     "dev": "next dev",
