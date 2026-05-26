@@ -1,0 +1,27 @@
+{
+  "name": "@datacules/agent-identity-mcp-client",
+  "version": "0.1.0",
+  "private": false,
+  "description": "MCP client adapter for @datacules/agent-identity — consume external MCP servers as CredentialStores",
+  "main": "./dist/cjs/index.js",
+  "module": "./dist/esm/index.js",
+  "types": "./dist/types/index.d.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "type-check": "tsc --noEmit"
+  },
+  "peerDependencies": {
+    "@datacules/agent-identity": "^0.1.0"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.10.0"
+  },
+  "devDependencies": {
+    "@datacules/agent-identity": "*",
+    "typescript": "^5"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "keywords": ["mcp", "model-context-protocol", "agent-identity", "credential", "datacules"]
+}
