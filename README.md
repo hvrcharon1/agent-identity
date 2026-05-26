@@ -14,7 +14,12 @@
   <a href="https://github.com/hvrcharon1/agent-identity/stargazers">
     <img src="https://img.shields.io/github/stars/hvrcharon1/agent-identity?style=flat-square&color=black" alt="Stars"/>
   </a>
+  <a href="https://github.com/hvrcharon1/agent-identity/actions/workflows/ci.yml">
+    <img src="https://img.shields.io/github/actions/workflow/status/hvrcharon1/agent-identity/ci.yml?branch=main&style=flat-square&label=CI&color=black" alt="CI"/>
+  </a>
+  <img src="https://img.shields.io/badge/packages-12%20(npm%20%2B%20PyPI)-black?style=flat-square" alt="Packages"/>
   <img src="https://img.shields.io/badge/providers-OpenAI%20%7C%20Anthropic%20%7C%20Gemini%20%7C%20Mistral%20%7C%20Local-black?style=flat-square" alt="Supported providers"/>
+  <img src="https://img.shields.io/badge/MCP-server%20%2B%20client-black?style=flat-square" alt="MCP support"/>
   <img src="https://img.shields.io/badge/stack-Next.js%20%2B%20TypeScript-black?style=flat-square" alt="Stack"/>
   <img src="https://img.shields.io/badge/data%20migration-phase--aware%20routing-black?style=flat-square" alt="Data migration support"/>
 </p>
@@ -50,6 +55,25 @@ So we built something to solve it: **`agent-identity`** — open-source, provide
 > **AI agents are executing real actions — merging code, modifying databases, sending emails, calling APIs on behalf of real people. The question of *who* the agent is acting as, and *with which credentials*, is no longer academic. It is a production-grade engineering concern.**
 
 A provider-agnostic framework for AI agents that act on behalf of users and services — with precise, auditable credential routing. Works with OpenAI, Anthropic, Gemini, Mistral, and local models out of the box.
+
+---
+
+## Packages
+
+| Package | Install | Description |
+|---------|---------|-------------|
+| `@datacules/agent-identity` | `npm install @datacules/agent-identity` | Core router, types, Zod schemas, React hook |
+| `@datacules/agent-identity-audit` | `npm install @datacules/agent-identity-audit` | Console, Webhook, Datadog, Splunk, Composite audit sinks |
+| `@datacules/agent-identity-store-aws` | `npm install @datacules/agent-identity-store-aws` | AWS Secrets Manager + DynamoDB credential store |
+| `@datacules/agent-identity-store-vault` | `npm install @datacules/agent-identity-store-vault` | HashiCorp Vault KV v2 credential store |
+| `@datacules/agent-identity-store-azure` | `npm install @datacules/agent-identity-store-azure` | Azure Key Vault + Table Storage credential store |
+| `@datacules/agent-identity-express` | `npm install @datacules/agent-identity-express` | Express middleware |
+| `@datacules/agent-identity-fastify` | `npm install @datacules/agent-identity-fastify` | Fastify plugin |
+| `@datacules/agent-identity-langchain` | `npm install @datacules/agent-identity-langchain` | LangChain tool + LangGraph node |
+| `@datacules/agent-identity-nestjs` | `npm install @datacules/agent-identity-nestjs` | NestJS module, service, guard, and parameter decorator |
+| `@datacules/agent-identity-mcp` | `npm install @datacules/agent-identity-mcp` | MCP server — expose agent-identity tools to any MCP client |
+| `@datacules/agent-identity-mcp-client` | `npm install @datacules/agent-identity-mcp-client` | MCP client — fetch credentials from any MCP server |
+| `agent-identity` (PyPI) | `pip install agent-identity` | Python SDK — sync + async client, zero runtime deps |
 
 ---
 
@@ -122,7 +146,7 @@ function AiComposer({ userId }: { userId: string }) {
 }
 ```
 
-Features: full `loading` / `error` / `expiresAt` lifecycle, auto-refresh 60 s before credential expiry, configurable `onError` callback.
+Features: full `loading` / `error` / `expiresAt` lifecycle, auto-refresh 60 s before credential expiry, configurable `onError` callback.
 
 ---
 
@@ -157,12 +181,11 @@ import express from 'express';
 import { agentIdentityMiddleware } from '@datacules/agent-identity-express';
 
 const app = express();
-app.use(express.json()); // required — parses the JSON body before the middleware runs
+app.use(express.json());
 
 app.use('/ai', agentIdentityMiddleware({ credentials, rules, logger }));
 
 app.post('/ai/complete', (req, res) => {
-  // The caller's JSON body must include: { agentContext: { userId, resourceId, ... } }
   const { ref, resolvedFor } = req.resolvedCredential!;
   // pass ref to your vault — never the raw secret
   res.json({ resolvedFor });
@@ -182,14 +205,84 @@ import Fastify from 'fastify';
 import { agentIdentityPlugin } from '@datacules/agent-identity-fastify';
 
 const app = Fastify();
-
 await app.register(agentIdentityPlugin, { credentials, rules, logger });
 
 app.post('/ai/complete', async (request, reply) => {
-  // The caller's JSON body must include: { agentContext: { userId, resourceId, ... } }
   const { ref, resolvedFor } = request.resolvedCredential!;
   return { resolvedFor };
 });
+```
+
+---
+
+### NestJS
+
+```bash
+npm install @datacules/agent-identity-nestjs @datacules/agent-identity
+```
+
+#### Module registration
+
+```typescript
+// Synchronous
+@Module({
+  imports: [
+    AgentIdentityModule.forRoot({ credentials, rules, logger }),
+  ],
+})
+export class AppModule {}
+
+// Asynchronous — pull from ConfigService or any other provider
+@Module({
+  imports: [
+    AgentIdentityModule.forRootAsync({
+      imports: [ConfigModule],
+      useFactory: (cfg: ConfigService) => ({
+        credentials: cfg.get('AI_CREDENTIALS'),
+        rules:       cfg.get('ROUTING_RULES'),
+      }),
+      inject: [ConfigService],
+    }),
+  ],
+})
+export class AppModule {}
+```
+
+#### Guard + parameter decorator
+
+```typescript
+import { AgentIdentityGuard, ResolvedCredential } from '@datacules/agent-identity-nestjs';
+import type { ResolvedCredential as Cred } from '@datacules/agent-identity';
+
+@Post('complete')
+@UseGuards(AgentIdentityGuard)
+async complete(@ResolvedCredential() cred: Cred) {
+  // Guard resolved the credential before the handler ran.
+  // cred.ref → fetch raw secret from your vault here, server-side only.
+  return { resolvedFor: cred.resolvedFor };
+}
+```
+
+The guard reads `request.body.agentContext` by default. Override `extractContext()` to read from a header or JWT instead.
+
+#### Service (direct injection)
+
+```typescript
+@Injectable()
+export class AiService {
+  constructor(private readonly agentIdentity: AgentIdentityService) {}
+
+  async complete(ctx: AgentRequestContext) {
+    const resolved = await this.agentIdentity.resolveAsync(ctx);
+    if (!resolved) throw new ForbiddenException('No credential matched');
+    // use resolved.ref to fetch the raw secret from your vault
+  }
+
+  async migrate(ctx: MigrationContext) {
+    const pair = await this.agentIdentity.resolvePairAsync(ctx);
+    // pair.source, pair.target
+  }
+}
 ```
 
 ---
@@ -200,8 +293,6 @@ app.post('/ai/complete', async (request, reply) => {
 npm install @datacules/agent-identity-langchain
 ```
 
-`createAgentIdentityModel` takes an options object for `credentials`, `rules`, `fetchSecret`, and optional `logger`:
-
 ```typescript
 import { createAgentIdentityModel } from '@datacules/agent-identity-langchain';
 
@@ -209,7 +300,7 @@ const { getModel, resolved } = createAgentIdentityModel(ctx, {
   credentials,
   rules,
   fetchSecret, // (ref: string) => Promise<string> — your vault call, server-side only
-  logger,      // optional AuditLogger
+  logger,
 });
 
 const model = await getModel(); // ChatAnthropic / ChatOpenAI — API key injected server-side
@@ -217,6 +308,115 @@ const response = await model.invoke('Summarise this document.');
 ```
 
 For LangGraph, use `createAgentIdentityNode()` as a drop-in `StateGraph` node that resolves and attaches `resolvedCredential` to graph state before any LLM call. The node reads `state.agentContext` and writes `state.resolvedCredential`.
+
+---
+
+### MCP server — inbound (`@datacules/agent-identity-mcp`)
+
+Exposes agent-identity credential resolution as a **Model Context Protocol (MCP) server**. Any MCP-capable client — Claude Desktop, Claude Code, Cursor, Windsurf, or a custom agent — can call agent-identity tools directly over MCP without touching the HTTP REST API.
+
+```bash
+npm install @datacules/agent-identity-mcp
+```
+
+#### Tools registered
+
+| Tool | Description |
+|------|-------------|
+| `resolve_credential` | Resolve a credential for an `AgentRequestContext` |
+| `resolve_migration_credential` | Resolve source + target pair for a `MigrationContext` |
+| `list_credentials` | List active credentials (safe metadata — no raw refs or secrets) |
+| `list_rules` | List routing rules ordered by priority |
+| `health` | Liveness check + loaded credential/rule counts |
+
+#### Claude Desktop config
+
+```json
+{
+  "mcpServers": {
+    "agent-identity": {
+      "command": "npx",
+      "args": ["@datacules/agent-identity-mcp"],
+      "env": {
+        "AGENT_IDENTITY_CREDENTIALS": "<base64-encoded credentials JSON>",
+        "AGENT_IDENTITY_RULES": "<base64-encoded rules JSON>"
+      }
+    }
+  }
+}
+```
+
+#### Claude Code
+
+```bash
+claude mcp add agent-identity \
+  -e AGENT_IDENTITY_CREDENTIALS=<base64> \
+  -e AGENT_IDENTITY_RULES=<base64> \
+  -- npx @datacules/agent-identity-mcp
+```
+
+#### Programmatic (library mode)
+
+```typescript
+import { createAgentIdentityMcpServer } from '@datacules/agent-identity-mcp';
+
+// stdio transport (Claude Desktop / Claude Code)
+const { start } = createAgentIdentityMcpServer({ credentials, rules });
+await start();
+
+// HTTP+SSE transport (hosted / networked deployments)
+const { start } = createAgentIdentityMcpServer({
+  credentials, rules, transport: 'http', httpPort: 3002,
+});
+await start();
+```
+
+---
+
+### MCP client — outbound (`@datacules/agent-identity-mcp-client`)
+
+Lets agent-identity **consume** external MCP servers to fetch credentials. `McpCredentialStore` implements the existing `CredentialStore` interface — plug it straight into `createRouterFromStore()` with no other changes.
+
+```bash
+npm install @datacules/agent-identity-mcp-client
+```
+
+```typescript
+import { McpCredentialStore } from '@datacules/agent-identity-mcp-client';
+import { createRouterFromStore } from '@datacules/agent-identity';
+
+// HTTP+SSE — connect to a running MCP server
+const store = new McpCredentialStore({
+  transport: 'http',
+  serverUrl: 'http://localhost:3002',
+});
+
+// stdio — spawn a local MCP server process
+const store = new McpCredentialStore({
+  transport: 'stdio',
+  command: 'npx',
+  args: ['@datacules/agent-identity-mcp'],
+  env: { AGENT_IDENTITY_CREDENTIALS: '...', AGENT_IDENTITY_RULES: '...' },
+});
+
+const router = createRouterFromStore(store, rules, logger);
+const resolved = await router.resolveAsync(ctx);
+```
+
+`McpToolCaller` gives you typed direct access without a local router:
+
+```typescript
+import { McpToolCaller } from '@datacules/agent-identity-mcp-client';
+
+const caller = new McpToolCaller({ transport: 'http', serverUrl: 'http://localhost:3002' });
+
+const resolved = await caller.resolveCredential(ctx);
+const pair     = await caller.resolveMigrationCredential(migCtx);
+const alive    = await caller.health();
+const rules    = await caller.callTool('list_rules', {}); // generic escape hatch
+```
+
+Both `McpCredentialStore` and `McpToolCaller` support `http` and `stdio` transports and share the same lazy-connect + in-memory cache pattern.
 
 ---
 
@@ -234,8 +434,6 @@ Or with Compose:
 ```bash
 docker compose up
 ```
-
-Then call the API from any language:
 
 ```bash
 curl -s -X POST http://localhost:3001/api/resolve \
@@ -309,7 +507,17 @@ const router = createRouterFromStore(new AwsCredentialStore(), rules, logger);
 // HashiCorp Vault KV v2
 import { VaultCredentialStore } from '@datacules/agent-identity-store-vault';
 const router = createRouterFromStore(new VaultCredentialStore(), rules, logger);
+
+// Azure Key Vault + Table Storage reservation locks
+import { AzureKeyVaultCredentialStore } from '@datacules/agent-identity-store-azure';
+const store = new AzureKeyVaultCredentialStore({
+  keyVaultUrl:     'https://my-vault.vault.azure.net',
+  tablesEndpoint:  'https://myaccount.table.core.windows.net',
+});
+const router = createRouterFromStore(store, rules, logger);
 ```
+
+All three stores implement the same `CredentialStore` interface and are drop-in replacements for each other. The Azure store uses `DefaultAzureCredential` — no code changes needed across Managed Identity, Azure CLI (local dev), or GitHub Actions OIDC environments.
 
 ---
 
@@ -404,6 +612,7 @@ These two patterns, plus **hybrid / context-switched** (both in one workflow) an
 - 🏷️ **Tags every agent action with a traceable human principal**
 - ⚖️ **Enforces least-privilege by architecture, not by convention**
 - 🔌 **Plugs into OpenAI, Anthropic, Gemini, Mistral, or any local model**
+- 🤝 **Works as both an MCP server and an MCP client** — integrates with the full MCP ecosystem in both directions
 - 🗄️ **Supports safe, auditable data migration with phase-aware credential routing**
 
 ---
@@ -437,6 +646,10 @@ The shift from single-agent to multi-agent architectures (orchestrator → sub-a
 
 No single AI provider will dominate every use case. Cost, capability, latency, data-residency requirements, and compliance constraints mean most production systems already use or plan to use multiple providers. `agent-identity`'s `ProviderAdapter` interface normalises credential injection across OpenAI, Anthropic, Gemini, Mistral, and local models — your routing rules, audit logs, and identity configuration don't change when you change the model underneath.
 
+### The MCP ecosystem is growing fast
+
+Model Context Protocol is becoming the standard integration layer for AI tools and agents. `agent-identity` participates in both directions: as an MCP server, it exposes credential resolution as callable tools to any MCP-capable client; as an MCP client, it can pull credentials from any MCP-compatible credential store. This means agent-identity integrates naturally into Claude Desktop, Claude Code, Cursor, Windsurf, and any custom MCP orchestration layer — without requiring a REST API call.
+
 ---
 
 ## 🗄️ Data migration support — why it matters and how it works
@@ -468,15 +681,13 @@ Extends `AgentRequestContext` with the fields a migration agent actually needs:
 
 ```typescript
 const ctx: MigrationContext = {
-  // standard agent fields
   userId: 'svc-migration-bot',
   provider: 'anthropic',
   model: 'claude-sonnet-4-20250514',
   traceId: 'trace-abc123',
   requestedAt: new Date().toISOString(),
 
-  // migration-specific
-  migrationId: 'migration-2026-q2-crm',   // ties every phase's audit entries together
+  migrationId: 'migration-2026-q2-crm',
   phase: 'load',
   sourceResourceId: 'crm-postgres-prod',
   targetResourceId: 'crm-postgres-v2',
@@ -484,7 +695,6 @@ const ctx: MigrationContext = {
   batchIndex: 3,
   totalBatches: 12,
 
-  // required by AgentRequestContext
   resourceId: 'crm-postgres-prod',
   resourceKind: 'shared',
   action: 'write',
@@ -504,15 +714,15 @@ const ctx: MigrationContext = {
 
 ```typescript
 const pair = router.resolvePair(ctx);
-// pair.source → read-scoped credential for sourceResourceId
-// pair.target → write-scoped credential for targetResourceId (or read if dryRun)
+// pair.source   → read-scoped credential for sourceResourceId
+// pair.target   → write-scoped credential for targetResourceId (or read if dryRun)
 // pair.expiresAt → ISO 8601 earliest expiry of both
 // pair.migrationId → tied to ctx.migrationId for the full audit trail
 ```
 
 **4. `POST /api/migrate/resolve` — batch-friendly HTTP endpoint**
 
-Resolves both credentials in one round-trip. The agent calls this once per phase, not once per row. For 100,000 rows that is the difference between 100,001 auth round-trips and 6.
+Resolves both credentials in one round-trip. The agent calls this once per phase, not once per row.
 
 **5. `validateForMigration()` — catch scope mismatches before data moves**
 
@@ -538,13 +748,6 @@ Extends `AuditLogEntry` with `migrationId`, `phase`, `rowsRead`, `rowsWritten`, 
 
 Visual flow diagram, clickable phase timeline, configuration Q&A for common misconfigurations, and a copyable API quick-reference card.
 
-### Why data migration is uniquely dangerous without this
-
-- **A dry-run with a write-capable credential silently writes.** No errors surface; the team proceeds with confidence; the production run is a double-write.
-- **A read-only credential on the load phase fails at the database, not the router.** Thousands of rows may be processed before the error surfaces.
-- **Two concurrent jobs on the same write credential produce interleaved writes.** Neither errors. The target dataset is silently corrupted.
-- **A migration without a grouped audit trail is unreplayable.** Without `migrationId` threading every entry, reconstructing what failed requires correlating thousands of records by timestamp.
-
 ---
 
 ## Auth patterns
@@ -568,6 +771,7 @@ Visual flow diagram, clickable phase timeline, configuration Q&A for common misc
 - **No credential escalation path** — the routing engine has no mechanism to elevate a user-delegated token beyond its original scope
 - **Migration dry-runs are enforced read-only at the router** — `readOnly: true` on a routing rule rejects credentials that lack read scope before any call is made
 - **Concurrent migration corruption is prevented by design** — `reserve()` locks a write credential to one migration ID for the duration of the batch; a second job receives `false` and must abort
+- **MCP tool responses never include raw secrets** — `list_credentials` returns safe metadata only; `resolve_credential` returns `resolvedFor` and `credentialId`, not refs
 
 ---
 
@@ -588,6 +792,10 @@ The routing engine (`packages/core/src/router.ts`) inspects each outbound call a
 
 Adapters in `packages/core/src/providers.ts` normalise credential injection across providers. Implement `ProviderAdapter` to add any provider — routing rules and audit config are untouched. All adapters implement `validateForMigration()` to catch scope mismatches before data moves.
 
+### MCP integration
+
+`@datacules/agent-identity-mcp` registers five tools on a standard MCP server (stdio or HTTP+SSE) so any MCP-capable client can resolve credentials without touching the HTTP REST API. `@datacules/agent-identity-mcp-client` implements `CredentialStore` against any external MCP server, letting the router pull credentials from a Vault MCP server, 1Password MCP, or any custom credential MCP server as a drop-in backend.
+
 ---
 
 ## Adding a routing rule
@@ -600,7 +808,7 @@ const rule: RoutingRule = {
   id: 'rule-personal-docs',
   resourceKind: 'personal',
   credentialKind: 'user-delegated',
-  credentialRef: 'user-oauth-ref',  // opaque slot identifier — never a raw secret
+  credentialRef: 'user-oauth-ref',
   description: "Use the calling user's own token for personal document access.",
   priority: 10,
 };
@@ -624,7 +832,7 @@ const migrationExtractRule: RoutingRule = {
 ```
 agent-identity/
 ├── packages/
-│   ├── core/                           # @datacules/agent-identity
+│   ├── core/                              # @datacules/agent-identity
 │   │   └── src/
 │   │       ├── types.ts
 │   │       ├── router.ts
@@ -634,17 +842,31 @@ agent-identity/
 │   │       ├── credentials.ts
 │   │       └── react/
 │   │           └── useAgentIdentity.ts
-│   ├── audit/                          # @datacules/agent-identity-audit
-│   │   └── src/                        # Console, Webhook, Datadog, Splunk, Composite
+│   ├── audit/                             # @datacules/agent-identity-audit
+│   │   └── src/                           # Console, Webhook, Datadog, Splunk, Composite
 │   ├── stores/
-│   │   ├── aws/                        # @datacules/agent-identity-store-aws
-│   │   └── vault/                      # @datacules/agent-identity-store-vault
+│   │   ├── aws/                           # @datacules/agent-identity-store-aws
+│   │   ├── vault/                         # @datacules/agent-identity-store-vault
+│   │   └── azure/                         # @datacules/agent-identity-store-azure
 │   ├── integrations/
-│   │   ├── langchain/                  # @datacules/agent-identity-langchain
-│   │   ├── express/                    # @datacules/agent-identity-express
-│   │   └── fastify/                    # @datacules/agent-identity-fastify
-│   └── python-sdk/                     # pip install agent-identity
-├── src/                                # Next.js dashboard app
+│   │   ├── express/                       # @datacules/agent-identity-express
+│   │   ├── fastify/                       # @datacules/agent-identity-fastify
+│   │   ├── langchain/                     # @datacules/agent-identity-langchain
+│   │   ├── nestjs/                        # @datacules/agent-identity-nestjs
+│   │   ├── mcp/                           # @datacules/agent-identity-mcp (inbound)
+│   │   │   ├── src/
+│   │   │   │   ├── index.ts               # createAgentIdentityMcpServer() factory
+│   │   │   │   ├── tools.ts               # 5 tool handler implementations
+│   │   │   │   ├── types.ts               # McpRequestContext + option types
+│   │   │   │   └── transports.ts          # stdio + HTTP+SSE helpers
+│   │   │   └── bin/server.js              # standalone CLI entry point
+│   │   └── mcp-client/                    # @datacules/agent-identity-mcp-client (outbound)
+│   │       └── src/
+│   │           ├── store.ts               # McpCredentialStore — implements CredentialStore
+│   │           ├── caller.ts              # McpToolCaller — typed direct MCP tool access
+│   │           └── index.ts
+│   └── python-sdk/                        # pip install agent-identity
+├── src/                                   # Next.js dashboard app
 │   ├── app/
 │   │   ├── layout.tsx
 │   │   ├── page.tsx
@@ -690,7 +912,7 @@ Implement `ProviderAdapter` to add any provider in minutes.
 
 Built at **Datacules LLC** 🤖 — [datacules.com](https://datacules.com)
 
-`#AIAgents` `#OpenSource` `#AgentIdentity` `#LLMSecurity` `#MultiAgentSystems` `#AIEngineering` `#FutureOfAI` `#DevSecOps` `#Accountability` `#TrustInAI` `#DataMigration`
+`#AIAgents` `#OpenSource` `#AgentIdentity` `#LLMSecurity` `#MultiAgentSystems` `#AIEngineering` `#FutureOfAI` `#DevSecOps` `#Accountability` `#TrustInAI` `#DataMigration` `#MCP` `#ModelContextProtocol`
 
 ---
 
