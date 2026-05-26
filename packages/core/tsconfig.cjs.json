@@ -7,5 +7,6 @@
     "module": "CommonJS",
     "declaration": false,
     "sourceMap": true
-  }
+  },
+  "exclude": ["**/*.test.ts", "**/*.test.tsx", "**/*.spec.ts"]
 }

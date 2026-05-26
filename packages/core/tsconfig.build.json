@@ -9,5 +9,6 @@
     "declaration": true,
     "declarationMap": true,
     "sourceMap": true
-  }
+  },
+  "exclude": ["**/*.test.ts", "**/*.test.tsx", "**/*.spec.ts"]
 }
