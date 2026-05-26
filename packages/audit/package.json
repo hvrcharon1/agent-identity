@@ -1,0 +1,22 @@
+{
+  "name": "@datacules/agent-identity-audit",
+  "version": "0.1.0",
+  "private": false,
+  "description": "Pre-built audit logger sinks for @datacules/agent-identity (Console, Webhook, Datadog, Splunk)",
+  "main": "./dist/cjs/index.js",
+  "module": "./dist/esm/index.js",
+  "types": "./dist/types/index.d.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "test": "vitest run",
+    "type-check": "tsc --noEmit"
+  },
+  "peerDependencies": {
+    "@datacules/agent-identity": "^0.1.0"
+  },
+  "devDependencies": {
+    "@datacules/agent-identity": "*",
+    "typescript": "^5",
+    "vitest": "^1.6.0"
+  }
+}
