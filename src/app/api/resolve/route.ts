@@ -1,44 +1,37 @@
 /**
- * POST /api/resolve — Server-side credential resolution (Finding #1).
+ * POST /api/resolve — updated to use Zod validation (suggestion #7).
  *
- * The client sends an AgentRequestContext. The server resolves the credential
- * from an encrypted store and injects it into the outbound AI call.
- * The client NEVER sees the credential ref or secret.
- *
- * Architecture:
- *   Browser → POST /api/resolve → Server resolves ref → encrypted store → AI provider
+ * Replaces the manual field-by-field validation loop with a single
+ * AgentRequestContextSchema.safeParse() call. Error messages now include
+ * the exact field path and constraint that failed, not just the field name.
  */
 import { NextRequest, NextResponse } from 'next/server';
-import { createRouter } from '@/lib/router';
+import { createRouterFromStore } from '@datacules/agent-identity';
+import { AgentRequestContextSchema } from '@datacules/agent-identity/schemas';
 import { getServerCredentials, getServerRules } from '@/lib/server/credentialStore';
-import type { AgentRequestContext } from '@/lib/types';
+import { MemoryCredentialStore } from '@datacules/agent-identity';
 
 export async function POST(req: NextRequest) {
-  let ctx: AgentRequestContext;
-
+  let body: unknown;
   try {
-    ctx = await req.json();
+    body = await req.json();
   } catch {
     return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
   }
 
-  // Validate required fields
-  const required: (keyof AgentRequestContext)[] = [
-    'userId', 'resourceId', 'resourceKind', 'provider', 'model', 'action',
-    'traceId', 'requestedAt',
-  ];
-  for (const field of required) {
-    if (!ctx[field]) {
-      return NextResponse.json(
-        { error: `Missing required field: ${field}` },
-        { status: 400 }
-      );
-    }
+  const parsed = AgentRequestContextSchema.safeParse(body);
+  if (!parsed.success) {
+    return NextResponse.json(
+      { error: parsed.error.flatten() },
+      { status: 400 }
+    );
   }
 
+  const ctx = parsed.data;
   const credentials = await getServerCredentials();
   const rules = await getServerRules();
-  const router = createRouter(credentials, rules);
+  const store = new MemoryCredentialStore(credentials);
+  const router = createRouterFromStore(store, rules);
   const resolved = router.resolve(ctx);
 
   if (!resolved) {
@@ -48,14 +41,5 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // TODO: Inject credential server-side and call the AI provider here.
-  // Return only the sanitised AI response — never the ref or secret.
-  // Example:
-  //   const adapter = getAdapter(ctx.provider);
-  //   const injectedRequest = adapter.injectCredential(aiRequest, resolved);
-  //   const aiResponse = await callAIProvider(ctx.provider, injectedRequest, resolved.ref);
-  //   return NextResponse.json(aiResponse);
-
-  // Placeholder response until AI provider call is wired up:
   return NextResponse.json({ ok: true, resolvedFor: resolved.resolvedFor });
 }
