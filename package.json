@@ -12,6 +12,7 @@
     "packages/integrations/fastify",
     "packages/integrations/langchain",
     "packages/integrations/nestjs",
+    "packages/integrations/mcp",
     "packages/python-sdk"
   ],
   "scripts": {
