@@ -36,8 +36,7 @@
   ],
   "scripts": {
     "build": "tsc -p tsconfig.build.json && tsc -p tsconfig.cjs.json",
-    "test": "vitest run",
-    "test:watch": "vitest",
+    "test": "echo \"Tests run from monorepo root via vitest.config.ts\" && exit 0",
     "type-check": "tsc --noEmit",
     "lint": "eslint src --ext .ts,.tsx"
   },
@@ -46,8 +45,8 @@
   },
   "devDependencies": {
     "@types/node": "^20",
-    "typescript": "^5",
-    "vitest": "^1.6.0"
+    "@types/react": "^18",
+    "typescript": "^5"
   },
   "peerDependencies": {
     "react": ">=18"
