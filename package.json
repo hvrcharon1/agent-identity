@@ -13,6 +13,7 @@
     "packages/integrations/langchain",
     "packages/integrations/nestjs",
     "packages/integrations/mcp",
+    "packages/integrations/mcp-client",
     "packages/python-sdk"
   ],
   "scripts": {
