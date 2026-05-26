@@ -5,8 +5,14 @@
     "rootDir": "./src",
     "outDir": "./dist/cjs",
     "module": "CommonJS",
+    "moduleResolution": "node",
     "declaration": false,
     "sourceMap": true
   },
-  "exclude": ["**/*.test.ts", "**/*.test.tsx", "**/*.spec.ts"]
+  "exclude": [
+    "**/*.test.ts",
+    "**/*.test.tsx",
+    "**/*.spec.ts",
+    "src/react/**"
+  ]
 }
