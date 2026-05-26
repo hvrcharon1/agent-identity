@@ -53,6 +53,291 @@ A provider-agnostic framework for AI agents that act on behalf of users and serv
 
 ---
 
+## Installation
+
+Choose the integration path that fits your stack. All options share the same credential routing engine, type system, and audit interface.
+
+### Node.js / TypeScript (npm package)
+
+```bash
+npm install @datacules/agent-identity
+```
+
+```typescript
+import { createRouter, MemoryCredentialStore } from '@datacules/agent-identity';
+import type { AgentRequestContext } from '@datacules/agent-identity';
+
+const router = createRouter(credentials, rules, logger);
+
+const ctx: AgentRequestContext = {
+  userId: 'user-abc',
+  resourceId: 'knowledge-base',
+  resourceKind: 'personal',
+  provider: 'anthropic',
+  model: 'claude-sonnet-4-20250514',
+  action: 'read',
+  traceId: crypto.randomUUID(),
+  requestedAt: new Date().toISOString(),
+};
+
+const resolved = router.resolve(ctx);
+// resolved.resolvedFor → 'user-abc'
+// resolved.ref        → opaque vault ref — the model layer never sees the raw secret
+```
+
+Works in any Node.js environment: Next.js, Express, Fastify, NestJS, LangChain, LangGraph, or a plain script.
+
+---
+
+### React hook (`@datacules/agent-identity/react`)
+
+The hook calls `POST /api/resolve` server-side — the raw credential never reaches the browser.
+
+```typescript
+import { useAgentIdentity } from '@datacules/agent-identity/react';
+
+function AiComposer({ userId }: { userId: string }) {
+  const ctx = {
+    userId,
+    resourceId: 'knowledge-base',
+    resourceKind: 'personal' as const,
+    provider: 'anthropic' as const,
+    model: 'claude-sonnet-4-20250514',
+    action: 'read',
+    traceId: crypto.randomUUID(),
+    requestedAt: new Date().toISOString(),
+  };
+
+  const { resolvedFor, loading, error, expiresAt } = useAgentIdentity(ctx);
+
+  if (loading) return <p>Resolving credentials…</p>;
+  if (error)   return <p>Auth error: {error.message}</p>;
+
+  return (
+    <div>
+      <p>Ready — acting as {resolvedFor}</p>
+      {expiresAt && <p>Session valid until {new Date(expiresAt).toLocaleTimeString()}</p>}
+    </div>
+  );
+}
+```
+
+Features: full `loading` / `error` / `expiresAt` lifecycle, auto-refresh 60 s before credential expiry, configurable `onError` callback.
+
+---
+
+### Zod schemas (`@datacules/agent-identity/schemas`)
+
+For runtime validation in route handlers — replaces manual field-by-field checks with structured error output:
+
+```typescript
+import { AgentRequestContextSchema } from '@datacules/agent-identity/schemas';
+
+const parsed = AgentRequestContextSchema.safeParse(body);
+if (!parsed.success) {
+  return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
+}
+const ctx = parsed.data; // fully typed AgentRequestContext
+```
+
+Also usable for OpenAPI spec generation via `zod-to-json-schema` and Python Pydantic model generation.
+
+---
+
+### Express middleware
+
+```bash
+npm install @datacules/agent-identity-express
+```
+
+```typescript
+import express from 'express';
+import { agentIdentityMiddleware } from '@datacules/agent-identity-express';
+
+const app = express();
+
+app.use('/ai', agentIdentityMiddleware({ credentials, rules, logger }));
+
+app.post('/ai/complete', (req, res) => {
+  // req.resolvedCredential is populated by the middleware
+  const { ref, resolvedFor } = req.resolvedCredential!;
+  // pass ref to your vault — never the raw secret
+  res.json({ resolvedFor });
+});
+```
+
+---
+
+### Fastify plugin
+
+```bash
+npm install @datacules/agent-identity-fastify
+```
+
+```typescript
+import Fastify from 'fastify';
+import { agentIdentityPlugin } from '@datacules/agent-identity-fastify';
+
+const app = Fastify();
+
+await app.register(agentIdentityPlugin, { credentials, rules, logger });
+
+app.post('/ai/complete', async (request, reply) => {
+  const { ref, resolvedFor } = request.resolvedCredential!;
+  return { resolvedFor };
+});
+```
+
+---
+
+### LangChain / LangGraph
+
+```bash
+npm install @datacules/agent-identity-langchain
+```
+
+```typescript
+import { createAgentIdentityModel } from '@datacules/agent-identity-langchain';
+
+const { getModel, resolved } = createAgentIdentityModel(ctx, credentials, rules, fetchSecret);
+const model = await getModel(); // ChatAnthropic / ChatOpenAI — API key injected server-side
+
+const response = await model.invoke('Summarise this document.');
+```
+
+For LangGraph, use `createAgentIdentityNode()` as a drop-in `StateGraph` node that resolves and attaches `resolvedCredential` to graph state before any LLM call.
+
+---
+
+### Python / non-Node languages (Docker sidecar + HTTP)
+
+Run `agent-identity` as a language-agnostic sidecar. Any language that can make an HTTP request can use the framework.
+
+```bash
+docker pull datacules/agent-identity
+docker run -p 3001:3001 datacules/agent-identity
+```
+
+Or with Compose:
+
+```bash
+docker compose up
+```
+
+Then call the API from any language:
+
+```bash
+curl -s -X POST http://localhost:3001/api/resolve \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "userId": "user-abc",
+    "resourceId": "crm-db",
+    "resourceKind": "shared",
+    "provider": "anthropic",
+    "model": "claude-sonnet-4-20250514",
+    "action": "read",
+    "traceId": "trace-xyz",
+    "requestedAt": "2026-05-26T00:00:00.000Z"
+  }'
+# → { "resolvedFor": "service", "credentialId": "...", "expiresAt": "..." }
+```
+
+---
+
+### Python SDK
+
+```bash
+pip install agent-identity
+```
+
+```python
+from agent_identity import AgentIdentityClient
+from datetime import datetime, timezone
+
+client = AgentIdentityClient(base_url="http://localhost:3001")
+
+resolved = client.resolve({
+    "userId": "user-abc",
+    "resourceId": "crm-db",
+    "resourceKind": "shared",
+    "provider": "anthropic",
+    "model": "claude-sonnet-4-20250514",
+    "action": "read",
+    "traceId": "trace-xyz",
+    "requestedAt": datetime.now(timezone.utc).isoformat(),
+})
+print(resolved["resolvedFor"])  # → "service"
+
+# For migration workflows:
+pair = client.resolve_migration({
+    "migrationId": "migration-2026-q2",
+    "phase": "load",
+    "sourceResourceId": "crm-postgres-prod",
+    "targetResourceId": "crm-postgres-v2",
+    "userId": "svc-migration-bot",
+    "provider": "anthropic",
+    "model": "claude-sonnet-4-20250514",
+    "traceId": "trace-abc123",
+    "dryRun": False,
+})
+```
+
+Zero runtime dependencies. Fully typed with `TypedDict`. Works with LangChain, AutoGen, CrewAI, or any Python agent framework.
+
+---
+
+### Production credential stores
+
+Swap out `MemoryCredentialStore` for a production-grade store:
+
+```typescript
+// AWS Secrets Manager + DynamoDB reservation locks
+import { AwsCredentialStore } from '@datacules/agent-identity-store-aws';
+const router = createRouterFromStore(new AwsCredentialStore(), rules, logger);
+
+// HashiCorp Vault KV v2
+import { VaultCredentialStore } from '@datacules/agent-identity-store-vault';
+const router = createRouterFromStore(new VaultCredentialStore(), rules, logger);
+```
+
+---
+
+### Audit sinks
+
+```typescript
+import {
+  ConsoleAuditLogger,
+  WebhookAuditLogger,
+  DatadogAuditLogger,
+  SplunkAuditLogger,
+  CompositeAuditLogger,
+} from '@datacules/agent-identity-audit';
+
+// Fan-out to multiple sinks simultaneously
+const logger = new CompositeAuditLogger([
+  new ConsoleAuditLogger(),
+  new DatadogAuditLogger({ apiKey: process.env.DD_API_KEY! }),
+  new WebhookAuditLogger({ url: 'https://hooks.example.com/agent-audit', secret: '...' }),
+]);
+
+const router = createRouter(credentials, rules, logger);
+```
+
+---
+
+### Interactive dashboard (local dev / demo)
+
+```bash
+git clone https://github.com/hvrcharon1/agent-identity.git
+cd agent-identity
+npm install
+npm run dev
+```
+
+Open [http://localhost:3000](http://localhost:3000). The Decision Helper wizard walks through three questions and recommends the right auth pattern. The **Data migration** tab covers phase-aware routing with copyable rule examples.
+
+---
+
 ## Why this exists — the identity problem in agentic AI
 
 Every AI agent that touches a real system must answer three questions before it acts:
@@ -214,7 +499,7 @@ A `dry-run` rule with `readOnly: true` will be rejected by the router if the res
 
 **3. `resolvePair()` — dual-credential resolution in one call**
 
-The router's new `resolvePair(ctx: MigrationContext)` method resolves both source and target credentials simultaneously, with overridden actions per credential:
+The router's `resolvePair(ctx: MigrationContext)` method resolves both source and target credentials simultaneously:
 
 ```typescript
 const router = createRouter(credentials, rules, logger);
@@ -229,8 +514,6 @@ if (!pair) {
 // pair.expiresAt → ISO 8601 earliest expiry of both — use this to know when to refresh
 // pair.migrationId → tied to ctx.migrationId for the full audit trail
 ```
-
-A single call. Both credentials resolved. The agent knows the expiry window before the batch loop starts.
 
 **4. `POST /api/migrate/resolve` — batch-friendly HTTP endpoint**
 
@@ -272,7 +555,7 @@ The agent calls this once per phase, not once per row. For a migration of 100,00
 
 **5. `validateForMigration()` — catch scope mismatches before data moves**
 
-Every provider adapter now implements `validateForMigration(credential, phase)`. The check fires before any row is read or written:
+Every provider adapter implements `validateForMigration(credential, phase)`. The check fires before any row is read or written:
 
 ```typescript
 const adapter = getAdapter(ctx.provider);
@@ -283,11 +566,9 @@ const adapter = getAdapter(ctx.provider);
 adapter.validateForMigration?.(resolved, ctx.phase);
 ```
 
-This catches the most common migration misconfiguration — using the source read credential for the load phase — at the routing layer, with a clear error, before any writes are attempted.
-
 **6. `reserve()` / `release()` — prevent concurrent migration corruption**
 
-Credential stores now support reservations. Call `reserve()` before the batch loop; call `release()` in the `finally` block:
+Credential stores support reservations. Call `reserve()` before the batch loop; call `release()` in the `finally` block:
 
 ```typescript
 const store = new MemoryCredentialStore(credentials);
@@ -304,8 +585,6 @@ try {
 }
 ```
 
-Without this, two concurrent migration jobs sharing a write credential will interleave their writes on the target. The result is a corrupted dataset that may not surface until long after both jobs complete.
-
 **7. `MigrationAuditLogEntry` — groupable, summarisable audit trail**
 
 All migration activity extends the base `AuditLogEntry` with migration-specific fields:
@@ -314,13 +593,13 @@ All migration activity extends the base `AuditLogEntry` with migration-specific 
 interface MigrationAuditLogEntry extends AuditLogEntry {
   migrationId: string;       // group all phases of one run
   phase: MigrationPhase;     // which phase produced this entry
-  rowsRead?: number;         // rows read in this step
-  rowsWritten?: number;      // rows written in this step
-  rowsFailed?: number;       // rows that errored
+  rowsRead?: number;
+  rowsWritten?: number;
+  rowsFailed?: number;
   dryRun: boolean;
   sourceCredentialId: string;
   targetCredentialId: string;
-  errorSummary?: string;     // short human-readable error description
+  errorSummary?: string;
 }
 ```
 
@@ -328,12 +607,7 @@ The `MigrationAuditLogger` interface adds `summarize(migrationId)` — call it a
 
 **8. Migration tab in the UI**
 
-The app's navigation now includes a **Data migration** tab that provides:
-
-- A visual flow diagram showing Source → Agent (holds both credentials) → Target
-- A clickable phase timeline (dry-run → extract → transform → load → verify → rollback) showing which credential is active at each phase, along with warnings and a copyable example routing rule
-- A configuration Q&A that detects common misconfigurations: cross-provider migrations that need a token exchange, same-credential-for-source-and-target errors, and long-running migrations that need `reserve()` called before the batch loop
-- An API quick-reference card for the migration-specific methods and endpoint
+The app's navigation includes a **Data migration** tab with a visual flow diagram, clickable phase timeline, configuration Q&A, and a copyable API quick-reference card.
 
 ### Why data migration is uniquely dangerous without this
 
@@ -342,7 +616,7 @@ Most credential misconfigurations in agentic systems are caught quickly — a wr
 - **A dry-run with a write-capable credential silently writes.** The dry-run returns no errors, the team proceeds with confidence, and the production run is now a double-write.
 - **A read-only credential on the load phase fails at the database layer, not the routing layer.** By the time the error surfaces, the agent may have processed thousands of rows and the rollback path is unclear.
 - **Two concurrent migration jobs on the same write credential produce interleaved writes.** Neither job errors. The target dataset is silently corrupted.
-- **A migration without a grouped audit trail is unreplayable.** If row 43,271 failed, which phase was it in, which batch, which credential was active, and what was the error? Without `migrationId` threading every entry, reconstructing the answer requires correlating thousands of individual audit records by timestamp.
+- **A migration without a grouped audit trail is unreplayable.** Without `migrationId` threading every entry, reconstructing what failed requires correlating thousands of individual audit records by timestamp.
 
 The migration enhancements in `agent-identity` close all four failure modes by design, not by convention.
 
@@ -383,7 +657,7 @@ The migration enhancements in `agent-identity` close all four failure modes by d
 
 ### Credential routing
 
-The routing engine (`src/lib/router.ts`) inspects each outbound call and selects the correct credential based on:
+The routing engine (`packages/core/src/router.ts`) inspects each outbound call and selects the correct credential based on:
 - Target resource type (`shared` vs `personal`)
 - Calling user's identity context
 - Migration phase (when `MigrationContext` is provided)
@@ -393,78 +667,14 @@ The model layer **never** sees raw credentials. The router injects them at call 
 
 ### Provider adapters
 
-Adapters in `src/lib/providers.ts` normalise credential injection across providers. Add a new provider by implementing the `ProviderAdapter` interface — your routing rules and audit configuration are untouched. All adapters now also implement `validateForMigration()` to catch scope mismatches before data moves.
-
----
-
-## Getting started
-
-```bash
-npm install
-npm run dev
-```
-
-Open [http://localhost:3000](http://localhost:3000).
-
-The Decision Helper wizard walks you through three questions — variable access levels, mixed resource types, per-user audit requirements — and recommends the right auth pattern for your use case.
-
-For migration workflows, open the **Data migration** tab. It walks you through which credential is active at each phase, surfaces common misconfigurations, and provides copyable routing rule examples for your specific setup.
-
----
-
-## Project structure
-
-```
-agent-identity/
-├── assets/
-│   └── logo.svg                        # Datacules brand mark
-├── src/
-│   ├── app/                            # Next.js app router pages
-│   │   ├── layout.tsx
-│   │   ├── page.tsx                    # Main dashboard (all tabs)
-│   │   └── api/
-│   │       ├── resolve/
-│   │       │   └── route.ts            # POST /api/resolve — single credential resolution
-│   │       └── migrate/
-│   │           └── resolve/
-│   │               └── route.ts        # POST /api/migrate/resolve — dual-credential migration resolution
-│   ├── components/
-│   │   ├── FlowDiagram.tsx
-│   │   ├── IdentitiesTab.tsx
-│   │   ├── PatternsTab.tsx
-│   │   ├── CredentialsTab.tsx
-│   │   ├── DecisionTab.tsx
-│   │   └── MigrationTab.tsx            # Data migration guide — flow diagram, phase timeline, config Q&A
-│   ├── lib/
-│   │   ├── types.ts                    # Core type definitions (incl. MigrationContext, MigrationPhase)
-│   │   ├── patterns.ts                 # Auth pattern definitions
-│   │   ├── credentials.ts              # Credential store abstraction
-│   │   ├── router.ts                   # Credential routing engine (incl. resolvePair, reserve/release)
-│   │   ├── decision.ts                 # Decision helper logic
-│   │   └── providers.ts                # AI provider adapters (incl. validateForMigration)
-│   └── hooks/
-│       ├── useIdentity.ts
-│       ├── useCredentials.ts
-│       └── useRouter.ts
-├── docs/
-│   ├── patterns.md                     # Auth pattern reference
-│   ├── credential-routing.md           # Router internals
-│   └── provider-integration.md        # Adding new providers
-├── examples/
-│   ├── openai-user-delegated/          # Per-user token with OpenAI
-│   ├── anthropic-fixed-cred/           # Fixed service account with Anthropic
-│   └── hybrid-routing/                 # Context-switched in one workflow
-├── package.json
-├── tsconfig.json
-└── next.config.js
-```
+Adapters in `packages/core/src/providers.ts` normalise credential injection across providers. Add a new provider by implementing the `ProviderAdapter` interface — your routing rules and audit configuration are untouched. All adapters also implement `validateForMigration()` to catch scope mismatches before data moves.
 
 ---
 
 ## Adding a routing rule
 
 ```typescript
-import type { RoutingRule } from '@/lib/types';
+import type { RoutingRule } from '@datacules/agent-identity';
 
 // Standard rule — single credential, any phase
 const rule: RoutingRule = {
@@ -489,6 +699,68 @@ const migrationExtractRule: RoutingRule = {
 ```
 
 The router matches on `resourceKind`, `phase`, `provider`, `userId`, and `action` — resolves the credential ref server-side, injects it via the provider adapter, and writes the audit entry. The model never sees the credential.
+
+---
+
+## Project structure
+
+```
+agent-identity/
+├── packages/
+│   ├── core/                           # @datacules/agent-identity (publishable npm package)
+│   │   └── src/
+│   │       ├── types.ts                # Core type definitions
+│   │       ├── router.ts               # Credential routing engine
+│   │       ├── providers.ts            # AI provider adapters
+│   │       ├── decision.ts             # Decision helper logic
+│   │       ├── schemas.ts              # Zod schemas (validation + OpenAPI generation)
+│   │       ├── credentials.ts          # Default credentials (dev/demo)
+│   │       └── react/
+│   │           └── useAgentIdentity.ts # Production-safe React hook
+│   ├── audit/                          # @datacules/agent-identity-audit
+│   │   └── src/                        # Console, Webhook, Datadog, Splunk, Composite sinks
+│   ├── stores/
+│   │   ├── aws/                        # @datacules/agent-identity-store-aws
+│   │   └── vault/                      # @datacules/agent-identity-store-vault
+│   └── integrations/
+│       ├── langchain/                  # @datacules/agent-identity-langchain
+│       ├── express/                    # @datacules/agent-identity-express
+│       └── fastify/                    # @datacules/agent-identity-fastify
+├── src/                                # Next.js dashboard app
+│   ├── app/
+│   │   ├── layout.tsx
+│   │   ├── page.tsx
+│   │   └── api/
+│   │       ├── resolve/route.ts        # POST /api/resolve
+│   │       └── migrate/resolve/route.ts # POST /api/migrate/resolve
+│   ├── components/
+│   │   ├── FlowDiagram.tsx
+│   │   ├── IdentitiesTab.tsx
+│   │   ├── PatternsTab.tsx
+│   │   ├── CredentialsTab.tsx
+│   │   ├── DecisionTab.tsx
+│   │   └── MigrationTab.tsx
+│   ├── lib/                            # App-layer wrappers (re-export from packages/core)
+│   └── hooks/
+│       ├── useIdentity.ts
+│       ├── useCredentials.ts
+│       └── useRouter.ts
+├── docs/
+│   ├── openapi.yaml                    # OpenAPI 3.1 spec for /api/resolve + /api/migrate/resolve
+│   ├── patterns.md
+│   ├── credential-routing.md
+│   └── provider-integration.md
+├── examples/
+│   ├── openai-user-delegated/
+│   ├── anthropic-fixed-cred/
+│   └── hybrid-routing/
+├── packages/python-sdk/                # pip install agent-identity
+├── Dockerfile
+├── docker-compose.yml
+├── package.json                        # Monorepo root (npm workspaces + turbo)
+├── tsconfig.json
+└── next.config.js
+```
 
 ---
 
