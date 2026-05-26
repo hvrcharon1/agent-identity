@@ -14,14 +14,13 @@
   "module": "./dist/esm/index.js",
   "types": "./dist/types/index.d.ts",
   "exports": {
-    ".": {
+    "." : {
       "import": "./dist/esm/index.js",
       "require": "./dist/cjs/index.js",
       "types": "./dist/types/index.d.ts"
     },
     "./react": {
       "import": "./dist/esm/react/index.js",
-      "require": "./dist/cjs/react/index.js",
       "types": "./dist/types/react/index.d.ts"
     },
     "./schemas": {
