@@ -1,0 +1,27 @@
+version: '3.9'
+
+services:
+  agent-identity:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: datacules/agent-identity:latest
+    ports:
+      - '3001:3001'
+    env_file:
+      - .env.local
+    healthcheck:
+      test: ['CMD', 'wget', '-qO-', 'http://localhost:3001/api/health']
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    restart: unless-stopped
+
+  # Example: Python LangChain service consuming the sidecar
+  # my-python-agent:
+  #   build: ./examples/python-langchain
+  #   environment:
+  #     AGENT_IDENTITY_URL: http://agent-identity:3001
+  #   depends_on:
+  #     agent-identity:
+  #       condition: service_healthy

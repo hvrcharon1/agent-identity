@@ -1,0 +1,274 @@
+openapi: 3.1.0
+info:
+  title: agent-identity credential resolution API
+  version: 0.1.0
+  description: |
+    Language-agnostic REST contract for resolving agent credentials.
+    Any application (Python, Go, Ruby, Java) can POST to /api/resolve or
+    /api/migrate/resolve. The server resolves the credential from an encrypted
+    store and returns only safe metadata — never the raw secret.
+  contact:
+    name: Datacules LLC
+    url: https://github.com/hvrcharon1/agent-identity
+  license:
+    name: MIT
+
+servers:
+  - url: http://localhost:3000
+    description: Local dev
+  - url: http://localhost:3001
+    description: Docker sidecar
+
+paths:
+  /api/resolve:
+    post:
+      operationId: resolveCredential
+      summary: Resolve the best credential for an agent request
+      description: |
+        The caller sends an AgentRequestContext describing the current task.
+        The server matches it against routing rules, resolves the credential
+        from the encrypted store, and returns only safe metadata.
+        The raw secret never leaves the server.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AgentRequestContext'
+            examples:
+              personal-resource:
+                summary: User reading from their knowledge base
+                value:
+                  userId: user-abc
+                  resourceId: kb-1
+                  resourceKind: personal
+                  provider: anthropic
+                  model: claude-sonnet-4-20250514
+                  action: read
+                  traceId: trace-xyz
+                  requestedAt: '2026-05-26T10:00:00.000Z'
+              shared-tool:
+                summary: Agent writing to a shared Linear board
+                value:
+                  userId: user-abc
+                  resourceId: linear-board-1
+                  resourceKind: shared
+                  provider: openai
+                  model: gpt-4o
+                  action: write
+                  traceId: trace-abc
+                  requestedAt: '2026-05-26T10:00:00.000Z'
+      responses:
+        '200':
+          description: Credential resolved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResolveResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/NoCredential'
+
+  /api/migrate/resolve:
+    post:
+      operationId: resolveMigrationCredentials
+      summary: Resolve source + target credentials for a migration phase
+      description: |
+        A migration job calls this once per phase to establish both source
+        (read) and target (write) credentials upfront. Returns the earliest
+        expiry of the two, so the agent knows when to refresh before the
+        batch loop ends. One round-trip per phase, not per row.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MigrateResolveRequest'
+            examples:
+              load-phase:
+                summary: Starting the load phase of a CRM migration
+                value:
+                  migrationId: migration-2026-q2
+                  phase: load
+                  sourceResourceId: crm-postgres-prod
+                  targetResourceId: crm-postgres-v2
+                  userId: svc-migration-bot
+                  provider: anthropic
+                  model: claude-sonnet-4-20250514
+                  traceId: trace-mig-001
+                  dryRun: false
+      responses:
+        '200':
+          description: Both credentials resolved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MigrateResolveResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/NoCredential'
+
+components:
+  schemas:
+    AgentRequestContext:
+      type: object
+      required:
+        - userId
+        - resourceId
+        - resourceKind
+        - provider
+        - model
+        - action
+        - traceId
+        - requestedAt
+      properties:
+        userId:
+          type: string
+          minLength: 1
+          description: Identifier of the user on whose behalf the agent acts
+        resourceId:
+          type: string
+          minLength: 1
+          description: Identifier of the resource being accessed
+        resourceKind:
+          $ref: '#/components/schemas/ResourceKind'
+        provider:
+          $ref: '#/components/schemas/SupportedProvider'
+        model:
+          type: string
+          description: Model string e.g. 'claude-sonnet-4-20250514' or 'gpt-4o'
+        action:
+          type: string
+          description: "Action being performed: read, write, delete, etc."
+        traceId:
+          type: string
+          description: Propagate across all steps of a multi-step agent run
+        sessionId:
+          type: string
+          description: Groups related requests for the same user session
+        requestedAt:
+          type: string
+          format: date-time
+          description: ISO 8601 timestamp of when the request was initiated
+        parentTraceId:
+          type: string
+          description: For nested agent calls
+
+    MigrateResolveRequest:
+      type: object
+      required:
+        - migrationId
+        - phase
+        - sourceResourceId
+        - targetResourceId
+        - userId
+        - provider
+        - model
+        - traceId
+      properties:
+        migrationId:
+          type: string
+          description: Ties all phases of one migration run together
+        phase:
+          $ref: '#/components/schemas/MigrationPhase'
+        sourceResourceId:
+          type: string
+          description: Resource data comes FROM
+        targetResourceId:
+          type: string
+          description: Resource data goes TO
+        userId:
+          type: string
+        provider:
+          $ref: '#/components/schemas/SupportedProvider'
+        model:
+          type: string
+        traceId:
+          type: string
+        dryRun:
+          type: boolean
+          default: false
+          description: When true, read-only credential resolution is enforced on both source and target
+        batchIndex:
+          type: integer
+          minimum: 0
+        totalBatches:
+          type: integer
+          minimum: 1
+
+    ResolveResponse:
+      type: object
+      required:
+        - ok
+        - resolvedFor
+      properties:
+        ok:
+          type: boolean
+        resolvedFor:
+          type: string
+          description: "'service' for fixed credentials; userId for user-delegated"
+        expiresAt:
+          type: string
+          format: date-time
+          description: When the credential expires; absent if it does not expire
+
+    MigrateResolveResponse:
+      type: object
+      required:
+        - migrationId
+        - phase
+        - sourceResolvedFor
+        - targetResolvedFor
+        - dryRun
+      properties:
+        migrationId:
+          type: string
+        phase:
+          $ref: '#/components/schemas/MigrationPhase'
+        sourceResolvedFor:
+          type: string
+        targetResolvedFor:
+          type: string
+        dryRun:
+          type: boolean
+        expiresAt:
+          type: string
+          format: date-time
+          description: Earliest expiry of source or target credential
+
+    ResourceKind:
+      type: string
+      enum: [shared, personal]
+      description: "shared = uniform access for all users; personal = per-user delegated access"
+
+    SupportedProvider:
+      type: string
+      enum: [openai, anthropic, gemini, mistral, local]
+
+    MigrationPhase:
+      type: string
+      enum: [dry-run, extract, transform, load, verify, rollback]
+
+    Error:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: string
+
+  responses:
+    BadRequest:
+      description: Missing or invalid field in request body
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    NoCredential:
+      description: No routing rule matched or credential could not be resolved
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
