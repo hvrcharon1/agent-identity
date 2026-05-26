@@ -122,7 +122,7 @@ function AiComposer({ userId }: { userId: string }) {
 }
 ```
 
-Features: full `loading` / `error` / `expiresAt` lifecycle, auto-refresh 60 s before credential expiry, configurable `onError` callback.
+Features: full `loading` / `error` / `expiresAt` lifecycle, auto-refresh 60 s before credential expiry, configurable `onError` callback.
 
 ---
 
@@ -150,16 +150,19 @@ Also usable for OpenAPI spec generation via `zod-to-json-schema` and Python Pyda
 npm install @datacules/agent-identity-express
 ```
 
+The middleware reads `req.body.agentContext` (configurable via `contextKey`) and attaches the resolved credential to `req.resolvedCredential`. Requires `express.json()` to be registered before the middleware.
+
 ```typescript
 import express from 'express';
 import { agentIdentityMiddleware } from '@datacules/agent-identity-express';
 
 const app = express();
+app.use(express.json()); // required — parses the JSON body before the middleware runs
 
 app.use('/ai', agentIdentityMiddleware({ credentials, rules, logger }));
 
 app.post('/ai/complete', (req, res) => {
-  // req.resolvedCredential is populated by the middleware
+  // The caller's JSON body must include: { agentContext: { userId, resourceId, ... } }
   const { ref, resolvedFor } = req.resolvedCredential!;
   // pass ref to your vault — never the raw secret
   res.json({ resolvedFor });
@@ -183,6 +186,7 @@ const app = Fastify();
 await app.register(agentIdentityPlugin, { credentials, rules, logger });
 
 app.post('/ai/complete', async (request, reply) => {
+  // The caller's JSON body must include: { agentContext: { userId, resourceId, ... } }
   const { ref, resolvedFor } = request.resolvedCredential!;
   return { resolvedFor };
 });
@@ -196,16 +200,23 @@ app.post('/ai/complete', async (request, reply) => {
 npm install @datacules/agent-identity-langchain
 ```
 
+`createAgentIdentityModel` takes an options object for `credentials`, `rules`, `fetchSecret`, and optional `logger`:
+
 ```typescript
 import { createAgentIdentityModel } from '@datacules/agent-identity-langchain';
 
-const { getModel, resolved } = createAgentIdentityModel(ctx, credentials, rules, fetchSecret);
-const model = await getModel(); // ChatAnthropic / ChatOpenAI — API key injected server-side
+const { getModel, resolved } = createAgentIdentityModel(ctx, {
+  credentials,
+  rules,
+  fetchSecret, // (ref: string) => Promise<string> — your vault call, server-side only
+  logger,      // optional AuditLogger
+});
 
+const model = await getModel(); // ChatAnthropic / ChatOpenAI — API key injected server-side
 const response = await model.invoke('Summarise this document.');
 ```
 
-For LangGraph, use `createAgentIdentityNode()` as a drop-in `StateGraph` node that resolves and attaches `resolvedCredential` to graph state before any LLM call.
+For LangGraph, use `createAgentIdentityNode()` as a drop-in `StateGraph` node that resolves and attaches `resolvedCredential` to graph state before any LLM call. The node reads `state.agentContext` and writes `state.resolvedCredential`.
 
 ---
 
@@ -282,7 +293,7 @@ pair = client.resolve_migration({
 })
 ```
 
-Zero runtime dependencies. Fully typed with `TypedDict`. Works with LangChain, AutoGen, CrewAI, or any Python agent framework.
+Zero runtime dependencies. Fully typed with `TypedDict`. Raises `ValidationError` (400) or `NoCredentialError` (403) for clean error handling. Works with LangChain, AutoGen, CrewAI, or any Python agent framework.
 
 ---
 
@@ -561,8 +572,8 @@ Every provider adapter implements `validateForMigration(credential, phase)`. The
 const adapter = getAdapter(ctx.provider);
 
 // Throws immediately if a read-only credential ref is used in a load or rollback phase:
-// "[anthropic] Migration phase "load" requires a write-scoped credential,
-//  but credential ref "source-readonly-slot" appears to be read-only."
+// "[anthropic] Migration phase \"load\" requires a write-scoped credential,
+//  but credential ref \"source-readonly-slot\" appears to be read-only."
 adapter.validateForMigration?.(resolved, ctx.phase);
 ```
 
@@ -722,10 +733,13 @@ agent-identity/
 │   ├── stores/
 │   │   ├── aws/                        # @datacules/agent-identity-store-aws
 │   │   └── vault/                      # @datacules/agent-identity-store-vault
-│   └── integrations/
-│       ├── langchain/                  # @datacules/agent-identity-langchain
-│       ├── express/                    # @datacules/agent-identity-express
-│       └── fastify/                    # @datacules/agent-identity-fastify
+│   ├── integrations/
+│   │   ├── langchain/                  # @datacules/agent-identity-langchain
+│   │   ├── express/                    # @datacules/agent-identity-express
+│   │   └── fastify/                    # @datacules/agent-identity-fastify
+│   └── python-sdk/                     # pip install agent-identity
+│       ├── agent_identity/__init__.py  # AgentIdentityClient, typed dicts, exceptions
+│       └── pyproject.toml
 ├── src/                                # Next.js dashboard app
 │   ├── app/
 │   │   ├── layout.tsx
@@ -754,7 +768,6 @@ agent-identity/
 │   ├── openai-user-delegated/
 │   ├── anthropic-fixed-cred/
 │   └── hybrid-routing/
-├── packages/python-sdk/                # pip install agent-identity
 ├── Dockerfile
 ├── docker-compose.yml
 ├── package.json                        # Monorepo root (npm workspaces + turbo)
