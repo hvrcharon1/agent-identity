@@ -1,0 +1,12 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "outDir": "./dist/esm",
+    "module": "ESNext",
+    "declarationDir": "./dist/types",
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true
+  }
+}

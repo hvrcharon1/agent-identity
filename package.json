@@ -1,36 +1,22 @@
 {
-  "name": "agent-identity",
-  "version": "0.1.0",
+  "name": "agent-identity-monorepo",
   "private": true,
+  "workspaces": [
+    "packages/*",
+    "packages/stores/*",
+    "packages/integrations/*"
+  ],
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
-    "lint": "next lint",
-    "type-check": "tsc --noEmit",
-    "test": "vitest run",
-    "test:watch": "vitest"
-  },
-  "dependencies": {
-    "next": "14.2.3",
-    "react": "^18",
-    "react-dom": "^18",
-    "class-variance-authority": "^0.7.0",
-    "clsx": "^2.1.0",
-    "tailwind-merge": "^2.2.2",
-    "zod": "^3.22.4"
+    "dev": "turbo dev --filter=@datacules/agent-identity-app",
+    "build": "turbo build",
+    "test": "turbo test",
+    "lint": "turbo lint",
+    "type-check": "turbo type-check"
   },
   "devDependencies": {
-    "@types/node": "^20",
-    "@types/react": "^18",
-    "@types/react-dom": "^18",
-    "@vitejs/plugin-react": "^4.3.0",
-    "autoprefixer": "^10.0.1",
-    "postcss": "^8",
-    "tailwindcss": "^3.3.0",
-    "typescript": "^5",
-    "eslint": "^8",
-    "eslint-config-next": "14.2.3",
-    "vitest": "^1.6.0"
+    "turbo": "^1.13.3"
+  },
+  "engines": {
+    "node": ">=20"
   }
 }
