@@ -1,0 +1,36 @@
+{
+  "name": "@datacules/agent-identity-store-azure",
+  "version": "0.1.0",
+  "private": false,
+  "description": "Azure Key Vault + Table Storage credential store for @datacules/agent-identity",
+  "main": "./dist/cjs/index.js",
+  "module": "./dist/esm/index.js",
+  "types": "./dist/types/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/esm/index.js",
+      "require": "./dist/cjs/index.js",
+      "types": "./dist/types/index.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json && tsc -p tsconfig.cjs.json",
+    "type-check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@azure/keyvault-secrets": "^4.8.0",
+    "@azure/data-tables": "^13.2.2",
+    "@azure/identity": "^4.3.0"
+  },
+  "peerDependencies": {
+    "@datacules/agent-identity": "^0.1.0"
+  },
+  "devDependencies": {
+    "@datacules/agent-identity": "*",
+    "typescript": "^5"
+  },
+  "files": [
+    "dist",
+    "src"
+  ]
+}
