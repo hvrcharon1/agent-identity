@@ -2,8 +2,9 @@
 pytest suite for agent_identity.AgentIdentityClient.
 
 All HTTP calls are intercepted via unittest.mock so no live server is needed.
-The mock patches urllib.request.urlopen at the module level where the SDK
-imports it, ensuring the patch always lines up with the actual call site.
+The SDK imports urllib.request as _urllib (a module-level alias), so the
+correct patch target is urllib.request.urlopen — patching the real module
+in-place so every call through _urllib is intercepted regardless of alias.
 """
 
 from __future__ import annotations
@@ -92,7 +93,7 @@ class TestResolve(unittest.TestCase):
     def setUp(self):
         self.client = AgentIdentityClient()
 
-    @patch("agent_identity.urllib.request.urlopen")
+    @patch("urllib.request.urlopen")
     def test_resolve_success(self, mock_urlopen):
         expected = {"ok": True, "resolvedFor": "user-1", "expiresAt": None}
         mock_urlopen.return_value = _make_response(expected)
@@ -103,7 +104,7 @@ class TestResolve(unittest.TestCase):
         self.assertTrue(result["ok"])
         mock_urlopen.assert_called_once()
 
-    @patch("agent_identity.urllib.request.urlopen")
+    @patch("urllib.request.urlopen")
     def test_resolve_auto_injects_requested_at(self, mock_urlopen):
         """resolve() must add requestedAt when the caller omits it."""
         ctx_without_ts = {k: v for k, v in MINIMAL_CTX.items() if k != "requestedAt"}
@@ -117,7 +118,7 @@ class TestResolve(unittest.TestCase):
         sent_body = json.loads(request_obj.data.decode())
         self.assertIn("requestedAt", sent_body)
 
-    @patch("agent_identity.urllib.request.urlopen")
+    @patch("urllib.request.urlopen")
     def test_resolve_no_credential_raises(self, mock_urlopen):
         mock_urlopen.side_effect = _make_http_error({"error": "No credential resolved"}, 403)
 
@@ -127,7 +128,7 @@ class TestResolve(unittest.TestCase):
         self.assertEqual(cm.exception.status_code, 403)
         self.assertIn("No credential resolved", str(cm.exception))
 
-    @patch("agent_identity.urllib.request.urlopen")
+    @patch("urllib.request.urlopen")
     def test_resolve_validation_error_raises(self, mock_urlopen):
         mock_urlopen.side_effect = _make_http_error({"error": "Missing required field: userId"}, 400)
 
@@ -136,7 +137,7 @@ class TestResolve(unittest.TestCase):
 
         self.assertEqual(cm.exception.status_code, 400)
 
-    @patch("agent_identity.urllib.request.urlopen")
+    @patch("urllib.request.urlopen")
     def test_resolve_server_error_raises(self, mock_urlopen):
         mock_urlopen.side_effect = _make_http_error({"error": "Internal server error"}, 500)
 
@@ -145,7 +146,7 @@ class TestResolve(unittest.TestCase):
 
         self.assertEqual(cm.exception.status_code, 500)
 
-    @patch("agent_identity.urllib.request.urlopen")
+    @patch("urllib.request.urlopen")
     def test_resolve_network_failure_raises(self, mock_urlopen):
         import urllib.error
         mock_urlopen.side_effect = urllib.error.URLError("Connection refused")
@@ -155,7 +156,7 @@ class TestResolve(unittest.TestCase):
 
         self.assertIsNone(cm.exception.status_code)
 
-    @patch("agent_identity.urllib.request.urlopen")
+    @patch("urllib.request.urlopen")
     def test_resolve_returns_expires_at(self, mock_urlopen):
         expected = {
             "ok": True,
@@ -173,7 +174,7 @@ class TestResolveMigration(unittest.TestCase):
     def setUp(self):
         self.client = AgentIdentityClient()
 
-    @patch("agent_identity.urllib.request.urlopen")
+    @patch("urllib.request.urlopen")
     def test_resolve_migration_success(self, mock_urlopen):
         expected = {
             "migrationId": "mig-001",
@@ -191,7 +192,7 @@ class TestResolveMigration(unittest.TestCase):
         self.assertEqual(result["sourceResolvedFor"], "service")
         mock_urlopen.assert_called_once()
 
-    @patch("agent_identity.urllib.request.urlopen")
+    @patch("urllib.request.urlopen")
     def test_resolve_migration_injects_dry_run_false(self, mock_urlopen):
         req_without_dry_run = {k: v for k, v in MINIMAL_MIGRATION.items() if k != "dryRun"}
         expected = {
@@ -211,7 +212,7 @@ class TestResolveMigration(unittest.TestCase):
         sent_body = json.loads(request_obj.data.decode())
         self.assertFalse(sent_body["dryRun"])
 
-    @patch("agent_identity.urllib.request.urlopen")
+    @patch("urllib.request.urlopen")
     def test_resolve_migration_no_credential_raises(self, mock_urlopen):
         mock_urlopen.side_effect = _make_http_error({"error": "No credential resolved"}, 403)
 
@@ -223,18 +224,18 @@ class TestHealth(unittest.TestCase):
     def setUp(self):
         self.client = AgentIdentityClient()
 
-    @patch("agent_identity.urllib.request.urlopen")
+    @patch("urllib.request.urlopen")
     def test_health_returns_true_on_200(self, mock_urlopen):
         mock_urlopen.return_value = _make_response({"ok": True})
         self.assertTrue(self.client.health())
 
-    @patch("agent_identity.urllib.request.urlopen")
+    @patch("urllib.request.urlopen")
     def test_health_returns_false_on_connection_error(self, mock_urlopen):
         import urllib.error
         mock_urlopen.side_effect = urllib.error.URLError("Connection refused")
         self.assertFalse(self.client.health())
 
-    @patch("agent_identity.urllib.request.urlopen")
+    @patch("urllib.request.urlopen")
     def test_health_returns_false_on_500(self, mock_urlopen):
         mock_urlopen.side_effect = _make_http_error({"error": "Internal error"}, 500)
         self.assertFalse(self.client.health())
