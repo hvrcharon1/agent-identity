@@ -15,11 +15,24 @@ import path from 'path';
 export default defineConfig({
   test: {
     environment: 'node',
-    include: ['src/**/*.test.ts', 'src/**/*.test.tsx'],
+    // Include tests from both the root Next.js app (src/) and the
+    // publishable core package (packages/core/src/). Other workspace
+    // packages (express, fastify, langchain, stores) have their own
+    // vitest configs and are run via `npm run build:packages`.
+    include: [
+      'src/**/*.test.ts',
+      'src/**/*.test.tsx',
+      'packages/core/src/**/*.test.ts',
+    ],
   },
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
+      // Resolve workspace package imports to source during vitest runs
+      // so tests don't require a prior `npm run build:packages`.
+      '@datacules/agent-identity': path.resolve(__dirname, './packages/core/src/index.ts'),
+      '@datacules/agent-identity/schemas': path.resolve(__dirname, './packages/core/src/schemas.ts'),
+      '@datacules/agent-identity/react': path.resolve(__dirname, './packages/core/src/react/index.ts'),
     },
   },
 });

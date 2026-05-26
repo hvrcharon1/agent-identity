@@ -1,0 +1,20 @@
+{
+  "name": "@datacules/agent-identity-store-vault",
+  "version": "0.1.0",
+  "private": false,
+  "description": "HashiCorp Vault KV v2 credential store for @datacules/agent-identity",
+  "main": "./dist/cjs/index.js",
+  "module": "./dist/esm/index.js",
+  "types": "./dist/types/index.d.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "type-check": "tsc --noEmit"
+  },
+  "peerDependencies": {
+    "@datacules/agent-identity": "^0.1.0"
+  },
+  "devDependencies": {
+    "@datacules/agent-identity": "*",
+    "typescript": "^5"
+  }
+}

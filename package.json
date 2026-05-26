@@ -1,7 +1,16 @@
 {
-  "name": "agent-identity",
+  "name": "agent-identity-monorepo",
   "version": "0.1.0",
   "private": true,
+  "workspaces": [
+    "packages/core",
+    "packages/audit",
+    "packages/stores/aws",
+    "packages/stores/vault",
+    "packages/integrations/express",
+    "packages/integrations/fastify",
+    "packages/integrations/langchain"
+  ],
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -9,7 +18,10 @@
     "lint": "next lint",
     "type-check": "tsc --noEmit",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "build:packages": "npm run build --workspace=packages/core",
+    "build:app": "next build",
+    "turbo:build": "turbo build"
   },
   "dependencies": {
     "next": "14.2.3",
@@ -31,6 +43,10 @@
     "typescript": "^5",
     "eslint": "^8",
     "eslint-config-next": "14.2.3",
-    "vitest": "^1.6.0"
+    "vitest": "^1.6.0",
+    "turbo": "^1.13.3"
+  },
+  "engines": {
+    "node": ">=20"
   }
 }
