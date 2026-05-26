@@ -17,15 +17,36 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-          # No lockfile-based cache: this monorepo has no package-lock.json
-          # committed yet. Adding cache:'npm' without a lockfile causes
-          # setup-node to exit 1 immediately.
 
       - name: Install all workspace dependencies
         run: npm install --legacy-peer-deps
 
-      - name: Build @datacules/agent-identity (core)
-        run: npm run build --workspace=packages/core
+      - name: Show installed TypeScript version
+        run: |
+          echo "=== root tsc ==="
+          ./node_modules/.bin/tsc --version 2>/dev/null || echo "no root tsc"
+          echo "=== packages/core tsc ==="
+          ./packages/core/node_modules/.bin/tsc --version 2>/dev/null || echo "no core tsc"
+          echo "=== packages/core package.json ==="
+          cat packages/core/package.json
+
+      - name: Build @datacules/agent-identity (core) - ESM
+        run: |
+          cd packages/core
+          echo "--- tsconfig.build.json ---"
+          cat tsconfig.build.json
+          echo "--- tsc -p tsconfig.build.json ---"
+          npx tsc -p tsconfig.build.json 2>&1
+          echo "ESM build exit: $?"
+
+      - name: Build @datacules/agent-identity (core) - CJS
+        run: |
+          cd packages/core
+          echo "--- tsconfig.cjs.json ---"
+          cat tsconfig.cjs.json
+          echo "--- tsc -p tsconfig.cjs.json ---"
+          npx tsc -p tsconfig.cjs.json 2>&1
+          echo "CJS build exit: $?"
 
       - name: Upload packages/core/dist
         uses: actions/upload-artifact@v4

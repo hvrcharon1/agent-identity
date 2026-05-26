@@ -30,10 +30,7 @@
       "types": "./dist/types/schemas.d.ts"
     }
   },
-  "files": [
-    "dist",
-    "README.md"
-  ],
+  "files": ["dist", "README.md"],
   "scripts": {
     "build": "tsc -p tsconfig.build.json && tsc -p tsconfig.cjs.json",
     "test": "echo \"Tests run from monorepo root via vitest.config.ts\" && exit 0",
@@ -46,14 +43,13 @@
   "devDependencies": {
     "@types/node": "^20",
     "@types/react": "^18",
+    "react": "^18",
     "typescript": "^5"
   },
   "peerDependencies": {
     "react": ">=18"
   },
   "peerDependenciesMeta": {
-    "react": {
-      "optional": true
-    }
+    "react": { "optional": true }
   }
 }
