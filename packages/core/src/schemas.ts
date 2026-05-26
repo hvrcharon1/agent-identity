@@ -1,0 +1,103 @@
+/**
+ * @datacules/agent-identity/schemas
+ *
+ * Zod schemas mirroring every public type. Three uses simultaneously:
+ *   1. Runtime validation in route handlers (replaces manual field loops)
+ *   2. TypeScript type inference via z.infer<>
+ *   3. JSON Schema / OpenAPI generation via zod-to-json-schema
+ *
+ * Since zod is already in dependencies, this costs nothing to ship.
+ */
+import { z } from 'zod';
+
+// ─── Primitives ───────────────────────────────────────────────────────────────
+
+export const SupportedProviderSchema = z.enum([
+  'openai',
+  'anthropic',
+  'gemini',
+  'mistral',
+  'local',
+]);
+
+export const ResourceKindSchema = z.enum(['shared', 'personal']);
+
+export const CredentialKindSchema = z.enum(['fixed', 'user-delegated']);
+
+export const CredentialStatusSchema = z.enum(['active', 'pending', 'revoked']);
+
+export const MigrationPhaseSchema = z.enum([
+  'dry-run',
+  'extract',
+  'transform',
+  'load',
+  'verify',
+  'rollback',
+]);
+
+// ─── Credential ─────────────────────────────────────────────────────────────
+
+export const CredentialSchema = z.object({
+  id: z.string().min(1),
+  kind: CredentialKindSchema,
+  name: z.string().min(1),
+  scope: z.string(),
+  status: CredentialStatusSchema,
+  provider: z.string().optional(),
+  ref: z.string().min(1),
+  expiresAt: z.string().datetime().optional(),
+  lastRotated: z.string().datetime().optional(),
+  refreshTokenRef: z.string().optional(),
+  rotationIntervalDays: z.number().int().nonnegative().optional(),
+});
+
+// ─── Routing Rule ──────────────────────────────────────────────────────────
+
+export const RoutingRuleSchema = z.object({
+  id: z.string().min(1),
+  description: z.string(),
+  credentialRef: z.string().min(1),
+  credentialKind: CredentialKindSchema,
+  priority: z.number().int(),
+  matchResourceKind: ResourceKindSchema.optional(),
+  matchAction: z.union([z.string(), z.array(z.string())]).optional(),
+  matchProvider: SupportedProviderSchema.optional(),
+  matchUserId: z.string().optional(),
+  matchPhase: z
+    .union([MigrationPhaseSchema, z.array(MigrationPhaseSchema)])
+    .optional(),
+  readOnly: z.boolean().optional(),
+});
+
+// ─── Agent Request Context ───────────────────────────────────────────────
+
+export const AgentRequestContextSchema = z.object({
+  userId: z.string().min(1),
+  resourceId: z.string().min(1),
+  resourceKind: ResourceKindSchema,
+  provider: SupportedProviderSchema,
+  model: z.string().min(1),
+  action: z.string().min(1),
+  traceId: z.string().min(1),
+  sessionId: z.string().optional(),
+  requestedAt: z.string().datetime(),
+  parentTraceId: z.string().optional(),
+});
+
+export const MigrationContextSchema = AgentRequestContextSchema.extend({
+  migrationId: z.string().min(1),
+  phase: MigrationPhaseSchema,
+  sourceResourceId: z.string().min(1),
+  targetResourceId: z.string().min(1),
+  dryRun: z.boolean(),
+  batchIndex: z.number().int().nonnegative().optional(),
+  totalBatches: z.number().int().positive().optional(),
+});
+
+// ─── TypeScript types derived from schemas ──────────────────────────────────
+// (no duplication with types.ts — these are the validated input variants)
+
+export type AgentRequestContextInput = z.infer<typeof AgentRequestContextSchema>;
+export type MigrationContextInput    = z.infer<typeof MigrationContextSchema>;
+export type RoutingRuleInput         = z.infer<typeof RoutingRuleSchema>;
+export type CredentialInput          = z.infer<typeof CredentialSchema>;
