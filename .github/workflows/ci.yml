@@ -7,39 +7,83 @@ on:
     branches: [main]
 
 jobs:
-  # ─── 1. Type-check ────────────────────────────────────────────────────────
-  type-check:
-    name: TypeScript type-check
+  # ─── 0. Build publishable packages (core must exist before Next type-check) ──
+  build-packages:
+    name: Build workspace packages
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 20
+          cache: 'npm'
+
+      - name: Install all workspace dependencies
+        run: npm install
+
+      - name: Build @datacules/agent-identity (core)
+        # This produces packages/core/dist/{esm,cjs,types}/ which the Next.js
+        # app imports at type-check and build time.
+        run: npm run build:packages
+
+      # Cache the built dist so downstream jobs don't need to rebuild.
+      - name: Upload packages/core/dist
+        uses: actions/upload-artifact@v4
+        with:
+          name: core-dist
+          path: packages/core/dist
+          retention-days: 1
+
+  # ─── 1. Type-check ────────────────────────────────────────────────────────
+  type-check:
+    name: TypeScript type-check
+    runs-on: ubuntu-latest
+    needs: [build-packages]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
       - run: npm install
+      - name: Restore core dist
+        uses: actions/download-artifact@v4
+        with:
+          name: core-dist
+          path: packages/core/dist
       - run: npm run type-check
 
   # ─── 2. Lint ──────────────────────────────────────────────────────────────
   lint:
     name: ESLint
     runs-on: ubuntu-latest
+    needs: [build-packages]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 20
+          cache: 'npm'
       - run: npm install
+      - name: Restore core dist
+        uses: actions/download-artifact@v4
+        with:
+          name: core-dist
+          path: packages/core/dist
       - run: npm run lint
 
-  # ─── 3. Unit tests (Finding #3) ───────────────────────────────────────────
+  # ─── 3. Unit tests ────────────────────────────────────────────────────────
   test:
     name: Unit tests
     runs-on: ubuntu-latest
+    # No dependency on build-packages: vitest.config.ts resolves workspace
+    # imports to source via alias, so no dist is needed for tests.
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 20
+          cache: 'npm'
       - run: npm install
       - run: npm test
 
@@ -47,18 +91,25 @@ jobs:
   build-and-smoke:
     name: Build + smoke test
     runs-on: ubuntu-latest
-    needs: [type-check, lint, test]
+    needs: [build-packages, type-check, lint, test]
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-node@v4
         with:
           node-version: 20
+          cache: 'npm'
 
       - name: Install dependencies
         run: npm install
 
-      - name: Build
+      - name: Restore core dist
+        uses: actions/download-artifact@v4
+        with:
+          name: core-dist
+          path: packages/core/dist
+
+      - name: Build Next.js app
         run: npm run build
 
       - name: Start server in background
