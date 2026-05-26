@@ -11,7 +11,8 @@
     "packages/integrations/express",
     "packages/integrations/fastify",
     "packages/integrations/langchain",
-    "packages/integrations/nestjs"
+    "packages/integrations/nestjs",
+    "packages/python-sdk"
   ],
   "scripts": {
     "dev": "next dev",
