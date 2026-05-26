@@ -1,0 +1,25 @@
+{
+  "name": "@datacules/agent-identity-langchain",
+  "version": "0.1.0",
+  "private": false,
+  "description": "LangChain and LangGraph integration for @datacules/agent-identity",
+  "main": "./dist/cjs/index.js",
+  "module": "./dist/esm/index.js",
+  "types": "./dist/types/index.d.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "type-check": "tsc --noEmit"
+  },
+  "peerDependencies": {
+    "@datacules/agent-identity": "^0.1.0",
+    "@langchain/core": ">=0.2.0"
+  },
+  "peerDependenciesMeta": {
+    "@langchain/core": { "optional": false }
+  },
+  "devDependencies": {
+    "@datacules/agent-identity": "*",
+    "@langchain/core": "^0.2.0",
+    "typescript": "^5"
+  }
+}

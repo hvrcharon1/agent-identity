@@ -1,0 +1,23 @@
+{
+  "name": "@datacules/agent-identity-express",
+  "version": "0.1.0",
+  "private": false,
+  "description": "Express middleware for @datacules/agent-identity",
+  "main": "./dist/cjs/index.js",
+  "module": "./dist/esm/index.js",
+  "types": "./dist/types/index.d.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "type-check": "tsc --noEmit"
+  },
+  "peerDependencies": {
+    "@datacules/agent-identity": "^0.1.0",
+    "express": ">=4.0.0"
+  },
+  "devDependencies": {
+    "@datacules/agent-identity": "*",
+    "@types/express": "^4",
+    "express": "^4",
+    "typescript": "^5"
+  }
+}
