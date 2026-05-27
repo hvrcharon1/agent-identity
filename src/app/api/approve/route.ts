@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { MemoryApprovalStore, ApprovalManager } from '@/lib/approval';
+import { MemoryApprovalStore } from '@/lib/approval';
 
-const store   = new MemoryApprovalStore();
-const manager = new ApprovalManager(store);
+const store = new MemoryApprovalStore();
 
 const ApproveBodySchema = z.object({
   requestId:     z.string().min(1),

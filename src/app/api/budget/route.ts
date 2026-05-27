@@ -1,10 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { MemoryBudgetStore, BudgetEnforcer } from '@/lib/budget';
+import { MemoryBudgetStore } from '@/lib/budget';
 import type { Credential } from '@/lib/types';
 
 const budgetStore = new MemoryBudgetStore();
-const enforcer   = new BudgetEnforcer(budgetStore);
 
 const DEMO_CREDENTIALS: Credential[] = [
   {
