@@ -73,15 +73,16 @@ const SEED_REQUESTS: ApprovalRequest[] = [
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-function statusBadge(status: ApprovalStatus) {
-  const map: Record<ApprovalStatus, { bg: string; text: string; label: string }> = {
-    pending:     { bg: 'bg-amber-100',  text: 'text-amber-700',  label: 'Pending'     },
-    approved:    { bg: 'bg-green-100',  text: 'text-green-700',  label: 'Approved'    },
-    rejected:    { bg: 'bg-red-100',    text: 'text-red-700',    label: 'Rejected'    },
-    timeout:     { bg: 'bg-gray-100',   text: 'text-gray-500',   label: 'Timed out'   },
-    break_glass: { bg: 'bg-purple-100', text: 'text-purple-700', label: 'Break-glass' },
-  };
-  const s = map[status];
+const STATUS_MAP: Record<ApprovalStatus, { bg: string; text: string; label: string }> = {
+  pending:     { bg: 'bg-amber-100',  text: 'text-amber-700',  label: 'Pending'     },
+  approved:    { bg: 'bg-green-100',  text: 'text-green-700',  label: 'Approved'    },
+  rejected:    { bg: 'bg-red-100',    text: 'text-red-700',    label: 'Rejected'    },
+  timeout:     { bg: 'bg-gray-100',   text: 'text-gray-500',   label: 'Timed out'   },
+  break_glass: { bg: 'bg-purple-100', text: 'text-purple-700', label: 'Break-glass' },
+};
+
+function StatusBadge({ status }: { status: ApprovalStatus }) {
+  const s = STATUS_MAP[status];
   return (
     <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${s.bg} ${s.text}`}>
       {s.label}
@@ -118,7 +119,7 @@ export function ApprovalTab() {
   const resolved = requests.filter((r) => r.status !== 'pending');
   const visible  = filter === 'all' ? requests : filter === 'pending' ? pending : resolved;
 
-  function resolve(requestId: string, status: ApprovalStatus, by = 'dashboard-user') {
+  function resolveRequest(requestId: string, status: ApprovalStatus, by = 'dashboard-user') {
     setRequests((prev) =>
       prev.map((r) =>
         r.requestId === requestId
@@ -183,19 +184,19 @@ export function ApprovalTab() {
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
-                  {statusBadge(req.status)}
+                  <StatusBadge status={req.status} />
                   <span className="text-xs font-mono text-gray-400">{req.context.traceId}</span>
                 </div>
                 <p className="text-sm font-medium text-gray-900 mt-1">
                   {req.context.userId}
-                  <span className="text-gray-400 font-normal"> → </span>
+                  <span className="text-gray-400 font-normal"> &#8594; </span>
                   <span className="font-mono text-xs">{req.context.action}</span>
                   <span className="text-gray-400 font-normal"> on </span>
                   <span className="font-mono text-xs">{req.context.resourceId}</span>
                 </p>
                 <p className="text-xs text-gray-400 mt-0.5">
                   Credential: <span className="font-mono">{req.credentialId}</span>
-                  {' · '}Rule: <span className="font-mono">{req.ruleId}</span>
+                  {' \u00b7 '}Rule: <span className="font-mono">{req.ruleId}</span>
                 </p>
               </div>
               <div className="text-right shrink-0">
@@ -213,14 +214,14 @@ export function ApprovalTab() {
                   <textarea
                     value={justification}
                     onChange={(e) => setJustification(e.target.value)}
-                    placeholder="Reason for approval or rejection…"
+                    placeholder="Reason for approval or rejection"
                     rows={2}
                     className="w-full text-sm border border-gray-200 rounded-md px-3 py-2 resize-none focus:outline-none focus:ring-1 focus:ring-gray-400"
                   />
                 </div>
                 <div className="flex gap-2 flex-wrap">
-                  <button onClick={() => resolve(req.requestId, 'approved')} className="px-3 py-1.5 bg-green-600 text-white text-xs rounded-md hover:bg-green-700 transition-colors">Approve</button>
-                  <button onClick={() => resolve(req.requestId, 'rejected')} className="px-3 py-1.5 bg-red-600 text-white text-xs rounded-md hover:bg-red-700 transition-colors">Reject</button>
+                  <button onClick={() => resolveRequest(req.requestId, 'approved')} className="px-3 py-1.5 bg-green-600 text-white text-xs rounded-md hover:bg-green-700 transition-colors">Approve</button>
+                  <button onClick={() => resolveRequest(req.requestId, 'rejected')} className="px-3 py-1.5 bg-red-600 text-white text-xs rounded-md hover:bg-red-700 transition-colors">Reject</button>
                   <button
                     onClick={() => setBreakGlassMode((v) => !v)}
                     className={`px-3 py-1.5 text-xs rounded-md border transition-colors ${
@@ -234,7 +235,7 @@ export function ApprovalTab() {
                   <div className="bg-purple-50 border border-purple-200 rounded-md p-3 space-y-2">
                     <p className="text-xs text-purple-700 font-medium">Break-glass override</p>
                     <p className="text-xs text-purple-600">Bypasses normal approval flow. This action is logged as a non-deletable audit entry and will appear in compliance reports.</p>
-                    <button onClick={() => resolve(req.requestId, 'break_glass', 'break-glass-operator')} className="px-3 py-1.5 bg-purple-600 text-white text-xs rounded-md hover:bg-purple-700 transition-colors">Confirm break-glass override</button>
+                    <button onClick={() => resolveRequest(req.requestId, 'break_glass', 'break-glass-operator')} className="px-3 py-1.5 bg-purple-600 text-white text-xs rounded-md hover:bg-purple-700 transition-colors">Confirm break-glass override</button>
                   </div>
                 )}
               </div>
@@ -244,7 +245,7 @@ export function ApprovalTab() {
               <div className="mt-4 pt-4 border-t border-gray-200">
                 <p className="text-xs text-gray-500">
                   Resolved by <span className="font-medium text-gray-700">{req.resolvedBy}</span>
-                  {req.resolvedAt && <> · {relativeTime(req.resolvedAt)}</>}
+                  {req.resolvedAt && <> &middot; {relativeTime(req.resolvedAt)}</>}
                 </p>
                 {req.justification && <p className="text-xs text-gray-500 mt-1 italic">&ldquo;{req.justification}&rdquo;</p>}
               </div>

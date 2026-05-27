@@ -16,6 +16,13 @@ interface TrustedDomain {
   description: string;
 }
 
+interface ExtendField {
+  label: string;
+  value: string;
+  setter: (v: string) => void;
+  placeholder: string;
+}
+
 const SEED_DOMAINS: TrustedDomain[] = [
   { domain: 'acme.com',   publicKey: 'MCowBQYDK2VwAyEA...acme',   description: 'ACME Corp (originating org)' },
   { domain: 'vendor.com', publicKey: 'MCowBQYDK2VwAyEA...vendor', description: 'Vendor LLC (fulfillment agent)' },
@@ -35,7 +42,7 @@ const SEED_CHAIN: IdentityChainEntry[] = [
   },
 ];
 
-function truncate(s: string, n = 20) { return s.length > n ? s.slice(0, n) + '…' : s; }
+function truncate(s: string, n = 20) { return s.length > n ? s.slice(0, n) + '\u2026' : s; }
 
 function relativeTime(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime();
@@ -66,7 +73,7 @@ export function FederationTab() {
       } else if (!allSigned) {
         setVerifyResult({ ok: false, message: 'One or more entries are missing a signature.' });
       } else {
-        setVerifyResult({ ok: true, message: `Chain verified — ${chain.length} entries, all from trusted domains.` });
+        setVerifyResult({ ok: true, message: `Chain verified \u2014 ${chain.length} entries, all from trusted domains.` });
       }
       setVerifying(false);
     }, 500);
@@ -84,13 +91,19 @@ export function FederationTab() {
     setNewAgentId('audit-agent');
   }
 
+  const extendFields: ExtendField[] = [
+    { label: 'Trust domain', value: newOrg,    setter: setNewOrg,    placeholder: 'acme.com'    },
+    { label: 'User ID',      value: newUserId, setter: setNewUserId, placeholder: 'user-alice'  },
+    { label: 'Agent ID',     value: newAgentId, setter: setNewAgentId, placeholder: 'audit-agent' },
+  ];
+
   return (
     <div className="space-y-6">
       <div>
         <h2 className="text-base font-semibold text-gray-900">Agent federation</h2>
         <p className="text-sm text-gray-500 mt-1">
           Cross-org identity chains carry the full principal history across trust boundaries.
-          Each entry is signed by the originating org's agent-identity deployment.
+          Each entry is signed by the originating org&#39;s agent-identity deployment.
         </p>
       </div>
 
@@ -131,17 +144,26 @@ export function FederationTab() {
                       <div>
                         <div className="flex items-center gap-2">
                           <span className="text-sm font-mono font-medium text-gray-900">{entry.org}</span>
-                          {trusted ? <span className="text-xs text-green-600">✓ trusted</span> : <span className="text-xs text-red-500">⚠ unknown domain</span>}
+                          {trusted
+                            ? <span className="text-xs text-green-600">&#10003; trusted</span>
+                            : <span className="text-xs text-red-500">&#9888; unknown domain</span>
+                          }
                         </div>
                         <p className="text-xs text-gray-500 mt-0.5">
                           <span className="font-mono">{entry.userId}</span>
-                          <span className="text-gray-300 mx-1">→</span>
+                          <span className="text-gray-300 mx-1">&#8594;</span>
                           <span className="font-mono">{entry.agentId}</span>
                         </p>
                       </div>
                       <div className="flex items-center gap-2">
                         <span className="text-xs text-gray-400">{relativeTime(entry.issuedAt)}</span>
-                        <button onClick={() => { setChain((prev) => prev.filter((_, i) => i !== idx)); setVerifyResult(null); }} className="text-gray-300 hover:text-red-400 text-xs" title="Remove">✕</button>
+                        <button
+                          onClick={() => { setChain((prev) => prev.filter((_, i) => i !== idx)); setVerifyResult(null); }}
+                          className="text-gray-300 hover:text-red-400 text-xs"
+                          title="Remove"
+                        >
+                          &#10005;
+                        </button>
                       </div>
                     </div>
                     <div className="mt-2 flex items-center gap-2">
@@ -157,12 +179,16 @@ export function FederationTab() {
       </div>
 
       <div className="flex gap-2">
-        <button onClick={verifyChain} disabled={verifying || chain.length === 0}
+        <button
+          onClick={verifyChain}
+          disabled={verifying || chain.length === 0}
           className={`px-4 py-2 text-sm rounded-md border transition-colors ${
-            chain.length === 0 ? 'border-gray-200 text-gray-300 cursor-not-allowed'
-            : 'border-gray-900 text-gray-900 hover:bg-gray-900 hover:text-white'
-          }`}>
-          {verifying ? 'Verifying…' : 'Verify chain'}
+            chain.length === 0
+              ? 'border-gray-200 text-gray-300 cursor-not-allowed'
+              : 'border-gray-900 text-gray-900 hover:bg-gray-900 hover:text-white'
+          }`}
+        >
+          {verifying ? 'Verifying\u2026' : 'Verify chain'}
         </button>
       </div>
 
@@ -170,17 +196,22 @@ export function FederationTab() {
         <div className={`rounded-lg p-3 border text-sm ${
           verifyResult.ok ? 'bg-green-50 border-green-200 text-green-700' : 'bg-red-50 border-red-200 text-red-700'
         }`}>
-          {verifyResult.ok ? '✓ ' : '✕ '}{verifyResult.message}
+          {verifyResult.ok ? '\u2713 ' : '\u2715 '}{verifyResult.message}
         </div>
       )}
 
       <div className="border border-dashed border-gray-300 rounded-lg p-4 space-y-3">
-        <p className="text-xs font-medium text-gray-700">Extend chain — add an entry</p>
+        <p className="text-xs font-medium text-gray-700">Extend chain &#8212; add an entry</p>
         <div className="grid grid-cols-3 gap-2">
-          {[['Trust domain', newOrg, setNewOrg, 'acme.com'], ['User ID', newUserId, setNewUserId, 'user-alice'], ['Agent ID', newAgentId, setNewAgentId, 'audit-agent']].map(([label, value, setter, placeholder]) => (
-            <div key={label as string}>
-              <label className="block text-xs text-gray-400 mb-1">{label as string}</label>
-              <input value={value as string} onChange={(e) => (setter as (v: string) => void)(e.target.value)} className="w-full text-sm border border-gray-200 rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-gray-400" placeholder={placeholder as string} />
+          {extendFields.map(({ label, value, setter, placeholder }) => (
+            <div key={label}>
+              <label className="block text-xs text-gray-400 mb-1">{label}</label>
+              <input
+                value={value}
+                onChange={(e) => setter(e.target.value)}
+                className="w-full text-sm border border-gray-200 rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-gray-400"
+                placeholder={placeholder}
+              />
             </div>
           ))}
         </div>
