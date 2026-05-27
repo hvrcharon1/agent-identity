@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-  <strong>Agent Identity & Auth Patterns</strong><br/>
+  <strong>Agent Identity &amp; Auth Patterns</strong><br/>
   <sub>A provider-agnostic framework by <a href="https://datacules.com">Datacules LLC</a></sub>
 </p>
 
@@ -17,7 +17,8 @@
   <a href="https://github.com/hvrcharon1/agent-identity/actions/workflows/ci.yml">
     <img src="https://img.shields.io/github/actions/workflow/status/hvrcharon1/agent-identity/ci.yml?branch=main&style=flat-square&label=CI&color=black" alt="CI"/>
   </a>
-  <img src="https://img.shields.io/badge/packages-12%20(npm%20%2B%20PyPI)-black?style=flat-square" alt="Packages"/>
+  <img src="https://img.shields.io/badge/version-0.2.0-black?style=flat-square" alt="Version"/>
+  <img src="https://img.shields.io/badge/packages-17%20(npm%20%2B%20PyPI)-black?style=flat-square" alt="Packages"/>
   <img src="https://img.shields.io/badge/providers-OpenAI%20%7C%20Anthropic%20%7C%20Gemini%20%7C%20Mistral%20%7C%20Local-black?style=flat-square" alt="Supported providers"/>
   <img src="https://img.shields.io/badge/MCP-server%20%2B%20client-black?style=flat-square" alt="MCP support"/>
   <img src="https://img.shields.io/badge/stack-Next.js%20%2B%20TypeScript-black?style=flat-square" alt="Stack"/>
@@ -67,13 +68,18 @@ A provider-agnostic framework for AI agents that act on behalf of users and serv
 | `@datacules/agent-identity-store-aws` | `npm install @datacules/agent-identity-store-aws` | AWS Secrets Manager + DynamoDB credential store |
 | `@datacules/agent-identity-store-vault` | `npm install @datacules/agent-identity-store-vault` | HashiCorp Vault KV v2 credential store |
 | `@datacules/agent-identity-store-azure` | `npm install @datacules/agent-identity-store-azure` | Azure Key Vault + Table Storage credential store |
+| `@datacules/agent-identity-store-spiffe` | `npm install @datacules/agent-identity-store-spiffe` | SPIFFE/SPIRE workload identity via X.509 SVIDs — zero static credentials |
+| `@datacules/agent-identity-store-dynamic` | `npm install @datacules/agent-identity-store-dynamic` | JIT credential provisioning — Vault dynamic secrets, AWS IAM Roles Anywhere, Azure Managed Identity |
 | `@datacules/agent-identity-express` | `npm install @datacules/agent-identity-express` | Express middleware |
 | `@datacules/agent-identity-fastify` | `npm install @datacules/agent-identity-fastify` | Fastify plugin |
 | `@datacules/agent-identity-langchain` | `npm install @datacules/agent-identity-langchain` | LangChain tool + LangGraph node |
 | `@datacules/agent-identity-nestjs` | `npm install @datacules/agent-identity-nestjs` | NestJS module, service, guard, and parameter decorator |
 | `@datacules/agent-identity-mcp` | `npm install @datacules/agent-identity-mcp` | MCP server — expose agent-identity tools to any MCP client |
 | `@datacules/agent-identity-mcp-client` | `npm install @datacules/agent-identity-mcp-client` | MCP client — fetch credentials from any MCP server |
-| `agent-identity` (PyPI) | `pip install agent-identity` | Python SDK — sync + async client, zero runtime deps |
+| `@datacules/agent-identity-otel` | `npm install @datacules/agent-identity-otel` | OpenTelemetry tracing — `withOtel()` wraps any router, emits spans on every `resolve()` |
+| `@datacules/agent-identity-anomaly` | `npm install @datacules/agent-identity-anomaly` | Behavioral baseline anomaly detection with EWMA scoring and configurable response policies |
+| `@datacules/agent-identity-compliance` | `npm install @datacules/agent-identity-compliance` | Compliance report generator — SOC 2, GDPR, HIPAA templates from audit log store |
+| `agent-identity` (PyPI) | `pip install agent-identity` | Python SDK — sync + async client, zero runtime deps, CLI |
 
 ---
 
@@ -110,6 +116,72 @@ const resolved = router.resolve(ctx);
 ```
 
 Works in any Node.js environment: Next.js, Express, Fastify, NestJS, LangChain, LangGraph, or a plain script.
+
+---
+
+### OpenTelemetry tracing
+
+```bash
+npm install @datacules/agent-identity-otel
+```
+
+```typescript
+import { withOtel } from '@datacules/agent-identity-otel';
+import { trace } from '@opentelemetry/api';
+
+const router = withOtel(createRouter(credentials, rules, logger), {
+  tracer: trace.getTracer('agent-identity'),
+});
+// Every resolve(), resolveAsync(), and resolvePair() call now emits spans
+// that nest inside your existing application traces in Datadog, Honeycomb, Jaeger, or X-Ray.
+```
+
+---
+
+### Anomaly detection
+
+```bash
+npm install @datacules/agent-identity-anomaly
+```
+
+Wraps the audit pipeline with an EWMA-based behavioral baseline. Builds a rolling profile per agent ID and scores each new resolution against it. Configurable response policies:
+
+```typescript
+import { withAnomalyDetection } from '@datacules/agent-identity-anomaly';
+
+const router = withAnomalyDetection(createRouter(credentials, rules, logger), {
+  policies: [
+    { severity: 'low',    action: 'warn' },     // emit credential.anomaly audit event
+    { severity: 'medium', action: 'throttle' }, // rate-limit to 10% of normal
+    { severity: 'high',   action: 'block' },    // return null pending human review
+  ],
+});
+```
+
+Detected signals: new credential type, call-rate spike (3× EWMA), new action type, off-hours access, new resource kind.
+
+---
+
+### Compliance reports
+
+```bash
+npm install @datacules/agent-identity-compliance
+```
+
+```typescript
+import { ComplianceReportGenerator, MemoryReportStore } from '@datacules/agent-identity-compliance';
+
+const generator = new ComplianceReportGenerator({ store });
+
+const report = await generator.generate({
+  type: 'soc2',         // 'soc2' | 'gdpr' | 'hipaa' | 'custom'
+  from: '2026-01-01T00:00:00Z',
+  to:   '2026-03-31T23:59:59Z',
+  format: 'markdown',   // 'json' | 'markdown'
+});
+// report.agentAccessSummary, .piiResourceAccess, .offHoursAccess,
+// .credentialRotationHistory, .anomalyEvents
+```
 
 ---
 
@@ -515,9 +587,17 @@ const store = new AzureKeyVaultCredentialStore({
   tablesEndpoint:  'https://myaccount.table.core.windows.net',
 });
 const router = createRouterFromStore(store, rules, logger);
+
+// SPIFFE/SPIRE — zero static credentials; X.509 SVIDs auto-renewed from SPIRE agent
+import { SpiffeCredentialStore } from '@datacules/agent-identity-store-spiffe';
+const store = new SpiffeCredentialStore({
+  spiffeEndpointSocket: 'unix:///run/spire/sockets/agent.sock',
+  trustDomain: 'acme.com',
+});
+const router = createRouterFromStore(store, rules, logger);
 ```
 
-All three stores implement the same `CredentialStore` interface and are drop-in replacements for each other. The Azure store uses `DefaultAzureCredential` — no code changes needed across Managed Identity, Azure CLI (local dev), or GitHub Actions OIDC environments.
+All four stores implement the same `CredentialStore` interface and are drop-in replacements for each other.
 
 ---
 
@@ -553,7 +633,20 @@ npm install
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000). The Decision Helper wizard walks through three questions and recommends the right auth pattern. The **Data migration** tab covers phase-aware routing with copyable rule examples.
+Open [http://localhost:3000](http://localhost:3000). Ten interactive tabs:
+
+| Tab | Description |
+|-----|-------------|
+| Identities | Four identity types with descriptions and flow diagrams |
+| Auth Patterns | Four auth patterns with tradeoff analysis and provider injection notes |
+| Credentials | Credential vault with status badges, expiry warnings, rotation metadata |
+| Decision Helper | Wizard — three yes/no questions → recommended auth pattern |
+| Data Migration | Phase timeline, configuration Q&A, copyable API quick-reference |
+| Attestation | Sign and verify JWT attestation tokens; decoded payload inspector |
+| Canary Routing | Configure canary weight splits; simulate traffic; visualise distribution |
+| Approval | Human-in-the-loop approval queue; break-glass override with justification |
+| Budget | Per-credential usage bars with soft threshold markers; resolution simulator |
+| Federation | Cross-org identity chain builder, trust domain registry, chain verifier |
 
 ---
 
@@ -581,7 +674,7 @@ Without an explicit answer to all three, you get one of these failure modes in p
 ### 🔴 Pattern 1 — Fixed credential (shared resource access)
 
 ```
-User 1 ─┐
+User 1 ─┬
 User 2 ──▶  [ AI Agent ]  ──▶  Fixed Auth  ──▶  Shared task board
 User 3 ─┘                                        (all users have same access)
 ```
@@ -593,7 +686,7 @@ Simple and low-overhead, but supplement with request-level audit logging since t
 ### 🟢 Pattern 2 — Individual user auth (variable access)
 
 ```
-User 1 ──[ User 1 Auth ]─┐
+User 1 ──[ User 1 Auth ]─┬
 User 2 ──[ User 2 Auth ]──▶  [ AI Agent ]  ──▶  Individual User Auth  ──▶  Company knowledge base
 User 3 ──[ User 3 Auth ]─┘                                                   (variable document access)
 ```
@@ -614,6 +707,9 @@ These two patterns, plus **hybrid / context-switched** (both in one workflow) an
 - 🔌 **Plugs into OpenAI, Anthropic, Gemini, Mistral, or any local model**
 - 🤝 **Works as both an MCP server and an MCP client** — integrates with the full MCP ecosystem in both directions
 - 🗄️ **Supports safe, auditable data migration with phase-aware credential routing**
+- 📊 **Emits OpenTelemetry spans** on every resolution — auth spans nest inside your existing application traces
+- 🛡️ **Detects anomalous credential usage** with EWMA behavioral baselines
+- 📄 **Generates SOC 2, GDPR, and HIPAA compliance reports** from audit log stores
 
 ---
 
@@ -772,6 +868,7 @@ Visual flow diagram, clickable phase timeline, configuration Q&A for common misc
 - **Migration dry-runs are enforced read-only at the router** — `readOnly: true` on a routing rule rejects credentials that lack read scope before any call is made
 - **Concurrent migration corruption is prevented by design** — `reserve()` locks a write credential to one migration ID for the duration of the batch; a second job receives `false` and must abort
 - **MCP tool responses never include raw secrets** — `list_credentials` returns safe metadata only; `resolve_credential` returns `resolvedFor` and `credentialId`, not refs
+- **Zero-trust attestation** — every `resolve()` call can sign a short-lived HMAC JWT attestation that downstream services verify independently
 
 ---
 
@@ -813,6 +910,16 @@ const rule: RoutingRule = {
   priority: 10,
 };
 
+// Canary routing — 5% of traffic on new credential, ramp with no deployment
+const canaryRule: RoutingRule = {
+  id: 'rule-shared-crm',
+  credentialRef: 'openai-prod-v1',
+  canaryRef: 'openai-prod-v2',
+  canaryWeight: 5,
+  credentialKind: 'fixed',
+  priority: 50,
+};
+
 // Migration rule — phase-aware, read-only enforced
 const migrationExtractRule: RoutingRule = {
   id: 'migration-extract',
@@ -835,62 +942,57 @@ agent-identity/
 │   ├── core/                              # @datacules/agent-identity
 │   │   └── src/
 │   │       ├── types.ts
-│   │       ├── router.ts
+│   │       ├── router.ts                  # CredentialRouter, canary, budget, approval, attestation
 │   │       ├── providers.ts
 │   │       ├── decision.ts
 │   │       ├── schemas.ts
-│   │       ├── credentials.ts
+│   │       ├── rotation.ts                # CredentialRotationScheduler
+│   │       ├── attestation.ts             # HmacAttestationSigner, buildAttestation, verifyAttestation
+│   │       ├── approval.ts                # ApprovalManager, MemoryApprovalStore, notifiers
+│   │       ├── budget.ts                  # BudgetEnforcer, MemoryBudgetStore
+│   │       ├── federation.ts              # FederationVerifier, FederationIssuer, IdentityChain
 │   │       └── react/
 │   │           └── useAgentIdentity.ts
 │   ├── audit/                             # @datacules/agent-identity-audit
-│   │   └── src/                           # Console, Webhook, Datadog, Splunk, Composite
 │   ├── stores/
 │   │   ├── aws/                           # @datacules/agent-identity-store-aws
 │   │   ├── vault/                         # @datacules/agent-identity-store-vault
-│   │   └── azure/                         # @datacules/agent-identity-store-azure
-│   ├── integrations/
-│   │   ├── express/                       # @datacules/agent-identity-express
-│   │   ├── fastify/                       # @datacules/agent-identity-fastify
-│   │   ├── langchain/                     # @datacules/agent-identity-langchain
-│   │   ├── nestjs/                        # @datacules/agent-identity-nestjs
-│   │   ├── mcp/                           # @datacules/agent-identity-mcp (inbound)
-│   │   │   ├── src/
-│   │   │   │   ├── index.ts               # createAgentIdentityMcpServer() factory
-│   │   │   │   ├── tools.ts               # 5 tool handler implementations
-│   │   │   │   ├── types.ts               # McpRequestContext + option types
-│   │   │   │   └── transports.ts          # stdio + HTTP+SSE helpers
-│   │   │   └── bin/server.js              # standalone CLI entry point
-│   │   └── mcp-client/                    # @datacules/agent-identity-mcp-client (outbound)
-│   │       └── src/
-│   │           ├── store.ts               # McpCredentialStore — implements CredentialStore
-│   │           ├── caller.ts              # McpToolCaller — typed direct MCP tool access
-│   │           └── index.ts
-│   └── python-sdk/                        # pip install agent-identity
-├── src/                                   # Next.js dashboard app
-│   ├── app/
-│   │   ├── layout.tsx
-│   │   ├── page.tsx
-│   │   └── api/
-│   │       ├── resolve/route.ts
-│   │       └── migrate/resolve/route.ts
-│   ├── components/
-│   │   ├── FlowDiagram.tsx
-│   │   ├── IdentitiesTab.tsx
-│   │   ├── PatternsTab.tsx
-│   │   ├── CredentialsTab.tsx
-│   │   ├── DecisionTab.tsx
-│   │   └── MigrationTab.tsx
-│   ├── lib/
-│   └── hooks/
-├── docs/
-│   └── openapi.yaml
-├── examples/
-├── Dockerfile
-├── docker-compose.yml
-├── package.json
-├── tsconfig.json
-└── next.config.js
+│   │   ├── azure/                         # @datacules/agent-identity-store-azure
+│   │   ├── spiffe/                        # @datacules/agent-identity-store-spiffe
+│   │   └── dynamic/                       # @datacules/agent-identity-store-dynamic (JIT provisioning)
+│   └── integrations/
+│       ├── express/                       # @datacules/agent-identity-express
+│       ├── fastify/                       # @datacules/agent-identity-fastify
+│       ├── langchain/                     # @datacules/agent-identity-langchain
+│       ├── nestjs/                        # @datacules/agent-identity-nestjs
+│       ├── mcp/                           # @datacules/agent-identity-mcp (inbound)
+│       ├── mcp-client/                    # @datacules/agent-identity-mcp-client (outbound)
+│       ├── otel/                          # @datacules/agent-identity-otel
+│       ├── anomaly/                       # @datacules/agent-identity-anomaly
+│       └── compliance/                    # @datacules/agent-identity-compliance
+├── packages/python-sdk/               # pip install agent-identity
+├── src/                               # Next.js 14 dashboard app (10 tabs)
+├── docs/openapi.yaml
+├── Dockerfile + docker-compose.yml
+└── .github/workflows/
+    ├── ci.yml                         # type-check, lint, test (Node + Python), build + smoke
+    └── publish.yml                    # npm + PyPI publish on vX.Y.Z tag
 ```
+
+---
+
+## Releasing
+
+The publish workflow fires automatically on a version tag push:
+
+```bash
+git tag v0.2.0
+git push origin v0.2.0
+```
+
+This stamps all 16 workspace `package.json` versions from the tag, builds core ESM + CJS, publishes all `@datacules/*` packages to npm with provenance, and publishes the Python wheel to PyPI via OIDC trusted publishing. A GitHub Release with auto-generated notes is created once both publish jobs succeed.
+
+See `.github/workflows/publish.yml` and `CONTRIBUTING.md` for setup instructions.
 
 ---
 
@@ -912,7 +1014,7 @@ Implement `ProviderAdapter` to add any provider in minutes.
 
 Built at **Datacules LLC** 🤖 — [datacules.com](https://datacules.com)
 
-`#AIAgents` `#OpenSource` `#AgentIdentity` `#LLMSecurity` `#MultiAgentSystems` `#AIEngineering` `#FutureOfAI` `#DevSecOps` `#Accountability` `#TrustInAI` `#DataMigration` `#MCP` `#ModelContextProtocol`
+`#AIAgents` `#OpenSource` `#AgentIdentity` `#LLMSecurity` `#MultiAgentSystems` `#AIEngineering` `#FutureOfAI` `#DevSecOps` `#Accountability` `#TrustInAI` `#DataMigration` `#MCP` `#ModelContextProtocol` `#OpenTelemetry` `#ZeroTrust`
 
 ---
 
