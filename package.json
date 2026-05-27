@@ -9,6 +9,7 @@
     "packages/stores/vault",
     "packages/stores/azure",
     "packages/stores/spiffe",
+    "packages/stores/dynamic",
     "packages/integrations/express",
     "packages/integrations/fastify",
     "packages/integrations/langchain",
@@ -16,6 +17,8 @@
     "packages/integrations/mcp",
     "packages/integrations/mcp-client",
     "packages/integrations/otel",
+    "packages/integrations/anomaly",
+    "packages/integrations/compliance",
     "packages/python-sdk"
   ],
   "scripts": {
