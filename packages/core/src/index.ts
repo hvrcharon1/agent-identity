@@ -7,63 +7,25 @@
  * @example
  * ```typescript
  * import { createRouter } from '@datacules/agent-identity';
+ * import type { AgentRequestContext } from '@datacules/agent-identity';
  *
  * const router = createRouter(credentials, rules, logger);
- * const resolved = router.resolve(ctx);
+ * const resolved = await router.resolveAsync(ctx);
  * ```
  */
 
-// ─── Types ────────────────────────────────────────────────────────────────────
-export type {
-  // Identity
-  IdentityType,
-  Identity,
-  // Auth patterns
-  AuthPatternType,
-  AuthPattern,
-  FlowNode,
-  // Credentials
-  CredentialKind,
-  CredentialStatus,
-  Credential,
-  // Routing
-  ResourceKind,
-  RoutingRule,
-  // Request context
-  AgentRequestContext,
-  ResolvedCredential,
-  // Migration
-  MigrationPhase,
-  MigrationContext,
-  ResolvedCredentialPair,
-  // Providers
-  SupportedProvider,
-  ProviderAdapter,
-  // Store & audit
-  CredentialStore,
-  AuditLogEntry,
-  MigrationAuditLogEntry,
-  AuditLogger,
-  MigrationAuditLogger,
-  MigrationSummary,
-  // Decision
-  DecisionAnswers,
-  DecisionResult,
-} from './types';
+// ─── Types (type-only re-export — required by isolatedModules) ───────────────
+// types.ts has ONLY interfaces and type aliases — no runtime values.
+// 'export type *' is mandatory under isolatedModules: true (TS1205).
+export type * from './types';
 
-// ─── Router ───────────────────────────────────────────────────────────────────
-export {
-  CredentialRouter,
-  MemoryCredentialStore,
-  createRouter,
-  createRouterFromStore,
-} from './router';
-
-// ─── Providers ────────────────────────────────────────────────────────────────
-export { getAdapter, PROVIDER_ADAPTERS, registerProvider } from './providers';
-
-// ─── Decision helper ──────────────────────────────────────────────────────────
-export { computeDecision } from './decision';
-
-// ─── Default credentials (for local dev / demos) ─────────────────────────────
-export { DEFAULT_CREDENTIALS, DEFAULT_ROUTING_RULES } from './credentials';
+// ─── Runtime modules (classes, functions, const) ─────────────────────────────
+export * from './router';
+export * from './providers';
+export * from './credentials';
+export * from './decision';
+export * from './rotation';
+export * from './attestation';
+export * from './approval';
+export * from './budget';
+export * from './federation';

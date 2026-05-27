@@ -35,6 +35,47 @@ export const MigrationPhaseSchema = z.enum([
   'rollback',
 ]);
 
+export const ApproverKindSchema = z.enum(['webhook', 'email', 'slack']);
+
+// ─── Rotation Policy ─────────────────────────────────────────────────────────
+
+export const RotationPolicySchema = z.object({
+  rotateAfterDays: z.number().int().positive().optional(),
+  rotateAfterUses: z.number().int().positive().optional(),
+  gracePeriodSeconds: z.number().int().nonnegative().optional(),
+  notifyBeforeDays: z.number().int().positive().optional(),
+  provisioner: z.string().optional(),
+});
+
+// ─── Budget Policy ────────────────────────────────────────────────────────────
+
+export const BudgetPolicySchema = z.object({
+  maxResolutionsPerHour: z.number().int().positive().optional(),
+  maxConcurrentSessions: z.number().int().positive().optional(),
+  maxDailySpendUsd: z.number().positive().optional(),
+  softThresholdPercent: z.number().min(0).max(100).optional(),
+  resetSchedule: z.string().optional(),
+});
+
+// ─── Approval Policy ─────────────────────────────────────────────────────────
+
+export const ApproverSchema = z.object({
+  kind: ApproverKindSchema,
+  target: z.string().min(1),
+});
+
+export const ApprovalPolicySchema = z.object({
+  requiredApprovers: z.number().int().positive(),
+  approvers: z.array(ApproverSchema),
+  timeoutSeconds: z.number().int().positive().optional(),
+  breakGlass: z
+    .object({
+      approver: z.string().min(1),
+      requireJustification: z.boolean().optional(),
+    })
+    .optional(),
+});
+
 // ─── Credential ─────────────────────────────────────────────────────────────
 
 export const CredentialSchema = z.object({
@@ -49,6 +90,9 @@ export const CredentialSchema = z.object({
   lastRotated: z.string().datetime().optional(),
   refreshTokenRef: z.string().optional(),
   rotationIntervalDays: z.number().int().nonnegative().optional(),
+  rotation: RotationPolicySchema.optional(),
+  budget: BudgetPolicySchema.optional(),
+  tags: z.array(z.string()).optional(),
 });
 
 // ─── Routing Rule ──────────────────────────────────────────────────────────
@@ -66,7 +110,11 @@ export const RoutingRuleSchema = z.object({
   matchPhase: z
     .union([MigrationPhaseSchema, z.array(MigrationPhaseSchema)])
     .optional(),
+  matchSpiffeId: z.string().optional(),
   readOnly: z.boolean().optional(),
+  canaryRef: z.string().optional(),
+  canaryWeight: z.number().int().min(0).max(100).optional(),
+  approval: ApprovalPolicySchema.optional(),
 });
 
 // ─── Agent Request Context ───────────────────────────────────────────────
@@ -82,6 +130,7 @@ export const AgentRequestContextSchema = z.object({
   sessionId: z.string().optional(),
   requestedAt: z.string().datetime(),
   parentTraceId: z.string().optional(),
+  spiffeId: z.string().optional(),
 });
 
 export const MigrationContextSchema = AgentRequestContextSchema.extend({

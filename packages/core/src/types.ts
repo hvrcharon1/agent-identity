@@ -37,6 +37,29 @@ export interface FlowNode {
   variant: 'default' | 'blue' | 'red' | 'green' | 'amber';
 }
 
+// ─── Rotation Policy ─────────────────────────────────────────────────────────
+
+export interface RotationPolicy {
+  rotateAfterDays?: number;
+  rotateAfterUses?: number;
+  gracePeriodSeconds?: number;
+  notifyBeforeDays?: number;
+  /** Matches a registered RotationProvider.id */
+  provisioner?: string;
+}
+
+// ─── Budget Policy ────────────────────────────────────────────────────────────
+
+export interface BudgetPolicy {
+  maxResolutionsPerHour?: number;
+  maxConcurrentSessions?: number;
+  maxDailySpendUsd?: number;
+  /** Percentage of any limit at which to emit a budget_warning event (default: 80) */
+  softThresholdPercent?: number;
+  /** Cron expression for reset schedule (default: daily midnight UTC) */
+  resetSchedule?: string;
+}
+
 // ─── Credentials ──────────────────────────────────────────────────────────────
 
 export type CredentialKind = 'fixed' | 'user-delegated';
@@ -56,6 +79,35 @@ export interface Credential {
   lastRotated?: string;
   refreshTokenRef?: string;
   rotationIntervalDays?: number;
+  /** Automated rotation policy — undefined means manual rotation only */
+  rotation?: RotationPolicy;
+  /** Usage budget enforcement policy */
+  budget?: BudgetPolicy;
+  /** Arbitrary tags e.g. ['pii', 'financial', 'prod'] — used by compliance reports */
+  tags?: string[];
+}
+
+// ─── Approval Policy ──────────────────────────────────────────────────────────
+
+export type ApproverKind = 'webhook' | 'email' | 'slack';
+
+export interface Approver {
+  kind: ApproverKind;
+  /** Webhook URL, email address, or Slack channel ID */
+  target: string;
+}
+
+export interface ApprovalPolicy {
+  requiredApprovers: number;
+  approvers: Approver[];
+  /** Seconds before auto-reject (default: 300) */
+  timeoutSeconds?: number;
+  breakGlass?: {
+    /** User ID of the emergency approver */
+    approver: string;
+    /** Whether to require a written justification */
+    requireJustification?: boolean;
+  };
 }
 
 // ─── Routing Rules ────────────────────────────────────────────────────────────
@@ -73,7 +125,14 @@ export interface RoutingRule {
   matchProvider?: SupportedProvider;
   matchUserId?: string;
   matchPhase?: MigrationPhase | MigrationPhase[];
+  matchSpiffeId?: string;
   readOnly?: boolean;
+  /** Secondary credential ref receiving canaryWeight % of traffic */
+  canaryRef?: string;
+  /** 0–100 — percentage of traffic routed to canaryRef (default: 0) */
+  canaryWeight?: number;
+  /** Approval required before credential resolves */
+  approval?: ApprovalPolicy;
 }
 
 // ─── Agent Request Context ────────────────────────────────────────────────────
@@ -89,6 +148,8 @@ export interface AgentRequestContext {
   sessionId?: string;
   requestedAt: string;
   parentTraceId?: string;
+  /** SPIFFE SVID of the calling workload (set by SpiffeCredentialStore) */
+  spiffeId?: string;
 }
 
 export interface ResolvedCredential {
@@ -96,6 +157,12 @@ export interface ResolvedCredential {
   kind: CredentialKind;
   ref: string;
   resolvedFor: string;
+  /** ISO 8601 expiry of this resolved credential */
+  expiresAt?: string;
+  /** Signed JWT attestation — present when AttestationSigner is configured */
+  credentialAttestation?: string;
+  /** True when this resolution was routed to the canary ref */
+  isCanary?: boolean;
 }
 
 // ─── Migration Types ──────────────────────────────────────────────────────────
@@ -170,6 +237,12 @@ export interface AuditLogEntry {
   credentialId: string;
   credentialKind: CredentialKind;
   resolvedFor: string;
+  /** True when this entry was routed via canary */
+  isCanary?: boolean;
+  /** Identity chain for federated agent calls */
+  identityChain?: IdentityChainEntry[];
+  /** SPIFFE ID of the calling workload */
+  spiffeId?: string;
 }
 
 export interface MigrationAuditLogEntry extends AuditLogEntry {
@@ -216,4 +289,63 @@ export interface DecisionResult {
   pattern: AuthPatternType;
   label: string;
   explanation: string;
+}
+
+// ─── Attestation ──────────────────────────────────────────────────────────────
+
+export interface AttestationSigner {
+  /** Sign a payload and return a compact JWT string */
+  sign(payload: Record<string, unknown>): Promise<string>;
+  /** Verify a compact JWT string; returns the payload or null if invalid */
+  verify(token: string): Promise<Record<string, unknown> | null>;
+}
+
+export interface AttestationPayload {
+  iss: string;
+  sub: string;
+  credentialId: string;
+  resolvedFor: string;
+  action: string;
+  resourceId: string;
+  traceId: string;
+  ruleId?: string;
+  iat: number;
+  exp: number;
+}
+
+// ─── Approval ────────────────────────────────────────────────────────────────
+
+export type ApprovalStatus = 'pending' | 'approved' | 'rejected' | 'timeout' | 'break_glass';
+
+export interface ApprovalRequest {
+  requestId: string;
+  credentialId: string;
+  ruleId: string;
+  context: AgentRequestContext;
+  status: ApprovalStatus;
+  requestedAt: string;
+  resolvedAt?: string;
+  resolvedBy?: string;
+  justification?: string;
+  expiresAt: string;
+}
+
+// ─── Federation ──────────────────────────────────────────────────────────────
+
+export interface IdentityChainEntry {
+  /** Trust domain e.g. 'acme.com' */
+  org: string;
+  userId: string;
+  agentId: string;
+  /** ISO 8601 timestamp when this entry was issued */
+  issuedAt: string;
+  /** Ed25519 signature over the canonical entry JSON */
+  signature: string;
+}
+
+export interface FederationConfig {
+  /** The local org's trust domain */
+  trustDomain: string;
+  /** Map of trustDomain → base64 public key for verification */
+  trustedDomains: Record<string, string>;
 }
