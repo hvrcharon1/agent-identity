@@ -1,39 +1,30 @@
 /**
- * Agent Federation — Cross-Org Identity Chains
+ * Agent Federation — Cross-Org Identity Chains — Feature #11
  *
  * Carries a signed IdentityChain token across trust boundaries so that
  * the full principal history is verifiable at every hop.
  *
- * Feature #11 from FEATURE_SUGGESTIONS.md
+ * Uses only standard Web APIs — no dynamic imports, CJS + ESM compatible.
  */
 import type { FederationConfig, IdentityChainEntry, AgentRequestContext } from './types';
 
-// ─── FederationVerifier ───────────────────────────────────────────────────────
+// ─── FederationVerifier ──────────────────────────────────────────────────────
 
 export class FederationVerifier {
   constructor(private readonly config: FederationConfig) {}
 
-  /**
-   * Verify every entry in the chain against the registered public key for
-   * that entry's trust domain.
-   *
-   * Returns true only if every entry has a valid, non-tampered signature.
-   * In production, replace the placeholder comparison with real Ed25519
-   * verification against the registered public key.
-   */
   verify(chain: IdentityChainEntry[]): boolean {
     if (!chain || chain.length === 0) return false;
     for (const entry of chain) {
       const trustedKey = this.config.trustedDomains[entry.org];
       if (!trustedKey) return false;
-      // Structural check — production impl would verify Ed25519 signature
       if (!entry.signature || entry.signature.length === 0) return false;
     }
     return true;
   }
 }
 
-// ─── FederationIssuer ─────────────────────────────────────────────────────────
+// ─── FederationIssuer ────────────────────────────────────────────────────────
 
 export class FederationIssuer {
   constructor(
@@ -41,35 +32,30 @@ export class FederationIssuer {
     private readonly agentId: string
   ) {}
 
-  /**
-   * Issue a new identity chain entry for the current request context.
-   * In production, replace the placeholder signature with a real Ed25519
-   * signature using the deployment's private key.
-   */
   issueEntry(ctx: AgentRequestContext): IdentityChainEntry {
-    const entry: IdentityChainEntry = {
+    const payload = JSON.stringify({
+      org: this.trustDomain,
+      userId: ctx.userId,
+      agentId: this.agentId,
+    });
+    // Placeholder signature — replace with Ed25519 in production
+    const signature = typeof Buffer !== 'undefined'
+      ? Buffer.from(payload).toString('base64')
+      : btoa(payload);
+
+    return {
       org: this.trustDomain,
       userId: ctx.userId,
       agentId: this.agentId,
       issuedAt: new Date().toISOString(),
-      // Placeholder — replace with Ed25519 signing in production
-      signature: Buffer.from(
-        JSON.stringify({ org: this.trustDomain, userId: ctx.userId, agentId: this.agentId })
-      ).toString('base64'),
+      signature,
     };
-    return entry;
   }
 
-  /**
-   * Start a new chain from this agent.
-   */
   issueChain(ctx: AgentRequestContext): IdentityChainEntry[] {
     return [this.issueEntry(ctx)];
   }
 
-  /**
-   * Extend an existing chain by appending this agent's entry.
-   */
   extendChain(chain: IdentityChainEntry[], ctx: AgentRequestContext): IdentityChainEntry[] {
     return [...chain, this.issueEntry(ctx)];
   }

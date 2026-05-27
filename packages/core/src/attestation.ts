@@ -2,12 +2,12 @@
  * Zero-Trust Credential Attestation — @datacules/agent-identity core
  *
  * Every resolve() call can sign a short-lived JWT attestation using an
- * Ed25519 key. Downstream services verify the attestation independently
+ * HMAC-SHA256 key. Downstream services verify the attestation independently
  * without calling agent-identity again — the proof travels with the request.
  *
- * Two built-in signers:
- *   HmacAttestationSigner  — HMAC-SHA256, symmetric, suitable for internal services
- *   Ed25519AttestationSigner — asymmetric, public key verifiable externally
+ * Uses Web Crypto API (crypto.subtle) exclusively — available in:
+ *   Node.js 18+ (global), browsers, Cloudflare Workers, Deno, Bun.
+ * No dynamic imports — compatible with both ESM and CJS builds.
  */
 import type { AttestationSigner, AttestationPayload, ResolvedCredential, AgentRequestContext } from './types';
 
@@ -25,22 +25,35 @@ export class HmacAttestationSigner implements AttestationSigner {
   }
 
   private base64url(input: string): string {
-    return Buffer.from(input).toString('base64url');
+    // Works in both browser and Node 18+ (Buffer is global in Node)
+    if (typeof Buffer !== 'undefined') {
+      return Buffer.from(input).toString('base64url');
+    }
+    // Browser fallback via btoa
+    return btoa(input).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+  }
+
+  private bufToBase64url(buf: ArrayBuffer): string {
+    if (typeof Buffer !== 'undefined') {
+      return Buffer.from(buf).toString('base64url');
+    }
+    const bytes = new Uint8Array(buf);
+    let binary = '';
+    for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i]);
+    return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
   }
 
   private async hmacSign(data: string): Promise<string> {
-    const encoder = new TextEncoder();
-    const keyData = encoder.encode(this.secret);
-    const msgData = encoder.encode(data);
-
-    if (typeof crypto !== 'undefined' && crypto.subtle) {
-      const key = await crypto.subtle.importKey('raw', keyData, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
-      const sig = await crypto.subtle.sign('HMAC', key, msgData);
-      return Buffer.from(sig).toString('base64url');
-    }
-    // Node.js fallback
-    const { createHmac } = await import('crypto');
-    return createHmac('sha256', this.secret).update(data).digest('base64url');
+    const enc = new TextEncoder();
+    const key = await crypto.subtle.importKey(
+      'raw',
+      enc.encode(this.secret),
+      { name: 'HMAC', hash: 'SHA-256' },
+      false,
+      ['sign']
+    );
+    const sig = await crypto.subtle.sign('HMAC', key, enc.encode(data));
+    return this.bufToBase64url(sig);
   }
 
   async sign(payload: Record<string, unknown>): Promise<string> {
@@ -56,7 +69,11 @@ export class HmacAttestationSigner implements AttestationSigner {
       if (!header || !body || !sig) return null;
       const expected = await this.hmacSign(`${header}.${body}`);
       if (expected !== sig) return null;
-      return JSON.parse(Buffer.from(body, 'base64url').toString('utf8'));
+      // Decode body: Node uses Buffer, browsers use atob
+      const decoded = typeof Buffer !== 'undefined'
+        ? Buffer.from(body, 'base64url').toString('utf8')
+        : atob(body.replace(/-/g, '+').replace(/_/g, '/'));
+      return JSON.parse(decoded);
     } catch {
       return null;
     }
@@ -95,14 +112,6 @@ export async function buildAttestation(
 
 // ─── Standalone verifyAttestation helper ────────────────────────────────────
 
-/**
- * Verify a credential attestation JWT.
- * Returns the decoded payload on success, null on any failure.
- *
- * @example
- * const payload = await verifyAttestation(token, signer);
- * if (!payload) throw new Error('Attestation invalid');
- */
 export async function verifyAttestation(
   token: string,
   signer: AttestationSigner
