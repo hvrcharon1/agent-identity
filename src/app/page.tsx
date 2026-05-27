@@ -8,9 +8,12 @@ import { DecisionTab } from '@/components/DecisionTab';
 import { MigrationTab } from '@/components/MigrationTab';
 import { AttestationTab } from '@/components/AttestationTab';
 import { CanaryTab } from '@/components/CanaryTab';
+import { ApprovalTab } from '@/components/ApprovalTab';
+import { BudgetTab } from '@/components/BudgetTab';
+import { FederationTab } from '@/components/FederationTab';
 import type { SupportedProvider } from '@/lib/types';
 
-// ─── Inline SVG tab icons ────────────────────────────────────────────────────
+// ─── Inline SVG tab icons ────────────────────────────────────────────
 function IconShield({ className }: { className?: string }) {
   return (
     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
@@ -75,6 +78,29 @@ function IconZap({ className }: { className?: string }) {
     </svg>
   );
 }
+function IconCheckCircle({ className }: { className?: string }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
+      <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>
+    </svg>
+  );
+}
+function IconGauge({ className }: { className?: string }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
+      <path d="m12 14 4-4"/><path d="M3.34 19a10 10 0 1 1 17.32 0"/>
+    </svg>
+  );
+}
+function IconNetwork({ className }: { className?: string }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
+      <rect x="16" y="16" width="6" height="6" rx="1"/><rect x="2" y="16" width="6" height="6" rx="1"/>
+      <rect x="9" y="2" width="6" height="6" rx="1"/>
+      <path d="M5 16v-3a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v3"/><path d="M12 12V8"/>
+    </svg>
+  );
+}
 
 const TABS = [
   { id: 'identities',   label: 'Identity types',    Icon: IconShield        },
@@ -84,16 +110,19 @@ const TABS = [
   { id: 'migration',    label: 'Data migration',     Icon: IconArrowLeftRight },
   { id: 'attestation',  label: 'Attestation',        Icon: IconFingerprint   },
   { id: 'canary',       label: 'Canary routing',     Icon: IconZap           },
+  { id: 'approval',     label: 'Approvals',          Icon: IconCheckCircle   },
+  { id: 'budget',       label: 'Budgets',            Icon: IconGauge         },
+  { id: 'federation',   label: 'Federation',         Icon: IconNetwork       },
 ] as const;
 
 type TabId = (typeof TABS)[number]['id'];
 
 const PROVIDERS: { id: SupportedProvider; label: string }[] = [
-  { id: 'openai',    label: 'OpenAI'             },
-  { id: 'anthropic', label: 'Anthropic'          },
-  { id: 'gemini',    label: 'Gemini'             },
-  { id: 'mistral',   label: 'Mistral'            },
-  { id: 'local',     label: 'Local / self-hosted' },
+  { id: 'openai',    label: 'OpenAI'              },
+  { id: 'anthropic', label: 'Anthropic'           },
+  { id: 'gemini',    label: 'Gemini'              },
+  { id: 'mistral',   label: 'Mistral'             },
+  { id: 'local',     label: 'Local / self-hosted'  },
 ];
 
 export default function Home() {
@@ -176,6 +205,9 @@ export default function Home() {
         {activeTab === 'migration'   && <MigrationTab />}
         {activeTab === 'attestation' && <AttestationTab />}
         {activeTab === 'canary'      && <CanaryTab />}
+        {activeTab === 'approval'    && <ApprovalTab />}
+        {activeTab === 'budget'      && <BudgetTab />}
+        {activeTab === 'federation'  && <FederationTab />}
 
       </div>
     </main>
