@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { FederationVerifier } from '@/lib/federation';
-import type { FederationConfig } from '@/lib/types';
+import type { FederationConfig } from '@/lib/federation';
 
 const FEDERATION_CONFIG: FederationConfig = {
   trustDomain: 'acme.com',

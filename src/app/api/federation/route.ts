@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { FederationIssuer, FederationVerifier } from '@/lib/federation';
-import type { FederationConfig } from '@/lib/types';
+import type { FederationConfig } from '@/lib/federation';
 
 // Demo federation config
 const FEDERATION_CONFIG: FederationConfig = {
