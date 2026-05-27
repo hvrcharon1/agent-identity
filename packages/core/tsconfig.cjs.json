@@ -8,6 +8,7 @@
     "moduleResolution": "node",
     "declaration": false,
     "declarationMap": false,
+    "declarationDir": "",
     "sourceMap": true
   },
   "exclude": [
