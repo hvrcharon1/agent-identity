@@ -37,6 +37,10 @@ describe('AgentRequestContextSchema', () => {
   it('rejects a non-datetime requestedAt', () => {
     expect(AgentRequestContextSchema.safeParse({ ...validCtx, requestedAt: 'not-a-date' }).success).toBe(false);
   });
+
+  it('accepts optional spiffeId', () => {
+    expect(AgentRequestContextSchema.safeParse({ ...validCtx, spiffeId: 'spiffe://acme.com/agent/orders' }).success).toBe(true);
+  });
 });
 
 describe('MigrationContextSchema', () => {
@@ -61,17 +65,54 @@ describe('RoutingRuleSchema', () => {
     const rule = { id: 'r-1', description: 'test', credentialRef: 'ref-1', credentialKind: 'fixed', priority: 10, matchAction: ['read', 'write'] };
     expect(RoutingRuleSchema.safeParse(rule).success).toBe(true);
   });
+
+  it('accepts canaryRef + canaryWeight', () => {
+    const rule = { id: 'r-1', description: 'test', credentialRef: 'ref-1', credentialKind: 'fixed', priority: 10, canaryRef: 'ref-2', canaryWeight: 10 };
+    expect(RoutingRuleSchema.safeParse(rule).success).toBe(true);
+  });
+
+  it('rejects canaryWeight > 100', () => {
+    const rule = { id: 'r-1', description: 'test', credentialRef: 'ref-1', credentialKind: 'fixed', priority: 10, canaryWeight: 150 };
+    expect(RoutingRuleSchema.safeParse(rule).success).toBe(false);
+  });
+
+  it('accepts approval policy', () => {
+    const rule = {
+      id: 'r-1', description: 'test', credentialRef: 'ref-1', credentialKind: 'fixed', priority: 10,
+      approval: { requiredApprovers: 1, approvers: [{ kind: 'webhook', target: 'https://example.com/approve' }] }
+    };
+    expect(RoutingRuleSchema.safeParse(rule).success).toBe(true);
+  });
 });
 
 describe('CredentialSchema', () => {
-  it('rejects pending status', () => {
+  it('accepts active status', () => {
+    const cred = { id: 'c-1', kind: 'fixed', name: 'Test', scope: 'all', status: 'active', ref: 'ref-1' };
+    expect(CredentialSchema.safeParse(cred).success).toBe(true);
+  });
+
+  it('accepts pending status (store filters it — schema allows it)', () => {
     const cred = { id: 'c-1', kind: 'fixed', name: 'Test', scope: 'all', status: 'pending', ref: 'ref-1' };
-    // pending is a valid status enum value— schema accepts it; the store filters it
     expect(CredentialSchema.safeParse(cred).success).toBe(true);
   });
 
   it('rejects invalid expiresAt', () => {
     const cred = { id: 'c-1', kind: 'fixed', name: 'Test', scope: 'all', status: 'active', ref: 'ref-1', expiresAt: 'not-a-date' };
     expect(CredentialSchema.safeParse(cred).success).toBe(false);
+  });
+
+  it('accepts rotation policy', () => {
+    const cred = { id: 'c-1', kind: 'fixed', name: 'Test', scope: 'all', status: 'active', ref: 'ref-1', rotation: { rotateAfterDays: 30, gracePeriodSeconds: 300 } };
+    expect(CredentialSchema.safeParse(cred).success).toBe(true);
+  });
+
+  it('accepts budget policy', () => {
+    const cred = { id: 'c-1', kind: 'fixed', name: 'Test', scope: 'all', status: 'active', ref: 'ref-1', budget: { maxResolutionsPerHour: 1000 } };
+    expect(CredentialSchema.safeParse(cred).success).toBe(true);
+  });
+
+  it('accepts tags array', () => {
+    const cred = { id: 'c-1', kind: 'fixed', name: 'Test', scope: 'all', status: 'active', ref: 'ref-1', tags: ['pii', 'prod'] };
+    expect(CredentialSchema.safeParse(cred).success).toBe(true);
   });
 });
