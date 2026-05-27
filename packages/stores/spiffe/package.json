@@ -1,0 +1,39 @@
+{
+  "name": "@datacules/agent-identity-store-spiffe",
+  "version": "0.1.0",
+  "description": "SPIFFE/SPIRE workload identity credential store for @datacules/agent-identity",
+  "private": false,
+  "type": "module",
+  "exports": {
+    ".": {
+      "import": "./dist/esm/index.js",
+      "require": "./dist/cjs/index.js",
+      "types": "./dist/types/index.d.ts"
+    }
+  },
+  "main": "./dist/cjs/index.js",
+  "module": "./dist/esm/index.js",
+  "types": "./dist/types/index.d.ts",
+  "files": ["dist", "README.md"],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json && tsc -p tsconfig.cjs.json",
+    "type-check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@datacules/agent-identity": "*"
+  },
+  "peerDependencies": {
+    "@spiffe/spiffe-workload-api": "^1.0.0"
+  },
+  "peerDependenciesMeta": {
+    "@spiffe/spiffe-workload-api": { "optional": true }
+  },
+  "devDependencies": {
+    "typescript": "^5"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/hvrcharon1/agent-identity"
+  }
+}

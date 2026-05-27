@@ -6,6 +6,8 @@ import { PatternsTab } from '@/components/PatternsTab';
 import { CredentialsTab } from '@/components/CredentialsTab';
 import { DecisionTab } from '@/components/DecisionTab';
 import { MigrationTab } from '@/components/MigrationTab';
+import { AttestationTab } from '@/components/AttestationTab';
+import { CanaryTab } from '@/components/CanaryTab';
 import type { SupportedProvider } from '@/lib/types';
 
 // ─── Inline SVG tab icons ────────────────────────────────────────────────────
@@ -55,13 +57,33 @@ function IconArrowLeftRight({ className }: { className?: string }) {
     </svg>
   );
 }
+function IconFingerprint({ className }: { className?: string }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
+      <path d="M2 12C2 6.5 6.5 2 12 2a10 10 0 0 1 8 4"/>
+      <path d="M5 19.5C5.5 18 6 15 6 12c0-1.7.7-3.3 1.8-4.5"/>
+      <path d="M17.5 5.5C19 7 20 9.4 20 12c0 4.4-.7 7.4-1.5 9"/>
+      <path d="M10 12a2 2 0 0 1 4 0c0 1.9-.8 3.8-2 5"/>
+      <path d="M9 12a3 3 0 0 1 6 0c0 2.8-1.2 5.3-3 7"/>
+    </svg>
+  );
+}
+function IconZap({ className }: { className?: string }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
+      <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+    </svg>
+  );
+}
 
 const TABS = [
-  { id: 'identities',  label: 'Identity types',   Icon: IconShield        },
-  { id: 'patterns',    label: 'Auth patterns',     Icon: IconGitBranch     },
-  { id: 'credentials', label: 'Credentials',       Icon: IconKey           },
-  { id: 'decide',      label: 'Decision helper',   Icon: IconHelpCircle    },
-  { id: 'migration',   label: 'Data migration',    Icon: IconArrowLeftRight },
+  { id: 'identities',   label: 'Identity types',    Icon: IconShield        },
+  { id: 'patterns',     label: 'Auth patterns',      Icon: IconGitBranch     },
+  { id: 'credentials',  label: 'Credentials',        Icon: IconKey           },
+  { id: 'decide',       label: 'Decision helper',    Icon: IconHelpCircle    },
+  { id: 'migration',    label: 'Data migration',     Icon: IconArrowLeftRight },
+  { id: 'attestation',  label: 'Attestation',        Icon: IconFingerprint   },
+  { id: 'canary',       label: 'Canary routing',     Icon: IconZap           },
 ] as const;
 
 type TabId = (typeof TABS)[number]['id'];
@@ -152,6 +174,8 @@ export default function Home() {
         {activeTab === 'credentials' && <CredentialsTab provider={activeProvider} />}
         {activeTab === 'decide'      && <DecisionTab />}
         {activeTab === 'migration'   && <MigrationTab />}
+        {activeTab === 'attestation' && <AttestationTab />}
+        {activeTab === 'canary'      && <CanaryTab />}
 
       </div>
     </main>
