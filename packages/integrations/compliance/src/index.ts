@@ -17,7 +17,8 @@
  *     to: '2026-03-31T23:59:59Z',
  *   });
  */
-import type { AuditLogEntry } from '@datacules/agent-identity';
+import type { AuditLogEntry, AuditLogger } from '@datacules/agent-identity';
+import { createHash } from 'node:crypto';
 
 // ─── Report types ────────────────────────────────────────────────────────────────
 
@@ -250,5 +251,189 @@ export class ComplianceReportGenerator {
       report.anomalyEvents.length === 0 ? '_None_' : report.anomalyEvents.map((a) => `- ${a.timestamp} | ${a.userId} | ${a.credentialId} | ${a.signal} (${a.severity})`).join('\n'),
     ];
     return lines.join('\n');
+  }
+}
+
+// ─── HashChainAuditLogger ────────────────────────────────────────────────────────
+
+/**
+ * A chained audit log entry — extends the base AuditLogEntry with two
+ * additional fields that form the tamper-evident SHA-256 chain.
+ */
+export interface ChainedAuditLogEntry extends AuditLogEntry {
+  /** SHA-256 hash of (serialised entry data + prevHash) */
+  hash: string;
+  /** Hash of the immediately preceding entry, or '' for the first entry */
+  prevHash: string;
+}
+
+/**
+ * Result returned by ChainVerifier.verify()
+ */
+export interface VerificationResult {
+  /** true only if every entry's hash recomputes correctly */
+  intact: boolean;
+  /** Number of entries verified */
+  entryCount: number;
+  /** SHA-256 hash of the last valid entry (the chain root for anchoring) */
+  rootHash: string | null;
+  /** Index of the first broken link (null if intact) */
+  brokenAt: number | null;
+  /** Human-readable reason for breakage (null if intact) */
+  brokenReason: string | null;
+}
+
+/**
+ * Computes the SHA-256 hash for a single audit log entry.
+ *
+ * The hash input is:
+ *   SHA256( JSON.stringify(coreFields) + prevHash )
+ *
+ * where coreFields are the entry's own data fields (excluding hash/prevHash
+ * themselves) sorted by key for deterministic serialisation.
+ */
+function computeEntryHash(entry: AuditLogEntry, prevHash: string): string {
+  // Exclude the chain fields from the payload so re-verification is stable
+  const { hash: _h, prevHash: _p, ...coreFields } = entry as ChainedAuditLogEntry;
+  void _h; void _p;
+  const sortedKeys = Object.keys(coreFields).sort();
+  const payload: Record<string, unknown> = {};
+  for (const k of sortedKeys) {
+    payload[k] = (coreFields as Record<string, unknown>)[k];
+  }
+  return createHash('sha256')
+    .update(JSON.stringify(payload) + prevHash)
+    .digest('hex');
+}
+
+/**
+ * HashChainAuditLogger wraps any existing AuditLogger and appends
+ * `hash` and `prevHash` fields to every entry before forwarding to
+ * the underlying sink.
+ *
+ * Each entry's hash covers its own data + the previous entry's hash,
+ * forming a SHA-256 linked list. Any retroactive modification to an
+ * entry breaks the chain from that point forward — detectable by
+ * ChainVerifier.verify() in O(n) time.
+ *
+ * Usage:
+ *   const base = new ConsoleAuditLogger();
+ *   const chained = new HashChainAuditLogger(base);
+ *   const router = createRouter(credentials, rules, chained);
+ *
+ * The underlying sink receives ChainedAuditLogEntry objects. If it
+ * serialises to JSONL (one JSON object per line), that file can be
+ * verified offline with:
+ *   agent-identity audit verify --file ./audit.jsonl
+ */
+export class HashChainAuditLogger implements AuditLogger {
+  private prevHash = '';
+
+  constructor(private readonly sink: AuditLogger) {}
+
+  log(entry: AuditLogEntry): void {
+    const hash = computeEntryHash(entry, this.prevHash);
+    const chained: ChainedAuditLogEntry = {
+      ...entry,
+      prevHash: this.prevHash,
+      hash,
+    };
+    this.prevHash = hash;
+    this.sink.log(chained as unknown as AuditLogEntry);
+  }
+
+  /** Returns the hash of the most recently logged entry (the current chain tip) */
+  get currentHash(): string {
+    return this.prevHash;
+  }
+}
+
+/**
+ * Verifies a sequence of ChainedAuditLogEntry objects.
+ *
+ * Replays the SHA-256 chain from the beginning. The first entry must
+ * have prevHash === '' (empty string). Every subsequent entry's hash
+ * must equal SHA256(sortedEntryData + prevEntry.hash).
+ *
+ * Any single field modification in any entry will break the chain
+ * from that entry onward.
+ */
+export class ChainVerifier {
+  /**
+   * Verify an in-memory array of entries.
+   *
+   * @param entries - Array of entries parsed from an audit log
+   */
+  static verify(entries: ChainedAuditLogEntry[]): VerificationResult {
+    if (entries.length === 0) {
+      return { intact: false, entryCount: 0, rootHash: null, brokenAt: null, brokenReason: 'Log is empty — nothing to verify' };
+    }
+
+    let prevHash = '';
+
+    for (let i = 0; i < entries.length; i++) {
+      const entry = entries[i];
+
+      // Check the recorded prevHash matches our running chain
+      if (entry.prevHash !== prevHash) {
+        return {
+          intact: false,
+          entryCount: entries.length,
+          rootHash: entries[i - 1]?.hash ?? null,
+          brokenAt: i,
+          brokenReason: `Entry ${i}: prevHash mismatch — expected ${prevHash.slice(0, 16)}… got ${entry.prevHash.slice(0, 16)}…`,
+        };
+      }
+
+      // Recompute the hash and check it matches what was recorded
+      const expected = computeEntryHash(entry, prevHash);
+      if (entry.hash !== expected) {
+        return {
+          intact: false,
+          entryCount: entries.length,
+          rootHash: entries[i - 1]?.hash ?? null,
+          brokenAt: i,
+          brokenReason: `Entry ${i}: hash mismatch — entry data appears to have been modified`,
+        };
+      }
+
+      prevHash = entry.hash;
+    }
+
+    return {
+      intact: true,
+      entryCount: entries.length,
+      rootHash: prevHash,
+      brokenAt: null,
+      brokenReason: null,
+    };
+  }
+
+  /**
+   * Parse a JSONL string (one JSON object per line) and verify the chain.
+   * Blank lines and lines that fail JSON.parse are skipped with a warning.
+   *
+   * @param jsonl - Full JSONL file content as a string
+   */
+  static verifyJsonl(jsonl: string): VerificationResult {
+    const entries: ChainedAuditLogEntry[] = [];
+    const lines = jsonl.split('\n');
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i].trim();
+      if (!line) continue;
+      try {
+        entries.push(JSON.parse(line) as ChainedAuditLogEntry);
+      } catch {
+        // Non-JSON line — treat as a chain break
+        return {
+          intact: false,
+          entryCount: entries.length,
+          rootHash: entries[entries.length - 1]?.hash ?? null,
+          brokenAt: entries.length,
+          brokenReason: `Line ${i + 1}: failed to parse as JSON — log file may be corrupted`,
+        };
+      }
+    }
+    return ChainVerifier.verify(entries);
   }
 }
