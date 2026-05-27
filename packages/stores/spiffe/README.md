@@ -1,16 +1,28 @@
 # `@datacules/agent-identity-store-spiffe`
 
-SPIFFE/SPIRE workload identity integration for [`@datacules/agent-identity`](../../core). Each agent workload obtains an X.509 SVID from a SPIRE agent socket instead of reading static secrets — no credentials stored anywhere.
+SPIFFE/SPIRE workload identity credential store for [`@datacules/agent-identity`](https://github.com/hvrcharon1/agent-identity).
 
-## Install
+Instead of static long-lived API keys stored in a vault, this store uses the **SPIFFE Workload API** to fetch short-lived **X.509 SVIDs** (SPIFFE Verifiable Identity Documents) on demand. A full store compromise yields only workload metadata — no usable credential material.
+
+---
+
+## How it works
+
+1. On `resolve()`, the store looks up credential metadata by `ref`.
+2. It calls the SPIRE Workload API socket to fetch the current X.509 SVID bundle for that workload.
+3. The SVID's PEM certificate chain is returned as the live credential value.
+4. Downstream services verify the chain against the trust bundle — no static API key ever travels over the wire.
+5. SVIDs are cached in memory until 5 minutes before expiry (configurable), then re-fetched transparently.
+
+---
+
+## Installation
 
 ```bash
-npm install @datacules/agent-identity-store-spiffe
+npm install @datacules/agent-identity-store-spiffe @spiffe/spiffe-workload-api
 ```
 
-## Why SPIFFE?
-
-In cloud-native environments (Kubernetes, ECS, Cloud Run), static secrets are fragile — they can leak via environment variables, config maps, or container inspection. SPIFFE SVIDs are short-lived X.509 certificates (auto-renewed, typically 1-hour TTL) that cryptographically prove the workload's identity at the platform level. No secrets to store, no rotation scripts, no environment variable leakage.
+---
 
 ## Usage
 
@@ -19,51 +31,76 @@ import { SpiffeCredentialStore } from '@datacules/agent-identity-store-spiffe';
 import { createRouterFromStore } from '@datacules/agent-identity';
 
 const store = new SpiffeCredentialStore({
-  spireSocketPath: '/run/spire/sockets/agent.sock',
-  trustDomain: 'acme.com',
+  trustDomain: 'acme.org',
+  endpointSocket: 'unix:///run/spire/sockets/agent.sock', // or SPIFFE_ENDPOINT_SOCKET env
+  credentials: [
+    {
+      id: 'cred-orders-service',
+      ref: 'orders-service',        // matched against SVID hint or path segment
+      kind: 'fixed',
+      name: 'Orders service workload identity',
+      scope: 'all',
+      status: 'active',
+      provider: 'local',
+    },
+  ],
 });
 
-// Route by SPIFFE ID pattern in the routing rule
-const rules = [
-  {
-    id: 'rule-orders-agent',
-    description: 'Orders agent — read access via SPIFFE workload identity',
-    matchSpiffeId: 'spiffe://acme.com/agent/orders-*', // glob pattern
-    credentialRef: 'orders-db-slot',
-    credentialKind: 'fixed',
-    priority: 90,
-  },
-];
-
 const router = createRouterFromStore(store, rules, logger);
-
-// Include spiffeId in the context — SpiffeCredentialStore populates it from the SVID
-const ctx = {
-  ...baseCtx,
-  spiffeId: 'spiffe://acme.com/agent/orders-prod',
-};
-
 const resolved = await router.resolveAsync(ctx);
+// resolved.ref contains the PEM X.509 SVID — pass it to mTLS or a
+// downstream service that verifies SPIFFE SVIDs
 ```
 
-## Kubernetes setup
+---
 
-Mount the SPIRE agent socket into your pod:
+## Configuration
 
-```yaml
-volumes:
-  - name: spire-agent-socket
-    hostPath:
-      path: /run/spire/sockets
-      type: Directory
-containers:
-  - name: orders-agent
-    volumeMounts:
-      - name: spire-agent-socket
-        mountPath: /run/spire/sockets
-        readOnly: true
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `credentials` | `Credential[]` | required | Static metadata for each workload |
+| `endpointSocket` | `string` | `SPIFFE_ENDPOINT_SOCKET` env or `/tmp/spire-agent/public/api.sock` | SPIFFE Workload API socket path |
+| `trustDomain` | `string` | `example.org` | SPIFFE trust domain (e.g. `acme.org`) |
+| `cacheTtlSeconds` | `number` | `3300` (55 min) | How long to cache SVIDs before re-fetching |
+
+---
+
+## SVID matching
+
+The store matches a credential `ref` to an SVID using three strategies (first match wins):
+
+1. **Hint match** — SVID `hint` field equals the credential `ref`
+2. **Path suffix** — SPIFFE ID ends with `/<ref>` (e.g. `spiffe://acme.org/orders-service`)
+3. **Exact SPIFFE ID** — SPIFFE ID equals `spiffe://<trustDomain>/<ref>`
+
+---
+
+## SPIRE server setup
+
+```bash
+# Register a workload entry for your service
+spire-server entry create \
+  -spiffeID spiffe://acme.org/orders-service \
+  -parentID  spiffe://acme.org/agent/prod \
+  -selector  k8s:pod-label:app:orders-service
+
+# The SPIRE agent on the node will attest the workload and issue SVIDs
+# automatically. No API key management required.
 ```
 
-## Works across cloud providers
+---
 
-SPIRE handles node attestation for AWS EC2 (via IMDSv2), GCP Compute Engine, Azure VMs, and on-prem bare metal — no code changes between environments.
+## Zero-trust architecture
+
+Combine with `@datacules/agent-identity-otel` for full observability:
+
+```typescript
+import { withOtel } from '@datacules/agent-identity-otel';
+
+const router = withOtel(
+  createRouterFromStore(spiffeStore, rules, logger),
+  { tracer: trace.getTracer('agent-identity') }
+);
+```
+
+Every SVID fetch, cache hit/miss, and credential resolution is traced.

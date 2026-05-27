@@ -1,18 +1,9 @@
 {
   "name": "@datacules/agent-identity-store-spiffe",
   "version": "0.1.0",
+  "description": "SPIFFE/SPIRE workload identity credential store for @datacules/agent-identity",
   "private": false,
-  "description": "SPIFFE/SPIRE workload identity store for @datacules/agent-identity — X.509 SVID-based credential routing, zero stored secrets",
-  "author": "Datacules LLC",
-  "license": "MIT",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/hvrcharon1/agent-identity.git",
-    "directory": "packages/stores/spiffe"
-  },
-  "main": "./dist/cjs/index.js",
-  "module": "./dist/esm/index.js",
-  "types": "./dist/types/index.d.ts",
+  "type": "module",
   "exports": {
     ".": {
       "import": "./dist/esm/index.js",
@@ -20,17 +11,29 @@
       "types": "./dist/types/index.d.ts"
     }
   },
+  "main": "./dist/cjs/index.js",
+  "module": "./dist/esm/index.js",
+  "types": "./dist/types/index.d.ts",
   "files": ["dist", "README.md"],
   "scripts": {
-    "build": "tsc -p tsconfig.build.json",
-    "type-check": "tsc --noEmit",
-    "lint": "eslint src --ext .ts"
+    "build": "tsc -p tsconfig.build.json && tsc -p tsconfig.cjs.json",
+    "type-check": "tsc --noEmit"
   },
-  "devDependencies": {
-    "@types/node": "^20",
-    "typescript": "^5"
+  "dependencies": {
+    "@datacules/agent-identity": "*"
   },
   "peerDependencies": {
-    "@datacules/agent-identity": "^0.1.0"
+    "@spiffe/spiffe-workload-api": "^1.0.0"
+  },
+  "peerDependenciesMeta": {
+    "@spiffe/spiffe-workload-api": { "optional": true }
+  },
+  "devDependencies": {
+    "typescript": "^5"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/hvrcharon1/agent-identity"
   }
 }
