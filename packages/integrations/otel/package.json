@@ -5,13 +5,11 @@
   "description": "Zero-config OpenTelemetry tracing wrapper for @datacules/agent-identity",
   "author": "Datacules LLC",
   "license": "MIT",
-  "main": "./dist/cjs/index.js",
   "module": "./dist/esm/index.js",
   "types": "./dist/types/index.d.ts",
   "exports": {
     ".": {
       "import": "./dist/esm/index.js",
-      "require": "./dist/cjs/index.js",
       "types": "./dist/types/index.d.ts"
     }
   },
