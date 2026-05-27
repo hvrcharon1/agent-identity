@@ -1,0 +1,40 @@
+{
+  "name": "@datacules/agent-identity-otel",
+  "version": "0.1.0",
+  "private": false,
+  "description": "OpenTelemetry-native tracing for @datacules/agent-identity — auto-instruments every resolve() call with OTEL spans",
+  "author": "Datacules LLC",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/hvrcharon1/agent-identity.git",
+    "directory": "packages/integrations/otel"
+  },
+  "main": "./dist/cjs/index.js",
+  "module": "./dist/esm/index.js",
+  "types": "./dist/types/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/esm/index.js",
+      "require": "./dist/cjs/index.js",
+      "types": "./dist/types/index.d.ts"
+    }
+  },
+  "files": ["dist", "README.md"],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "type-check": "tsc --noEmit",
+    "lint": "eslint src --ext .ts"
+  },
+  "dependencies": {
+    "@opentelemetry/api": "^1.7.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "typescript": "^5"
+  },
+  "peerDependencies": {
+    "@datacules/agent-identity": "^0.1.0",
+    "@opentelemetry/api": "^1.7.0"
+  }
+}

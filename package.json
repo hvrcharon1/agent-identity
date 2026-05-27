@@ -14,6 +14,7 @@
     "packages/integrations/nestjs",
     "packages/integrations/mcp",
     "packages/integrations/mcp-client",
+    "packages/integrations/otel",
     "packages/python-sdk"
   ],
   "scripts": {
