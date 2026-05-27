@@ -5,9 +5,8 @@
     "rootDir": "./src",
     "outDir": "./dist/cjs",
     "module": "CommonJS",
-    "moduleResolution": "node",
+    "moduleResolution": "bundler",
     "declaration": false,
-    "declarationDir": null,
     "declarationMap": false,
     "sourceMap": true
   },

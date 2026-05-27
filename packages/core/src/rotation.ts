@@ -1,196 +1,162 @@
 /**
- * Automated Credential Rotation — @datacules/agent-identity core
+ * Automated Credential Rotation — Feature #4 from FEATURE_SUGGESTIONS.md
  *
- * Adds RotationPolicy, RotationProvider, and CredentialRotationScheduler.
- * The scheduler runs in the background and calls registered RotationProviders
- * when a credential's policy threshold is reached. During the grace period
- * both old and new refs resolve so in-flight requests are not disrupted.
+ * RotationPolicy on Credential + CredentialRotationScheduler that detects
+ * expiring/due credentials and calls registered RotationProvider instances
+ * to mint new secrets.
  */
-import type { Credential, CredentialStore, AuditLogger } from './types';
+import type { Credential, AuditLogger, RotationPolicy } from './types';
 
-// ─── Rotation Policy ────────────────────────────────────────────────────────
+// ─── Interfaces ───────────────────────────────────────────────────────────────
 
-export interface RotationPolicy {
-  /** Rotate N days after lastRotated (or createdAt if never rotated) */
-  rotateAfterDays?: number;
-  /** Rotate after N successful resolutions */
-  rotateAfterUses?: number;
-  /** Both old + new refs remain valid during grace period (default: 300 s) */
-  gracePeriodSeconds?: number;
-  /** Emit credential.rotation_due audit event N days before deadline (default: 3) */
-  notifyBeforeDays?: number;
-  /** Which RotationProvider to call (matches RotationProvider.id) */
-  provisioner?: string;
-}
-
-// ─── Rotation Provider ───────────────────────────────────────────────────────
-
+/**
+ * A RotationProvider mints a new secret for a credential and updates the
+ * store. Built-in providers: VaultRotationProvider, AwsRotationProvider.
+ * Custom providers implement this interface.
+ */
 export interface RotationProvider {
-  /** Matches RotationPolicy.provisioner */
   id: string;
-  /** Mint a new secret; return the new ref and optional expiry */
-  provision(credential: Credential): Promise<{ newRef: string; expiresAt?: string }>;
-  /** Revoke the old ref after the grace period */
-  revoke(oldRef: string): Promise<void>;
+  rotate(credential: Credential): Promise<{ newRef: string; rotatedAt: string }>;
 }
 
-// ─── Rotation Events ─────────────────────────────────────────────────────────
-
-export type RotationEventKind = 'credential.rotated' | 'credential.rotation_due' | 'credential.rotation_failed';
-
-export interface RotationEvent {
-  kind: RotationEventKind;
-  credentialId: string;
-  credentialRef: string;
-  newRef?: string;
-  expiresAt?: string;
-  error?: string;
-  timestamp: string;
+/**
+ * CredentialRepository is a minimal interface over any CredentialStore that
+ * supports mutation — listing and updating credentials. The core store
+ * interface is read-only for callers; rotation needs write access.
+ */
+export interface RotationRepository {
+  listActive(): Promise<Credential[]>;
+  update(id: string, patch: Partial<Credential>): Promise<void>;
 }
 
-// ─── Scheduler Config ────────────────────────────────────────────────────────
-
-export interface RotationConfig {
-  store: CredentialStore;
-  providers: RotationProvider[];
-  logger?: AuditLogger;
-  /** How often to run the check loop in ms (default: 3_600_000 — 1 hour) */
-  checkIntervalMs?: number;
-  /** Callback fired after each rotation event (useful for tests / dashboards) */
-  onEvent?: (event: RotationEvent) => void;
-}
-
-// ─── Scheduler ───────────────────────────────────────────────────────────────
+// ─── CredentialRotationScheduler ─────────────────────────────────────────────
 
 export class CredentialRotationScheduler {
-  private readonly providers: Map<string, RotationProvider>;
-  private timer?: ReturnType<typeof setInterval>;
-  /** Tracks per-credential use counts for rotateAfterUses policies */
-  private useCounts = new Map<string, number>();
-  /** Refs currently in grace period — both old + new resolve */
-  private gracefulRefs = new Map<string, string>(); // oldRef → newRef
+  private readonly providers = new Map<string, RotationProvider>();
+  private intervalHandle: ReturnType<typeof setInterval> | null = null;
 
-  constructor(private readonly config: RotationConfig) {
-    this.providers = new Map(config.providers.map((p) => [p.id, p]));
-  }
+  constructor(
+    private readonly repository: RotationRepository,
+    private readonly auditLogger?: AuditLogger
+  ) {}
 
-  /** Call this every time a credential is successfully resolved */
-  recordUse(credentialId: string): void {
-    this.useCounts.set(credentialId, (this.useCounts.get(credentialId) ?? 0) + 1);
+  registerProvider(provider: RotationProvider): void {
+    this.providers.set(provider.id, provider);
   }
 
   /**
-   * Returns the current active ref for a credential.
-   * During a grace period returns the NEW ref so new requests use the rotated secret.
+   * Check all active credentials for pending rotation and rotate them.
+   * Call this on a schedule (e.g. every hour via cron or setInterval).
    */
-  activeRef(originalRef: string): string {
-    return this.gracefulRefs.get(originalRef) ?? originalRef;
+  async runOnce(): Promise<void> {
+    const credentials = await this.repository.listActive();
+    const now = new Date();
+
+    for (const cred of credentials) {
+      if (!cred.rotation) continue;
+
+      const due = this.isRotationDue(cred, cred.rotation, now);
+      if (!due) {
+        await this.maybeEmitWarning(cred, cred.rotation, now);
+        continue;
+      }
+
+      const provider = cred.rotation.provisioner
+        ? this.providers.get(cred.rotation.provisioner)
+        : null;
+
+      if (!provider) {
+        console.warn(`[RotationScheduler] No provider for credential ${cred.id} (provisioner: ${cred.rotation.provisioner ?? 'unset'})`);
+        continue;
+      }
+
+      try {
+        const { newRef, rotatedAt } = await provider.rotate(cred);
+        await this.repository.update(cred.id, { ref: newRef, lastRotated: rotatedAt });
+
+        if (this.auditLogger) {
+          await this.auditLogger.log({
+            timestamp: new Date().toISOString(),
+            traceId: `rotation-${cred.id}`,
+            userId: 'system',
+            action: 'credential.rotated',
+            resourceId: cred.id,
+            resourceKind: 'shared',
+            provider: 'local',
+            model: 'system',
+            credentialId: cred.id,
+            credentialKind: cred.kind,
+            resolvedFor: 'system',
+          });
+        }
+      } catch (err) {
+        console.error(`[RotationScheduler] Rotation failed for ${cred.id}:`, err);
+        if (this.auditLogger) {
+          await this.auditLogger.log({
+            timestamp: new Date().toISOString(),
+            traceId: `rotation-${cred.id}`,
+            userId: 'system',
+            action: 'credential.rotation_failed',
+            resourceId: cred.id,
+            resourceKind: 'shared',
+            provider: 'local',
+            model: 'system',
+            credentialId: cred.id,
+            credentialKind: cred.kind,
+            resolvedFor: 'system',
+          });
+        }
+      }
+    }
   }
 
-  /** Start the background check loop */
-  start(): void {
-    const interval = this.config.checkIntervalMs ?? 3_600_000;
-    this.check().catch(console.error); // immediate first pass
-    this.timer = setInterval(() => this.check().catch(console.error), interval);
+  /**
+   * Start a background rotation loop at the given interval.
+   * @param intervalMs Check frequency in milliseconds (default: 3600000 = 1 hour)
+   */
+  start(intervalMs = 3_600_000): void {
+    if (this.intervalHandle !== null) return;
+    this.intervalHandle = setInterval(() => {
+      this.runOnce().catch(console.error);
+    }, intervalMs);
   }
 
   stop(): void {
-    if (this.timer) clearInterval(this.timer);
+    if (this.intervalHandle !== null) {
+      clearInterval(this.intervalHandle);
+      this.intervalHandle = null;
+    }
   }
 
-  async check(): Promise<void> {
-    const active = await this.config.store.listActive();
-    const now = new Date();
+  private isRotationDue(cred: Credential, policy: RotationPolicy, now: Date): boolean {
+    if (policy.rotateAfterDays !== undefined && cred.lastRotated) {
+      const lastRotated = new Date(cred.lastRotated);
+      const daysSince = (now.getTime() - lastRotated.getTime()) / 86_400_000;
+      if (daysSince >= policy.rotateAfterDays) return true;
+    }
+    return false;
+  }
 
-    for (const cred of active) {
-      if (!cred.rotation) continue;
-      const policy = cred.rotation;
-
-      if (policy.rotateAfterDays && cred.lastRotated) {
-        const msSince = now.getTime() - new Date(cred.lastRotated).getTime();
-        const daysSince = msSince / 86_400_000;
-        const warnAt = policy.rotateAfterDays - (policy.notifyBeforeDays ?? 3);
-
-        if (daysSince >= policy.rotateAfterDays) {
-          await this.rotate(cred);
-          continue;
-        }
-        if (daysSince >= warnAt) {
-          await this.emitEvent({ kind: 'credential.rotation_due', credentialId: cred.id, credentialRef: cred.ref, timestamp: now.toISOString() });
-        }
+  private async maybeEmitWarning(cred: Credential, policy: RotationPolicy, now: Date): Promise<void> {
+    if (!this.auditLogger) return;
+    if (policy.notifyBeforeDays !== undefined && policy.rotateAfterDays !== undefined && cred.lastRotated) {
+      const lastRotated = new Date(cred.lastRotated);
+      const daysUntilDue = policy.rotateAfterDays - (now.getTime() - lastRotated.getTime()) / 86_400_000;
+      if (daysUntilDue > 0 && daysUntilDue <= policy.notifyBeforeDays) {
+        await this.auditLogger.log({
+          timestamp: new Date().toISOString(),
+          traceId: `rotation-warning-${cred.id}`,
+          userId: 'system',
+          action: 'credential.rotation_due',
+          resourceId: cred.id,
+          resourceKind: 'shared',
+          provider: 'local',
+          model: 'system',
+          credentialId: cred.id,
+          credentialKind: cred.kind,
+          resolvedFor: 'system',
+        });
       }
-
-      if (policy.rotateAfterUses) {
-        const uses = this.useCounts.get(cred.id) ?? 0;
-        if (uses >= policy.rotateAfterUses) {
-          await this.rotate(cred);
-          this.useCounts.set(cred.id, 0);
-        }
-      }
     }
-  }
-
-  private async rotate(cred: Credential): Promise<void> {
-    const policy = cred.rotation!;
-    const provisionerId = policy.provisioner ?? 'default';
-    const provider = this.providers.get(provisionerId);
-
-    if (!provider) {
-      const ev: RotationEvent = {
-        kind: 'credential.rotation_failed',
-        credentialId: cred.id,
-        credentialRef: cred.ref,
-        error: `No provider registered for id "${provisionerId}"`,
-        timestamp: new Date().toISOString(),
-      };
-      await this.emitEvent(ev);
-      return;
-    }
-
-    try {
-      const { newRef, expiresAt } = await provider.provision(cred);
-      this.gracefulRefs.set(cred.ref, newRef);
-
-      const ev: RotationEvent = {
-        kind: 'credential.rotated',
-        credentialId: cred.id,
-        credentialRef: cred.ref,
-        newRef,
-        expiresAt,
-        timestamp: new Date().toISOString(),
-      };
-      await this.emitEvent(ev);
-
-      const grace = (policy.gracePeriodSeconds ?? 300) * 1_000;
-      setTimeout(async () => {
-        this.gracefulRefs.delete(cred.ref);
-        await provider.revoke(cred.ref).catch((err) =>
-          console.error(`[rotation] revoke failed for ${cred.ref}:`, err)
-        );
-      }, grace);
-    } catch (err) {
-      const error = err instanceof Error ? err.message : String(err);
-      await this.emitEvent({ kind: 'credential.rotation_failed', credentialId: cred.id, credentialRef: cred.ref, error, timestamp: new Date().toISOString() });
-    }
-  }
-
-  private async emitEvent(event: RotationEvent): Promise<void> {
-    this.config.onEvent?.(event);
-    if (!this.config.logger) return;
-    await this.config.logger
-      .log({
-        timestamp: event.timestamp,
-        traceId: `rotation-${event.credentialId}-${Date.now()}`,
-        userId: 'system:rotation-scheduler',
-        action: event.kind,
-        resourceId: event.credentialRef,
-        resourceKind: 'shared',
-        provider: 'local',
-        model: 'system',
-        credentialId: event.credentialId,
-        credentialKind: 'fixed',
-        resolvedFor: 'system',
-      })
-      .catch(console.error);
   }
 }
