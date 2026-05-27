@@ -1,0 +1,36 @@
+{
+  "name": "@datacules/agent-identity-store-spiffe",
+  "version": "0.1.0",
+  "private": false,
+  "description": "SPIFFE/SPIRE workload identity store for @datacules/agent-identity — X.509 SVID-based credential routing, zero stored secrets",
+  "author": "Datacules LLC",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/hvrcharon1/agent-identity.git",
+    "directory": "packages/stores/spiffe"
+  },
+  "main": "./dist/cjs/index.js",
+  "module": "./dist/esm/index.js",
+  "types": "./dist/types/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/esm/index.js",
+      "require": "./dist/cjs/index.js",
+      "types": "./dist/types/index.d.ts"
+    }
+  },
+  "files": ["dist", "README.md"],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "type-check": "tsc --noEmit",
+    "lint": "eslint src --ext .ts"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "typescript": "^5"
+  },
+  "peerDependencies": {
+    "@datacules/agent-identity": "^0.1.0"
+  }
+}

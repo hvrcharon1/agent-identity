@@ -1,0 +1,36 @@
+{
+  "name": "@datacules/agent-identity-store-dynamic",
+  "version": "0.1.0",
+  "private": false,
+  "description": "Just-in-time credential provisioning store for @datacules/agent-identity — mints short-lived secrets on demand via Vault dynamic secrets or AWS IAM Roles Anywhere",
+  "author": "Datacules LLC",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/hvrcharon1/agent-identity.git",
+    "directory": "packages/stores/dynamic"
+  },
+  "main": "./dist/cjs/index.js",
+  "module": "./dist/esm/index.js",
+  "types": "./dist/types/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/esm/index.js",
+      "require": "./dist/cjs/index.js",
+      "types": "./dist/types/index.d.ts"
+    }
+  },
+  "files": ["dist", "README.md"],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "type-check": "tsc --noEmit",
+    "lint": "eslint src --ext .ts"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "typescript": "^5"
+  },
+  "peerDependencies": {
+    "@datacules/agent-identity": "^0.1.0"
+  }
+}

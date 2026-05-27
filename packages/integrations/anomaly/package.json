@@ -1,0 +1,36 @@
+{
+  "name": "@datacules/agent-identity-anomaly",
+  "version": "0.1.0",
+  "private": false,
+  "description": "Anomaly detection and behavioral baseline for @datacules/agent-identity — statistical detection of unusual credential usage patterns",
+  "author": "Datacules LLC",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/hvrcharon1/agent-identity.git",
+    "directory": "packages/integrations/anomaly"
+  },
+  "main": "./dist/cjs/index.js",
+  "module": "./dist/esm/index.js",
+  "types": "./dist/types/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/esm/index.js",
+      "require": "./dist/cjs/index.js",
+      "types": "./dist/types/index.d.ts"
+    }
+  },
+  "files": ["dist", "README.md"],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "type-check": "tsc --noEmit",
+    "lint": "eslint src --ext .ts"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "typescript": "^5"
+  },
+  "peerDependencies": {
+    "@datacules/agent-identity": "^0.1.0"
+  }
+}
