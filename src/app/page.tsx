@@ -6,6 +6,11 @@ import { PatternsTab } from '@/components/PatternsTab';
 import { CredentialsTab } from '@/components/CredentialsTab';
 import { DecisionTab } from '@/components/DecisionTab';
 import { MigrationTab } from '@/components/MigrationTab';
+import { AttestationTab } from '@/components/AttestationTab';
+import { CanaryTab } from '@/components/CanaryTab';
+import { ApprovalTab } from '@/components/ApprovalTab';
+import { BudgetTab } from '@/components/BudgetTab';
+import { FederationTab } from '@/components/FederationTab';
 import type { SupportedProvider } from '@/lib/types';
 
 // ─── Inline SVG tab icons ────────────────────────────────────────────────────
@@ -55,13 +60,59 @@ function IconArrowLeftRight({ className }: { className?: string }) {
     </svg>
   );
 }
+function IconFingerprint({ className }: { className?: string }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
+      <path d="M2 12C2 6.5 6.5 2 12 2a10 10 0 0 1 8 4"/>
+      <path d="M5 19.5C5.5 18 6 15 6 12c0-1.7.7-3.3 1.8-4.5"/>
+      <path d="M17.5 5.5C19 7 20 9.4 20 12c0 4.4-.7 7.4-1.5 9"/>
+      <path d="M10 12a2 2 0 0 1 4 0c0 1.9-.8 3.8-2 5"/>
+      <path d="M9 12a3 3 0 0 1 6 0c0 2.8-1.2 5.3-3 7"/>
+    </svg>
+  );
+}
+function IconZap({ className }: { className?: string }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
+      <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+    </svg>
+  );
+}
+function IconCheckCircle({ className }: { className?: string }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
+      <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>
+    </svg>
+  );
+}
+function IconGauge({ className }: { className?: string }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
+      <path d="m12 14 4-4"/><path d="M3.34 19a10 10 0 1 1 17.32 0"/>
+    </svg>
+  );
+}
+function IconNetwork({ className }: { className?: string }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
+      <rect x="16" y="16" width="6" height="6" rx="1"/><rect x="2" y="16" width="6" height="6" rx="1"/>
+      <rect x="9" y="2" width="6" height="6" rx="1"/>
+      <path d="M5 16v-3a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v3"/><path d="M12 12V8"/>
+    </svg>
+  );
+}
 
 const TABS = [
-  { id: 'identities',  label: 'Identity types',   Icon: IconShield        },
-  { id: 'patterns',    label: 'Auth patterns',     Icon: IconGitBranch     },
-  { id: 'credentials', label: 'Credentials',       Icon: IconKey           },
-  { id: 'decide',      label: 'Decision helper',   Icon: IconHelpCircle    },
-  { id: 'migration',   label: 'Data migration',    Icon: IconArrowLeftRight },
+  { id: 'identities',   label: 'Identity types',    Icon: IconShield        },
+  { id: 'patterns',     label: 'Auth patterns',      Icon: IconGitBranch     },
+  { id: 'credentials',  label: 'Credentials',        Icon: IconKey           },
+  { id: 'decide',       label: 'Decision helper',    Icon: IconHelpCircle    },
+  { id: 'migration',    label: 'Data migration',     Icon: IconArrowLeftRight },
+  { id: 'attestation',  label: 'Attestation',        Icon: IconFingerprint   },
+  { id: 'canary',       label: 'Canary routing',     Icon: IconZap           },
+  { id: 'approval',     label: 'Approvals',          Icon: IconCheckCircle   },
+  { id: 'budget',       label: 'Budgets',            Icon: IconGauge         },
+  { id: 'federation',   label: 'Federation',         Icon: IconNetwork       },
 ] as const;
 
 type TabId = (typeof TABS)[number]['id'];
@@ -152,6 +203,11 @@ export default function Home() {
         {activeTab === 'credentials' && <CredentialsTab provider={activeProvider} />}
         {activeTab === 'decide'      && <DecisionTab />}
         {activeTab === 'migration'   && <MigrationTab />}
+        {activeTab === 'attestation' && <AttestationTab />}
+        {activeTab === 'canary'      && <CanaryTab />}
+        {activeTab === 'approval'    && <ApprovalTab />}
+        {activeTab === 'budget'      && <BudgetTab />}
+        {activeTab === 'federation'  && <FederationTab />}
 
       </div>
     </main>
