@@ -1,0 +1,14 @@
+{
+  "name": "example-hybrid-routing",
+  "version": "0.0.1",
+  "private": true,
+  "description": "agent-identity example: hybrid context-switched credential routing",
+  "type": "module",
+  "scripts": {
+    "dev": "node index.js"
+  },
+  "dependencies": {
+    "@datacules/agent-identity": "^0.2.0",
+    "@datacules/agent-identity-audit": "^0.2.0"
+  }
+}

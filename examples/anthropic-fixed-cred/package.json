@@ -1,0 +1,14 @@
+{
+  "name": "example-anthropic-fixed-cred",
+  "version": "0.0.1",
+  "private": true,
+  "description": "agent-identity example: Anthropic fixed service-account credential",
+  "type": "module",
+  "scripts": {
+    "dev": "node index.js"
+  },
+  "dependencies": {
+    "@datacules/agent-identity": "^0.2.0",
+    "@datacules/agent-identity-audit": "^0.2.0"
+  }
+}
