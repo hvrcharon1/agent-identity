@@ -98,14 +98,21 @@ export interface Approver {
 }
 
 export interface ApprovalPolicy {
+  /**
+   * Minimum number of approvers that must approve before the credential
+   * resolves. Set to 1 for standard single-approver gates.
+   */
   requiredApprovers: number;
+  /**
+   * List of approvers to notify. Each entry specifies the channel (webhook,
+   * email, slack) and the target address or URL.
+   */
   approvers: Approver[];
-  /** Seconds before auto-reject (default: 300) */
+  /** Seconds before the request auto-times-out (default: 300) */
   timeoutSeconds?: number;
   breakGlass?: {
-    /** User ID of the emergency approver */
+    /** User ID authorised for emergency override */
     approver: string;
-    /** Whether to require a written justification */
     requireJustification?: boolean;
   };
 }
@@ -257,8 +264,22 @@ export interface MigrationAuditLogEntry extends AuditLogEntry {
   errorSummary?: string;
 }
 
+/**
+ * AuditLogger — the core audit interface.
+ *
+ * log() accepts both synchronous (void) and asynchronous (Promise<void>)
+ * implementations. This union return type ensures that:
+ *   - Synchronous loggers (ConsoleAuditLogger, HashChainAuditLogger) satisfy
+ *     the interface without wrapping every call in a Promise.
+ *   - Async loggers (WebhookAuditLogger, DatadogAuditLogger) can return a
+ *     Promise that callers may await.
+ *
+ * Callers that need guaranteed delivery should await the result:
+ *   await logger.log(entry);
+ * Callers using fire-and-forget patterns may call without await.
+ */
 export interface AuditLogger {
-  log(entry: AuditLogEntry): Promise<void>;
+  log(entry: AuditLogEntry): void | Promise<void>;
 }
 
 export interface MigrationAuditLogger extends AuditLogger {
