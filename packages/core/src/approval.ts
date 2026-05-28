@@ -78,7 +78,7 @@ export class WebhookApprovalNotifier implements ApprovalNotifier {
 export class SlackApprovalNotifier implements ApprovalNotifier {
   constructor(private readonly webhookUrl: string) {}
 
-  async notify(request: ApprovalRequest, _policy: ApprovalPolicy): Promise<void> {
+  async notify(request: ApprovalRequest, policy: ApprovalPolicy): Promise<void> {
     const approverTargets = policy.approvers.map((a) => a.target).join(', ');
     const text = [
       `*Approval required* — request \`${request.requestId}\``,
