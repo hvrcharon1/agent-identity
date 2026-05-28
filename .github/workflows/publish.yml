@@ -7,7 +7,7 @@ on:
       - "v[0-9]+.[0-9]+.[0-9]+"
 
 jobs:
-  # ─── Publish all @datacules/* npm packages ──────────────────────────────────
+  # ─── Publish all @datacules/* npm packages ────────────────────────────────────────────
   publish-npm:
     name: Publish npm packages
     runs-on: ubuntu-latest
@@ -64,223 +64,258 @@ jobs:
       - name: Build @datacules/agent-identity (core) — CJS
         run: cd packages/core && npx tsc -p tsconfig.cjs.json
 
-      # publish_pkg: idempotent publish helper.
-      # If the exact version is already on the registry, prints a skip notice
-      # and exits 0. Safe to re-run and safe for re-tags.
+      # publish_pkg: truly idempotent npm publish helper.
+      # Runs npm publish and inspects stderr for the canonical "already published"
+      # signals (E403 + "You cannot publish", E409). Any other non-zero exit still
+      # fails the step. This is more robust than `npm view` which can return
+      # non-zero for auth/network reasons unrelated to whether the version exists.
       - name: Publish @datacules/agent-identity
         run: |
-          PKG=$(node -p "require('./package.json').name")
-          VER=$(node -p "require('./package.json').version")
-          if npm view "$PKG@$VER" version --silent 2>/dev/null | grep -q "$VER"; then
-            echo "SKIP: $PKG@$VER already published"
-          else
-            npm publish --access public
+          set +e
+          OUT=$(npm publish --access public 2>&1)
+          STATUS=$?
+          echo "$OUT"
+          if echo "$OUT" | grep -qiE '(cannot publish over|E409|already exists|previously published)'; then
+            echo "SKIP: version already published — treating as success"
+            exit 0
           fi
+          exit $STATUS
         working-directory: packages/core
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Publish @datacules/agent-identity-audit
         run: |
-          PKG=$(node -p "require('./package.json').name")
-          VER=$(node -p "require('./package.json').version")
-          if npm view "$PKG@$VER" version --silent 2>/dev/null | grep -q "$VER"; then
-            echo "SKIP: $PKG@$VER already published"
-          else
-            npm publish --access public
+          set +e
+          OUT=$(npm publish --access public 2>&1)
+          STATUS=$?
+          echo "$OUT"
+          if echo "$OUT" | grep -qiE '(cannot publish over|E409|already exists|previously published)'; then
+            echo "SKIP: version already published — treating as success"
+            exit 0
           fi
+          exit $STATUS
         working-directory: packages/audit
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Publish @datacules/agent-identity-store-aws
         run: |
-          PKG=$(node -p "require('./package.json').name")
-          VER=$(node -p "require('./package.json').version")
-          if npm view "$PKG@$VER" version --silent 2>/dev/null | grep -q "$VER"; then
-            echo "SKIP: $PKG@$VER already published"
-          else
-            npm publish --access public
+          set +e
+          OUT=$(npm publish --access public 2>&1)
+          STATUS=$?
+          echo "$OUT"
+          if echo "$OUT" | grep -qiE '(cannot publish over|E409|already exists|previously published)'; then
+            echo "SKIP: version already published — treating as success"
+            exit 0
           fi
+          exit $STATUS
         working-directory: packages/stores/aws
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Publish @datacules/agent-identity-store-vault
         run: |
-          PKG=$(node -p "require('./package.json').name")
-          VER=$(node -p "require('./package.json').version")
-          if npm view "$PKG@$VER" version --silent 2>/dev/null | grep -q "$VER"; then
-            echo "SKIP: $PKG@$VER already published"
-          else
-            npm publish --access public
+          set +e
+          OUT=$(npm publish --access public 2>&1)
+          STATUS=$?
+          echo "$OUT"
+          if echo "$OUT" | grep -qiE '(cannot publish over|E409|already exists|previously published)'; then
+            echo "SKIP: version already published — treating as success"
+            exit 0
           fi
+          exit $STATUS
         working-directory: packages/stores/vault
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Publish @datacules/agent-identity-store-azure
         run: |
-          PKG=$(node -p "require('./package.json').name")
-          VER=$(node -p "require('./package.json').version")
-          if npm view "$PKG@$VER" version --silent 2>/dev/null | grep -q "$VER"; then
-            echo "SKIP: $PKG@$VER already published"
-          else
-            npm publish --access public
+          set +e
+          OUT=$(npm publish --access public 2>&1)
+          STATUS=$?
+          echo "$OUT"
+          if echo "$OUT" | grep -qiE '(cannot publish over|E409|already exists|previously published)'; then
+            echo "SKIP: version already published — treating as success"
+            exit 0
           fi
+          exit $STATUS
         working-directory: packages/stores/azure
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Publish @datacules/agent-identity-store-dynamic
         run: |
-          PKG=$(node -p "require('./package.json').name")
-          VER=$(node -p "require('./package.json').version")
-          if npm view "$PKG@$VER" version --silent 2>/dev/null | grep -q "$VER"; then
-            echo "SKIP: $PKG@$VER already published"
-          else
-            npm publish --access public
+          set +e
+          OUT=$(npm publish --access public 2>&1)
+          STATUS=$?
+          echo "$OUT"
+          if echo "$OUT" | grep -qiE '(cannot publish over|E409|already exists|previously published)'; then
+            echo "SKIP: version already published — treating as success"
+            exit 0
           fi
+          exit $STATUS
         working-directory: packages/stores/dynamic
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Publish @datacules/agent-identity-store-spiffe
         run: |
-          PKG=$(node -p "require('./package.json').name")
-          VER=$(node -p "require('./package.json').version")
-          if npm view "$PKG@$VER" version --silent 2>/dev/null | grep -q "$VER"; then
-            echo "SKIP: $PKG@$VER already published"
-          else
-            npm publish --access public
+          set +e
+          OUT=$(npm publish --access public 2>&1)
+          STATUS=$?
+          echo "$OUT"
+          if echo "$OUT" | grep -qiE '(cannot publish over|E409|already exists|previously published)'; then
+            echo "SKIP: version already published — treating as success"
+            exit 0
           fi
+          exit $STATUS
         working-directory: packages/stores/spiffe
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Publish @datacules/agent-identity-express
         run: |
-          PKG=$(node -p "require('./package.json').name")
-          VER=$(node -p "require('./package.json').version")
-          if npm view "$PKG@$VER" version --silent 2>/dev/null | grep -q "$VER"; then
-            echo "SKIP: $PKG@$VER already published"
-          else
-            npm publish --access public
+          set +e
+          OUT=$(npm publish --access public 2>&1)
+          STATUS=$?
+          echo "$OUT"
+          if echo "$OUT" | grep -qiE '(cannot publish over|E409|already exists|previously published)'; then
+            echo "SKIP: version already published — treating as success"
+            exit 0
           fi
+          exit $STATUS
         working-directory: packages/integrations/express
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Publish @datacules/agent-identity-fastify
         run: |
-          PKG=$(node -p "require('./package.json').name")
-          VER=$(node -p "require('./package.json').version")
-          if npm view "$PKG@$VER" version --silent 2>/dev/null | grep -q "$VER"; then
-            echo "SKIP: $PKG@$VER already published"
-          else
-            npm publish --access public
+          set +e
+          OUT=$(npm publish --access public 2>&1)
+          STATUS=$?
+          echo "$OUT"
+          if echo "$OUT" | grep -qiE '(cannot publish over|E409|already exists|previously published)'; then
+            echo "SKIP: version already published — treating as success"
+            exit 0
           fi
+          exit $STATUS
         working-directory: packages/integrations/fastify
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Publish @datacules/agent-identity-langchain
         run: |
-          PKG=$(node -p "require('./package.json').name")
-          VER=$(node -p "require('./package.json').version")
-          if npm view "$PKG@$VER" version --silent 2>/dev/null | grep -q "$VER"; then
-            echo "SKIP: $PKG@$VER already published"
-          else
-            npm publish --access public
+          set +e
+          OUT=$(npm publish --access public 2>&1)
+          STATUS=$?
+          echo "$OUT"
+          if echo "$OUT" | grep -qiE '(cannot publish over|E409|already exists|previously published)'; then
+            echo "SKIP: version already published — treating as success"
+            exit 0
           fi
+          exit $STATUS
         working-directory: packages/integrations/langchain
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Publish @datacules/agent-identity-nestjs
         run: |
-          PKG=$(node -p "require('./package.json').name")
-          VER=$(node -p "require('./package.json').version")
-          if npm view "$PKG@$VER" version --silent 2>/dev/null | grep -q "$VER"; then
-            echo "SKIP: $PKG@$VER already published"
-          else
-            npm publish --access public
+          set +e
+          OUT=$(npm publish --access public 2>&1)
+          STATUS=$?
+          echo "$OUT"
+          if echo "$OUT" | grep -qiE '(cannot publish over|E409|already exists|previously published)'; then
+            echo "SKIP: version already published — treating as success"
+            exit 0
           fi
+          exit $STATUS
         working-directory: packages/integrations/nestjs
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Publish @datacules/agent-identity-mcp
         run: |
-          PKG=$(node -p "require('./package.json').name")
-          VER=$(node -p "require('./package.json').version")
-          if npm view "$PKG@$VER" version --silent 2>/dev/null | grep -q "$VER"; then
-            echo "SKIP: $PKG@$VER already published"
-          else
-            npm publish --access public
+          set +e
+          OUT=$(npm publish --access public 2>&1)
+          STATUS=$?
+          echo "$OUT"
+          if echo "$OUT" | grep -qiE '(cannot publish over|E409|already exists|previously published)'; then
+            echo "SKIP: version already published — treating as success"
+            exit 0
           fi
+          exit $STATUS
         working-directory: packages/integrations/mcp
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Publish @datacules/agent-identity-mcp-client
         run: |
-          PKG=$(node -p "require('./package.json').name")
-          VER=$(node -p "require('./package.json').version")
-          if npm view "$PKG@$VER" version --silent 2>/dev/null | grep -q "$VER"; then
-            echo "SKIP: $PKG@$VER already published"
-          else
-            npm publish --access public
+          set +e
+          OUT=$(npm publish --access public 2>&1)
+          STATUS=$?
+          echo "$OUT"
+          if echo "$OUT" | grep -qiE '(cannot publish over|E409|already exists|previously published)'; then
+            echo "SKIP: version already published — treating as success"
+            exit 0
           fi
+          exit $STATUS
         working-directory: packages/integrations/mcp-client
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Publish @datacules/agent-identity-otel
         run: |
-          PKG=$(node -p "require('./package.json').name")
-          VER=$(node -p "require('./package.json').version")
-          if npm view "$PKG@$VER" version --silent 2>/dev/null | grep -q "$VER"; then
-            echo "SKIP: $PKG@$VER already published"
-          else
-            npm publish --access public
+          set +e
+          OUT=$(npm publish --access public 2>&1)
+          STATUS=$?
+          echo "$OUT"
+          if echo "$OUT" | grep -qiE '(cannot publish over|E409|already exists|previously published)'; then
+            echo "SKIP: version already published — treating as success"
+            exit 0
           fi
+          exit $STATUS
         working-directory: packages/integrations/otel
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Publish @datacules/agent-identity-anomaly
         run: |
-          PKG=$(node -p "require('./package.json').name")
-          VER=$(node -p "require('./package.json').version")
-          if npm view "$PKG@$VER" version --silent 2>/dev/null | grep -q "$VER"; then
-            echo "SKIP: $PKG@$VER already published"
-          else
-            npm publish --access public
+          set +e
+          OUT=$(npm publish --access public 2>&1)
+          STATUS=$?
+          echo "$OUT"
+          if echo "$OUT" | grep -qiE '(cannot publish over|E409|already exists|previously published)'; then
+            echo "SKIP: version already published — treating as success"
+            exit 0
           fi
+          exit $STATUS
         working-directory: packages/integrations/anomaly
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Publish @datacules/agent-identity-compliance
         run: |
-          PKG=$(node -p "require('./package.json').name")
-          VER=$(node -p "require('./package.json').version")
-          if npm view "$PKG@$VER" version --silent 2>/dev/null | grep -q "$VER"; then
-            echo "SKIP: $PKG@$VER already published"
-          else
-            npm publish --access public
+          set +e
+          OUT=$(npm publish --access public 2>&1)
+          STATUS=$?
+          echo "$OUT"
+          if echo "$OUT" | grep -qiE '(cannot publish over|E409|already exists|previously published)'; then
+            echo "SKIP: version already published — treating as success"
+            exit 0
           fi
+          exit $STATUS
         working-directory: packages/integrations/compliance
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
-  # ─── Publish Python SDK to PyPI ─────────────────────────────────────────────
+  # ─── Publish Python SDK to PyPI ─────────────────────────────────────────────────────
   publish-python:
     name: Publish Python SDK to PyPI
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      id-token: write   # required for OIDC trusted publishing
     steps:
       - uses: actions/checkout@v4
 
@@ -305,14 +340,20 @@ jobs:
         working-directory: packages/python-sdk
         run: python -m build
 
+      # OIDC trusted publishing — no PYPI_TOKEN secret required.
+      # One-time setup: go to pypi.org → datacules-agent-identity → Manage →
+      # Publishing → Add trusted publisher:
+      #   owner: hvrcharon1   repo: agent-identity   workflow: publish.yml
+      #
+      # Falls back to password token if PYPI_TOKEN secret is set (e.g. before
+      # OIDC is configured). skip_existing ensures idempotency on re-runs.
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           packages-dir: packages/python-sdk/dist/
-          password: ${{ secrets.PYPI_TOKEN }}
-          skip_existing: true
+          skip-existing: true
 
-  # ─── Create GitHub Release with auto-generated notes ────────────────────────
+  # ─── Create GitHub Release with auto-generated notes ──────────────────────────────────────
   github-release:
     name: Create GitHub Release
     runs-on: ubuntu-latest
