@@ -1,11 +1,14 @@
 /**
  * Credential Router — core of @datacules/agent-identity.
  *
- * Key features added in this version:
+ * Key features:
  * - Canary routing: canaryRef + canaryWeight on RoutingRule
  * - Attestation: optional AttestationSigner on router config
  * - Budget enforcement: BudgetEnforcer check before resolving
  * - Approval gate: ApprovalManager integration on rules with approval policy
+ * - resolveAsync(): full async resolution path for cloud stores
+ * - resolvePairAsync(): async migration pair resolution (async counterpart
+ *   of resolvePair(), enabling budget + attestation on migration workflows)
  */
 
 import type {
@@ -101,7 +104,6 @@ export class CredentialRouter {
       return null;
     }
 
-    // Canary selection
     const ref = this.selectRef(rule);
     const isCanary = ref === rule.canaryRef;
 
@@ -120,7 +122,8 @@ export class CredentialRouter {
     };
 
     if (this.config.logger) {
-      this.config.logger.log(this.buildAuditEntry(ctx, resolved, rule, isCanary)).catch(console.error);
+      const entry = this.buildAuditEntry(ctx, resolved, rule, isCanary);
+      Promise.resolve(this.config.logger.log(entry)).catch(console.error);
     }
 
     return resolved;
@@ -181,7 +184,7 @@ export class CredentialRouter {
     return resolved;
   }
 
-  // ─── Pair resolve for migration ───────────────────────────────────────────
+  // ─── Pair resolve for migration (sync) ───────────────────────────────────
 
   resolvePair(ctx: MigrationContext): ResolvedCredentialPair | null {
     const sourceCtx: AgentRequestContext = { ...ctx, resourceId: ctx.sourceResourceId, action: 'read' };
@@ -192,6 +195,56 @@ export class CredentialRouter {
     if (!source || !target) return null;
 
     return { source, target, migrationId: ctx.migrationId };
+  }
+
+  // ─── Pair resolve for migration (async) ──────────────────────────────────
+
+  /**
+   * Async counterpart of resolvePair(). Resolves source and target credentials
+   * in parallel using resolveAsync(), so both resolutions benefit from:
+   *   - Budget enforcement (per-credential checks)
+   *   - Attestation signing (if AttestationSigner is configured)
+   *   - Approval gates (if ApprovalManager is configured)
+   *   - Cloud credential stores (AWS Secrets Manager, Vault, Azure Key Vault)
+   *
+   * Use this instead of resolvePair() in any production migration workflow
+   * that uses a non-MemoryCredentialStore.
+   *
+   * The source context always uses action: 'read'.
+   * The target context uses action: 'read' when dryRun is true, otherwise
+   * the original action from the MigrationContext.
+   *
+   * Returns null if either source or target credential cannot be resolved.
+   */
+  async resolvePairAsync(ctx: MigrationContext): Promise<ResolvedCredentialPair | null> {
+    const sourceCtx: AgentRequestContext = {
+      ...ctx,
+      resourceId: ctx.sourceResourceId,
+      action: 'read',
+    };
+    const targetCtx: AgentRequestContext = {
+      ...ctx,
+      resourceId: ctx.targetResourceId,
+      action: ctx.dryRun ? 'read' : ctx.action,
+    };
+
+    // Resolve both in parallel — independent credentials, no ordering dependency
+    const [source, target] = await Promise.all([
+      this.resolveAsync(sourceCtx),
+      this.resolveAsync(targetCtx),
+    ]);
+
+    if (!source || !target) return null;
+
+    // expiresAt on the pair is the earlier of the two expiries
+    let expiresAt: string | undefined;
+    if (source.expiresAt && target.expiresAt) {
+      expiresAt = source.expiresAt < target.expiresAt ? source.expiresAt : target.expiresAt;
+    } else {
+      expiresAt = source.expiresAt ?? target.expiresAt;
+    }
+
+    return { source, target, migrationId: ctx.migrationId, expiresAt };
   }
 
   // ─── Canary selection ─────────────────────────────────────────────────────

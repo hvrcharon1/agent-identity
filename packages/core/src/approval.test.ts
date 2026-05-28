@@ -1,18 +1,15 @@
 /**
- * approval.test.ts
- *
- * Tests for MemoryApprovalStore and ApprovalManager.
+ * approval.test.ts — updated to use the canonical ApprovalPolicy type
+ * (requiredApprovers: number, approvers: Approver[]) from types.ts.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import {
   MemoryApprovalStore,
   ApprovalManager,
-  WebhookApprovalNotifier,
-  SlackApprovalNotifier,
 } from './approval';
 import type { AgentRequestContext, ApprovalPolicy, AuditLogEntry, AuditLogger } from './types';
 
-// ─── Fixtures ────────────────────────────────────────────────────────────────
+// ─── Fixtures ─────────────────────────────────────────────────────────────────
 
 const ctx: AgentRequestContext = {
   userId: 'user-alice',
@@ -25,9 +22,10 @@ const ctx: AgentRequestContext = {
   requestedAt: new Date().toISOString(),
 };
 
+// Canonical ApprovalPolicy — matches types.ts (requiredApprovers + Approver[])
 const policy: ApprovalPolicy = {
-  requireApproval: true,
-  approvers: ['admin@example.com'],
+  requiredApprovers: 1,
+  approvers: [{ kind: 'webhook', target: 'https://approvals.example.com/hook' }],
   timeoutSeconds: 300,
 };
 
@@ -66,12 +64,8 @@ describe('MemoryApprovalStore', () => {
 
   it('update() changes status and sets resolvedAt', async () => {
     const req = {
-      requestId: 'req-2',
-      credentialId: 'cred-2',
-      ruleId: 'rule-2',
-      context: ctx,
-      status: 'pending' as const,
-      requestedAt: new Date().toISOString(),
+      requestId: 'req-2', credentialId: 'cred-2', ruleId: 'rule-2', context: ctx,
+      status: 'pending' as const, requestedAt: new Date().toISOString(),
       expiresAt: new Date(Date.now() + 300_000).toISOString(),
     };
     await store.create(req);
@@ -83,16 +77,12 @@ describe('MemoryApprovalStore', () => {
   });
 
   it('listPending() returns only pending requests', async () => {
-    await store.create({
-      requestId: 'r1', credentialId: 'c1', ruleId: 'rule', context: ctx,
+    await store.create({ requestId: 'r1', credentialId: 'c1', ruleId: 'rule', context: ctx,
       status: 'pending', requestedAt: new Date().toISOString(),
-      expiresAt: new Date(Date.now() + 300_000).toISOString(),
-    });
-    await store.create({
-      requestId: 'r2', credentialId: 'c2', ruleId: 'rule', context: ctx,
+      expiresAt: new Date(Date.now() + 300_000).toISOString() });
+    await store.create({ requestId: 'r2', credentialId: 'c2', ruleId: 'rule', context: ctx,
       status: 'pending', requestedAt: new Date().toISOString(),
-      expiresAt: new Date(Date.now() + 300_000).toISOString(),
-    });
+      expiresAt: new Date(Date.now() + 300_000).toISOString() });
     await store.update('r2', 'approved');
     const pending = await store.listPending();
     expect(pending).toHaveLength(1);
@@ -100,7 +90,7 @@ describe('MemoryApprovalStore', () => {
   });
 });
 
-// ─── ApprovalManager ─────────────────────────────────────────────────────────
+// ─── ApprovalManager ──────────────────────────────────────────────────────────
 
 describe('ApprovalManager', () => {
   let store: MemoryApprovalStore;
@@ -133,7 +123,6 @@ describe('ApprovalManager', () => {
     await manager.request(ctx, policy, 'cred-1', 'rule-1');
     const second = await manager.request(ctx, policy, 'cred-1', 'rule-1');
     expect(second).toBe('pending');
-    // Only one audit event should have been emitted (from the first call)
     const events = logger.entries.filter((e) => e.action === 'credential.approval_requested');
     expect(events).toHaveLength(1);
   });
@@ -152,19 +141,15 @@ describe('ApprovalManager', () => {
     expect(status).toBe('rejected');
   });
 
-  it('returns timeout and emits audit event when the request is expired', async () => {
-    const shortPolicy: ApprovalPolicy = { requireApproval: true, approvers: [], timeoutSeconds: 0 };
-    await manager.request(ctx, shortPolicy, 'cred-1', 'rule-1');
-    // Force the stored expiresAt to the past
-    await store.update('approval-trace-xyz-rule-1', 'pending');
-    // Patch the stored entry directly to simulate expiry
-    const stored = await store.get('approval-trace-xyz-rule-1');
+  it('returns timeout and emits audit event when the request has expired', async () => {
+    await manager.request(ctx, policy, 'cred-1', 'rule-expire');
+    const requestId = 'approval-trace-xyz-rule-expire';
+    // Directly mutate the stored entry to simulate expiry
+    const stored = await store.get(requestId);
     if (stored) {
-      Object.assign(stored, { expiresAt: new Date(Date.now() - 1000).toISOString(), status: 'pending' });
-      await store.create(stored); // overwrites
+      await store.create({ ...stored, expiresAt: new Date(Date.now() - 1000).toISOString(), status: 'pending' });
     }
-
-    const status = await manager.request(ctx, shortPolicy, 'cred-1', 'rule-1');
+    const status = await manager.request(ctx, policy, 'cred-1', 'rule-expire');
     expect(status).toBe('timeout');
     const event = logger.entries.find((e) => e.action === 'credential.approval_timeout');
     expect(event).toBeDefined();

@@ -78,12 +78,14 @@ export class WebhookApprovalNotifier implements ApprovalNotifier {
 export class SlackApprovalNotifier implements ApprovalNotifier {
   constructor(private readonly webhookUrl: string) {}
 
-  async notify(request: ApprovalRequest, _policy: ApprovalPolicy): Promise<void> {
+  async notify(request: ApprovalRequest, policy: ApprovalPolicy): Promise<void> {
+    const approverTargets = policy.approvers.map((a) => a.target).join(', ');
     const text = [
       `*Approval required* — request \`${request.requestId}\``,
       `User: ${request.context.userId}`,
       `Action: ${request.context.action} on ${request.context.resourceId}`,
       `Credential: ${request.credentialId}`,
+      `Required approvers: ${policy.requiredApprovers} (${approverTargets})`,
       `Expires: ${request.expiresAt}`,
     ].join('\n');
     try {
@@ -109,9 +111,14 @@ export class ApprovalManager {
 
   /**
    * Gate a resolve() call behind an approval policy.
-   * Returns 'approved' / 'break_glass' if the request was already
-   * approved, otherwise creates a new approval request, notifies approvers,
-   * and returns 'pending' (the router returns null — caller should retry).
+   *
+   * Returns the current ApprovalStatus:
+   *   'approved' / 'break_glass' → caller should proceed with resolution
+   *   'pending'                  → caller should return null and retry later
+   *   'rejected' / 'timeout'    → caller should return null permanently
+   *
+   * The requestId is derived deterministically from traceId + ruleId so that
+   * repeated calls within the same trace are idempotent.
    */
   async request(
     ctx: AgentRequestContext,
@@ -119,9 +126,9 @@ export class ApprovalManager {
     credentialId: string,
     ruleId: string
   ): Promise<ApprovalStatus> {
-    // Generate deterministic request ID for idempotency within the same trace
     const requestId = `approval-${ctx.traceId}-${ruleId}`;
     const existing = await this.store.get(requestId);
+
     if (existing) {
       if (existing.status === 'approved' || existing.status === 'break_glass') {
         return existing.status;
