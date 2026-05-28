@@ -1,0 +1,10 @@
+{
+  "_comment": "Add this block to your Claude Desktop mcpServers config (~/.config/claude/claude_desktop_config.json on Mac)",
+  "mcpServers": {
+    "agent-identity": {
+      "command": "node",
+      "args": ["<absolute-path-to>/examples/mcp-server/server.js"],
+      "env": {}
+    }
+  }
+}
