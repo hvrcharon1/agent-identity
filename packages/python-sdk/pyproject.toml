@@ -3,10 +3,10 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "agent-identity"
+name = "datacules-agent-identity"
 version = "0.1.0"
-description = "Python SDK for the agent-identity credential routing sidecar"
-authors = [{name = "Datacules LLC"}]
+description = "Python SDK for the agent-identity credential routing sidecar — by Datacules LLC"
+authors = [{name = "Datacules LLC", email = "harshalrasal792@gmail.com"}]
 license = {text = "MIT"}
 readme = "README.md"
 requires-python = ">=3.8"
@@ -15,6 +15,11 @@ dependencies = []
 
 [project.optional-dependencies]
 dev = ["pytest", "pytest-cov"]
+
+[project.urls]
+Homepage = "https://github.com/hvrcharon1/agent-identity"
+Repository = "https://github.com/hvrcharon1/agent-identity"
+Documentation = "https://github.com/hvrcharon1/agent-identity/tree/main/packages/python-sdk"
 
 [tool.setuptools.packages.find]
 where = ["."]

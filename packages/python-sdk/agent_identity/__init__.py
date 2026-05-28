@@ -1,8 +1,8 @@
 """
-agent_identity — Python SDK for the agent-identity sidecar
+agent_identity — Python SDK for the agent-identity credential routing sidecar
 
 Installation:
-    pip install agent-identity        # when published to PyPI
+    pip install datacules-agent-identity
     # or directly:
     pip install git+https://github.com/hvrcharon1/agent-identity.git#subdirectory=packages/python-sdk
 
@@ -48,7 +48,7 @@ except ImportError:  # pragma: no cover
     raise RuntimeError("agent-identity requires Python 3.8+")
 
 
-# ─── Type aliases ─────────────────────────────────────────────────────────────────
+# ─── Type aliases ────────────────────────────────────────────────────────────────────
 
 ResourceKind  = Literal["shared", "personal"]
 SupportedProvider = Literal["openai", "anthropic", "gemini", "mistral", "local"]
@@ -97,7 +97,7 @@ class MigrateResolveResponse(TypedDict):
     expiresAt: Optional[str]
 
 
-# ─── Exceptions ──────────────────────────────────────────────────────────────────
+# ─── Exceptions ───────────────────────────────────────────────────────────────────
 
 class AgentIdentityError(Exception):
     """Base exception for all agent-identity SDK errors."""
@@ -114,7 +114,7 @@ class ValidationError(AgentIdentityError):
     """Raised when the server returns 400 — invalid request body."""
 
 
-# ─── Client ─────────────────────────────────────────────────────────────────────
+# ─── Client ────────────────────────────────────────────────────────────────────────
 
 class AgentIdentityClient:
     """
@@ -130,7 +130,7 @@ class AgentIdentityClient:
         self.base_url = base_url.rstrip("/")
         self.timeout = timeout
 
-    # ─── Public API ──────────────────────────────────────────────────────────
+    # ─── Public API ────────────────────────────────────────────────────────────────────
 
     def resolve(self, ctx: AgentRequestContext) -> ResolveResponse:
         """
@@ -182,7 +182,7 @@ class AgentIdentityClient:
         except Exception:  # noqa: BLE001
             return False
 
-    # ─── Internal ────────────────────────────────────────────────────────────────
+    # ─── Internal ──────────────────────────────────────────────────────────────────────
 
     def _post(self, path: str, body: Dict[str, Any], method: str = "POST") -> Any:
         url = f"{self.base_url}{path}"
