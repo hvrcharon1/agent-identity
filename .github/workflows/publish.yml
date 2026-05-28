@@ -7,7 +7,7 @@ on:
       - "v[0-9]+.[0-9]+.[0-9]+"
 
 jobs:
-  # ─── Publish all @datacules/* npm packages ────────────────────────────────────────────
+  # ─── Publish all @datacules/* npm packages ──────────────────────────────────
   publish-npm:
     name: Publish npm packages
     runs-on: ubuntu-latest
@@ -64,11 +64,7 @@ jobs:
       - name: Build @datacules/agent-identity (core) — CJS
         run: cd packages/core && npx tsc -p tsconfig.cjs.json
 
-      # publish_pkg: truly idempotent npm publish helper.
-      # Runs npm publish and inspects stderr for the canonical "already published"
-      # signals (E403 + "You cannot publish", E409). Any other non-zero exit still
-      # fails the step. This is more robust than `npm view` which can return
-      # non-zero for auth/network reasons unrelated to whether the version exists.
+      # Idempotent publish: run npm publish and treat E409/already-exists as success.
       - name: Publish @datacules/agent-identity
         run: |
           set +e
@@ -309,13 +305,12 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
-  # ─── Publish Python SDK to PyPI ─────────────────────────────────────────────────────
+  # ─── Publish Python SDK to PyPI ─────────────────────────────────────────────
   publish-python:
     name: Publish Python SDK to PyPI
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      id-token: write   # required for OIDC trusted publishing
     steps:
       - uses: actions/checkout@v4
 
@@ -333,27 +328,26 @@ jobs:
           VERSION=${{ steps.tag.outputs.VERSION }}
           sed -i "s/^version = .*/version = \"$VERSION\"/" pyproject.toml
 
-      - name: Install build tools
-        run: pip install build
+      - name: Install build + upload tools
+        run: pip install build twine
 
       - name: Build sdist + wheel
         working-directory: packages/python-sdk
         run: python -m build
 
-      # OIDC trusted publishing — no PYPI_TOKEN secret required.
-      # One-time setup: go to pypi.org → datacules-agent-identity → Manage →
-      # Publishing → Add trusted publisher:
-      #   owner: hvrcharon1   repo: agent-identity   workflow: publish.yml
-      #
-      # Falls back to password token if PYPI_TOKEN secret is set (e.g. before
-      # OIDC is configured). skip_existing ensures idempotency on re-runs.
+      # twine upload with API token.
+      # PYPI_TOKEN must be set in repo secrets (Settings → Secrets → Actions).
+      # To create a token: pypi.org → Account Settings → API tokens →
+      # Add API token → scope to "datacules-agent-identity" project.
+      # --skip-existing makes re-runs idempotent (already-uploaded wheel = success).
       - name: Publish to PyPI
-        uses: pypa/gh-action-pypi-publish@release/v1
-        with:
-          packages-dir: packages/python-sdk/dist/
-          skip-existing: true
+        working-directory: packages/python-sdk
+        run: twine upload --skip-existing dist/*
+        env:
+          TWINE_USERNAME: __token__
+          TWINE_PASSWORD: ${{ secrets.PYPI_TOKEN }}
 
-  # ─── Create GitHub Release with auto-generated notes ──────────────────────────────────────
+  # ─── Create GitHub Release with auto-generated notes ────────────────────────
   github-release:
     name: Create GitHub Release
     runs-on: ubuntu-latest
