@@ -6,7 +6,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
-## [Unreleased] — v0.3.0
+## [0.3.0] — 2026-05-29
 
 ### Added
 
@@ -40,7 +40,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   - `packages/core/src/rotation.test.ts` — 12 cases (`CredentialRotationScheduler`, audit events, start/stop)
   - `packages/integrations/compliance/src/hashchain.test.ts` — 14 cases (`HashChainAuditLogger`, `ChainVerifier`, tamper detection)
 
-**Test coverage — anomaly package (this PR)**
+**Test coverage — anomaly package (PR #20)**
 - 16 new Vitest test cases in `packages/integrations/anomaly/src/anomaly.test.ts`:
   - Baseline collection phase (3): no events during collection, resolveFunc still called, baseline learning
   - Scoring phase detection (5): new_provider, new_action_type, new_resource_kind, no events on known values, rate_spike
@@ -49,12 +49,26 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   - Baseline management (2): resetBaseline() restores collecting state, independent baselines per agent
   - Edge cases (1): baseline not updated when resolveFunc returns null
 
+**Test coverage — DynamicCredentialStore + provisioners (PR #21)**
+- 13 new Vitest test cases in `packages/stores/dynamic/src/dynamic.test.ts`:
+  - `DynamicCredentialStore` (6): provision, TTL caching, cache:false bypass, renew-before-expiry re-provision, listActive, listByKind
+  - `VaultDynamicProvisioner` (4): correct endpoint + token header, lease response mapping, 403 error throw, revoke call
+  - `AwsRolesAnywhereProvisioner` (3): correct sessions endpoint, credential set mapping, 401 error throw
+  - All external HTTP calls mocked via `vi.stubGlobal('fetch', ...)` — no live Vault or AWS endpoint required
+
+**CI / testing infrastructure (PR #22)**
+- `vitest.config.ts` include pattern expanded from `packages/core/src/**` to `packages/**`
+  — 43 test cases (compliance + anomaly + dynamic) that were silently skipped since PRs #17–#21 are now
+  included in the `Unit tests (Node)` CI job on every push to `main`
+
 ### Fixed
 
 - `approval.ts`: `SlackApprovalNotifier` — renamed `_policy` parameter to `policy` (TypeScript TS2304 — parameter was used in body but prefixed with underscore)
 - `types.ts`: `AuditLogger.log()` signature changed from `Promise<void>` to `void | Promise<void>` — the interface now accepts both sync and async implementations correctly
 - `approval.ts`: `ApprovalPolicy` type reconciliation — aligned `approval.ts` to use the canonical `ApprovalPolicy` from `types.ts`
 - `router.ts`: Added `resolvePairAsync()` — async counterpart of `resolvePair()` closing gap G7 from the status report
+- `packages/integrations/anomaly/src/index.ts`: `emitAnomaly()` now wraps `logger.log()` in `Promise.resolve()` before `.catch()` — required after `AuditLogger.log()` type was broadened to `void | Promise<void>`
+- `tsconfig.json`: added `@datacules/agent-identity-anomaly` path alias pointing to `packages/integrations/anomaly/src/index.ts` — fixes TS2307 in `src/lib/anomaly.ts`
 
 ---
 
@@ -83,7 +97,7 @@ full-featured, publishable **Turborepo monorepo** with 17 packages across npm an
 | `packages/integrations/otel` | `@datacules/agent-identity-otel` | OpenTelemetry tracing — `withOtel()` wrapper emitting spans on every `resolve()` call |
 | `packages/integrations/anomaly` | `@datacules/agent-identity-anomaly` | Behavioral baseline anomaly detection with EWMA scoring, configurable response policies |
 | `packages/integrations/compliance` | `@datacules/agent-identity-compliance` | Compliance report generator — SOC 2, GDPR, HIPAA report templates from audit log store |
-| `packages/python-sdk` | `agent-identity` (PyPI) | Python 3.8+ client — sync + async, Pydantic v2, zero runtime deps, CLI |
+| `packages/python-sdk` | `datacules-agent-identity` (PyPI) | Python 3.8+ client — sync + async, Pydantic v2, zero runtime deps, CLI |
 
 ### Core package additions (`@datacules/agent-identity`)
 
@@ -152,9 +166,13 @@ Seven new interactive tabs added to the dashboard (total: 10):
 - `Unit tests (Python SDK)` added to `needs` chain of `Build + smoke test` gate
 - Smoke test server wait bumped from 60 s to 90 s (cold runner headroom)
 - `.github/workflows/publish.yml` — automated publish on `vX.Y.Z` tags:
-  - `publish-npm` — stamps all workspace `package.json` versions, builds core, publishes `@datacules/*` with npm provenance
+  - `publish-npm` — stamps all workspace `package.json` versions, builds core ESM + CJS, publishes `@datacules/*` with npm provenance
   - `publish-python` — stamps `pyproject.toml` version, builds sdist + wheel, publishes to PyPI via OIDC trusted publishing
   - `github-release` — creates GitHub Release with auto-generated notes after both publish jobs succeed
+- Python SDK distribution name corrected to `datacules-agent-identity` on PyPI (was `agent-identity`, owned by a different account)
+- `publish.yml`: npm publish made truly idempotent — `npm publish` output inspected for `E409`/`already exists` signals rather than relying on `npm view` (which fails under auth)
+- `publish.yml`: PyPI publish switched from OIDC to twine + `PYPI_TOKEN` secret while OIDC trusted publisher is set up
+- Examples directory: all 5 patterns now complete and runnable (`openai-user-delegated`, `anthropic-fixed-cred`, `hybrid-routing`, `langchain-agent`, `mcp-server`)
 
 ### Bug fixes
 
