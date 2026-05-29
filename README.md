@@ -17,7 +17,7 @@
   <a href="https://github.com/hvrcharon1/agent-identity/actions/workflows/ci.yml">
     <img src="https://img.shields.io/github/actions/workflow/status/hvrcharon1/agent-identity/ci.yml?branch=main&style=flat-square&label=CI&color=black" alt="CI"/>
   </a>
-  <img src="https://img.shields.io/badge/version-0.2.0-black?style=flat-square" alt="Version"/>
+  <img src="https://img.shields.io/badge/version-0.3.0-black?style=flat-square" alt="Version"/>
   <img src="https://img.shields.io/badge/packages-17%20(npm%20%2B%20PyPI)-black?style=flat-square" alt="Packages"/>
   <img src="https://img.shields.io/badge/providers-OpenAI%20%7C%20Anthropic%20%7C%20Gemini%20%7C%20Mistral%20%7C%20Local-black?style=flat-square" alt="Supported providers"/>
   <img src="https://img.shields.io/badge/MCP-server%20%2B%20client-black?style=flat-square" alt="MCP support"/>
@@ -79,7 +79,7 @@ A provider-agnostic framework for AI agents that act on behalf of users and serv
 | `@datacules/agent-identity-otel` | `npm install @datacules/agent-identity-otel` | OpenTelemetry tracing — `withOtel()` wraps any router, emits spans on every `resolve()` |
 | `@datacules/agent-identity-anomaly` | `npm install @datacules/agent-identity-anomaly` | Behavioral baseline anomaly detection with EWMA scoring and configurable response policies |
 | `@datacules/agent-identity-compliance` | `npm install @datacules/agent-identity-compliance` | Compliance report generator — SOC 2, GDPR, HIPAA templates from audit log store |
-| `agent-identity` (PyPI) | `pip install agent-identity` | Python SDK — sync + async client, zero runtime deps, CLI |
+| `datacules-agent-identity` (PyPI) | `pip install datacules-agent-identity` | Python SDK — sync + async client, zero runtime deps, CLI |
 
 ---
 
@@ -528,7 +528,7 @@ curl -s -X POST http://localhost:3001/api/resolve \
 ### Python SDK
 
 ```bash
-pip install agent-identity
+pip install datacules-agent-identity
 ```
 
 ```python
@@ -633,7 +633,7 @@ npm install
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000). Ten interactive tabs:
+Open [http://localhost:3000](http://localhost:3000). Eleven interactive tabs:
 
 | Tab | Description |
 |-----|-------------|
@@ -647,6 +647,7 @@ Open [http://localhost:3000](http://localhost:3000). Ten interactive tabs:
 | Approval | Human-in-the-loop approval queue; break-glass override with justification |
 | Budget | Per-credential usage bars with soft threshold markers; resolution simulator |
 | Federation | Cross-org identity chain builder, trust domain registry, chain verifier |
+| Anomaly | Live agent baseline table; anomaly event feed with severity badges; EWMA policy simulator |
 
 ---
 
@@ -970,8 +971,8 @@ agent-identity/
 │       ├── otel/                          # @datacules/agent-identity-otel
 │       ├── anomaly/                       # @datacules/agent-identity-anomaly
 │       └── compliance/                    # @datacules/agent-identity-compliance
-├── packages/python-sdk/               # pip install agent-identity
-├── src/                               # Next.js 14 dashboard app (10 tabs)
+├── packages/python-sdk/               # pip install datacules-agent-identity
+├── src/                               # Next.js 14 dashboard app (11 tabs)
 ├── docs/openapi.yaml
 ├── Dockerfile + docker-compose.yml
 └── .github/workflows/
@@ -986,11 +987,11 @@ agent-identity/
 The publish workflow fires automatically on a version tag push:
 
 ```bash
-git tag v0.2.0
-git push origin v0.2.0
+git tag v0.3.0
+git push origin v0.3.0
 ```
 
-This stamps all 16 workspace `package.json` versions from the tag, builds core ESM + CJS, publishes all `@datacules/*` packages to npm with provenance, and publishes the Python wheel to PyPI via OIDC trusted publishing. A GitHub Release with auto-generated notes is created once both publish jobs succeed.
+This stamps all 16 workspace `package.json` versions from the tag, builds core ESM + CJS, publishes all `@datacules/*` packages to npm with provenance, and publishes the Python wheel to PyPI. A GitHub Release with auto-generated notes is created once both publish jobs succeed.
 
 See `.github/workflows/publish.yml` and `CONTRIBUTING.md` for setup instructions.
 
