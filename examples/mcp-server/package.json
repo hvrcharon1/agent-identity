@@ -9,7 +9,7 @@
     "start:http": "node server.js --transport http"
   },
   "dependencies": {
-    "@datacules/agent-identity": "^0.2.0",
+    "@datacules/agent-identity": "^0.3.0",
     "@datacules/agent-identity-mcp": "^0.2.0",
     "@datacules/agent-identity-audit": "^0.2.0"
   }
