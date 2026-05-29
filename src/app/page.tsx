@@ -11,6 +11,7 @@ import { CanaryTab } from '@/components/CanaryTab';
 import { ApprovalTab } from '@/components/ApprovalTab';
 import { BudgetTab } from '@/components/BudgetTab';
 import { FederationTab } from '@/components/FederationTab';
+import { AnomalyTab } from '@/components/AnomalyTab';
 import type { SupportedProvider } from '@/lib/types';
 
 // ─── Inline SVG tab icons ────────────────────────────────────────────
@@ -101,18 +102,28 @@ function IconNetwork({ className }: { className?: string }) {
     </svg>
   );
 }
+function IconAlertTriangle({ className }: { className?: string }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
+      <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/>
+      <line x1="12" y1="9" x2="12" y2="13"/>
+      <line x1="12" y1="17" x2="12.01" y2="17"/>
+    </svg>
+  );
+}
 
 const TABS = [
-  { id: 'identities',   label: 'Identity types',    Icon: IconShield        },
-  { id: 'patterns',     label: 'Auth patterns',      Icon: IconGitBranch     },
-  { id: 'credentials',  label: 'Credentials',        Icon: IconKey           },
-  { id: 'decide',       label: 'Decision helper',    Icon: IconHelpCircle    },
-  { id: 'migration',    label: 'Data migration',     Icon: IconArrowLeftRight },
-  { id: 'attestation',  label: 'Attestation',        Icon: IconFingerprint   },
-  { id: 'canary',       label: 'Canary routing',     Icon: IconZap           },
-  { id: 'approval',     label: 'Approvals',          Icon: IconCheckCircle   },
-  { id: 'budget',       label: 'Budgets',            Icon: IconGauge         },
-  { id: 'federation',   label: 'Federation',         Icon: IconNetwork       },
+  { id: 'identities',   label: 'Identity types',    Icon: IconShield         },
+  { id: 'patterns',     label: 'Auth patterns',      Icon: IconGitBranch      },
+  { id: 'credentials',  label: 'Credentials',        Icon: IconKey            },
+  { id: 'decide',       label: 'Decision helper',    Icon: IconHelpCircle     },
+  { id: 'migration',    label: 'Data migration',     Icon: IconArrowLeftRight  },
+  { id: 'attestation',  label: 'Attestation',        Icon: IconFingerprint    },
+  { id: 'canary',       label: 'Canary routing',     Icon: IconZap            },
+  { id: 'approval',     label: 'Approvals',          Icon: IconCheckCircle    },
+  { id: 'budget',       label: 'Budgets',            Icon: IconGauge          },
+  { id: 'federation',   label: 'Federation',         Icon: IconNetwork        },
+  { id: 'anomaly',      label: 'Anomaly',            Icon: IconAlertTriangle  },
 ] as const;
 
 type TabId = (typeof TABS)[number]['id'];
@@ -208,6 +219,7 @@ export default function Home() {
         {activeTab === 'approval'    && <ApprovalTab />}
         {activeTab === 'budget'      && <BudgetTab />}
         {activeTab === 'federation'  && <FederationTab />}
+        {activeTab === 'anomaly'     && <AnomalyTab />}
 
       </div>
     </main>

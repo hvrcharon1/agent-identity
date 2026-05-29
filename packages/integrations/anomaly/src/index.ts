@@ -211,6 +211,9 @@ export class AnomalyDetector {
       baselineValue: event.baselineValue,
       observedValue: event.observedValue,
     };
-    await this.config.logger.log(entry as AuditLogEntry).catch(console.error);
+    // AuditLogger.log() returns void | Promise<void>. Wrap in Promise.resolve()
+    // so .catch() is always valid regardless of whether the implementation is
+    // sync (returns void) or async (returns Promise<void>).
+    await Promise.resolve(this.config.logger.log(entry as AuditLogEntry)).catch(console.error);
   }
 }

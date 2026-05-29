@@ -1,12 +1,15 @@
 openapi: 3.1.0
 info:
   title: agent-identity credential resolution API
-  version: 0.1.0
+  version: 0.3.0
   description: |
     Language-agnostic REST contract for resolving agent credentials.
     Any application (Python, Go, Ruby, Java) can POST to /api/resolve or
     /api/migrate/resolve. The server resolves the credential from an encrypted
     store and returns only safe metadata — never the raw secret.
+
+    v0.3.0 adds attestation, approval, budget, federation, and anomaly endpoints
+    that were introduced in the Phase 1–4 feature build.
   contact:
     name: Datacules LLC
     url: https://github.com/hvrcharon1/agent-identity
@@ -20,6 +23,9 @@ servers:
     description: Docker sidecar
 
 paths:
+
+  # ── Core resolution ─────────────────────────────────────────────────────────
+
   /api/resolve:
     post:
       operationId: resolveCredential
@@ -29,6 +35,7 @@ paths:
         The server matches it against routing rules, resolves the credential
         from the encrypted store, and returns only safe metadata.
         The raw secret never leaves the server.
+      tags: [Core]
       requestBody:
         required: true
         content:
@@ -74,6 +81,7 @@ paths:
     post:
       operationId: resolveMigrationCredentials
       summary: Resolve source + target credentials for a migration phase
+      tags: [Core]
       description: |
         A migration job calls this once per phase to establish both source
         (read) and target (write) credentials upfront. Returns the earliest
@@ -110,8 +118,249 @@ paths:
         '403':
           $ref: '#/components/responses/NoCredential'
 
+  # ── Attestation ──────────────────────────────────────────────────────────────
+
+  /api/attest:
+    post:
+      operationId: verifyAttestation
+      summary: Verify a JWT attestation token
+      tags: [Attestation]
+      description: |
+        Verifies a signed JWT attestation produced by buildAttestation().
+        Returns the decoded payload on success, or an error if the token
+        is expired, tampered, or signed with a different key.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AttestVerifyRequest'
+      responses:
+        '200':
+          description: Token valid — decoded payload returned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AttestVerifyResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          description: Token invalid, expired, or tampered
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/attest/sign:
+    post:
+      operationId: signAttestation
+      summary: Sign a new JWT attestation for a resolved credential
+      tags: [Attestation]
+      description: |
+        Takes an AgentRequestContext, calls buildAttestation() using the
+        server-side HMAC key, and returns the signed JWT. Downstream
+        services verify the token with verifyAttestation().
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AgentRequestContext'
+      responses:
+        '200':
+          description: Attestation token signed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AttestSignResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  # ── Approvals ────────────────────────────────────────────────────────────────
+
+  /api/approve:
+    post:
+      operationId: approveOrReject
+      summary: Approve or reject a pending approval request
+      tags: [Approvals]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ApproveRequest'
+      responses:
+        '200':
+          description: Decision recorded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApproveResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          description: Approval request not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/approve/break-glass:
+    post:
+      operationId: breakGlassOverride
+      summary: Emergency break-glass credential override
+      tags: [Approvals]
+      description: |
+        Bypasses the normal approval workflow for emergency access.
+        Requires a written justification. Creates a non-deletable audit
+        entry marked as a break-glass event.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BreakGlassRequest'
+      responses:
+        '200':
+          description: Break-glass override recorded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BreakGlassResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  # ── Budget ───────────────────────────────────────────────────────────────────
+
+  /api/budget:
+    get:
+      operationId: getBudgetUtilisation
+      summary: Current usage utilisation for all budget-enabled credentials
+      tags: [Budget]
+      responses:
+        '200':
+          description: Budget utilisation for each credential
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BudgetResponse'
+    post:
+      operationId: resetBudgetCounter
+      summary: Reset hourly or daily counter for a credential
+      tags: [Budget]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BudgetResetRequest'
+      responses:
+        '200':
+          description: Counter reset
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OkResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  # ── Federation ───────────────────────────────────────────────────────────────
+
+  /api/federation/issue:
+    post:
+      operationId: issueIdentityChain
+      summary: Issue a new cross-org identity chain from an AgentRequestContext
+      tags: [Federation]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AgentRequestContext'
+      responses:
+        '200':
+          description: Identity chain issued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FederationIssueResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /api/federation/verify:
+    post:
+      operationId: verifyIdentityChain
+      summary: Verify an inbound identity chain against the trust config
+      tags: [Federation]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FederationVerifyRequest'
+      responses:
+        '200':
+          description: Verification result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FederationVerifyResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  # ── Anomaly ──────────────────────────────────────────────────────────────────
+
+  /api/anomaly:
+    post:
+      operationId: observeAnomaly
+      summary: Pass an AgentRequestContext through the anomaly detector
+      tags: [Anomaly]
+      description: |
+        Wraps a resolve() call with anomaly detection. Scores the context
+        against the agent's behavioral baseline and returns any anomaly events.
+        If the policy action is 'block' and a high-severity anomaly is detected,
+        blocked: true is returned and the caller should not proceed.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AgentRequestContext'
+      responses:
+        '200':
+          description: Anomaly check complete
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnomalyObserveResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+    delete:
+      operationId: resetAnomalyBaseline
+      summary: Reset a specific agent's behavioral baseline
+      tags: [Anomaly]
+      parameters:
+        - name: userId
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Agent user ID whose baseline to reset
+      responses:
+        '200':
+          description: Baseline reset
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OkResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
 components:
   schemas:
+
+    # ── Core ──────────────────────────────────────────────────────────────────
+
     AgentRequestContext:
       type: object
       required:
@@ -127,34 +376,26 @@ components:
         userId:
           type: string
           minLength: 1
-          description: Identifier of the user on whose behalf the agent acts
         resourceId:
           type: string
           minLength: 1
-          description: Identifier of the resource being accessed
         resourceKind:
           $ref: '#/components/schemas/ResourceKind'
         provider:
           $ref: '#/components/schemas/SupportedProvider'
         model:
           type: string
-          description: Model string e.g. 'claude-sonnet-4-20250514' or 'gpt-4o'
         action:
           type: string
-          description: "Action being performed: read, write, delete, etc."
         traceId:
           type: string
-          description: Propagate across all steps of a multi-step agent run
         sessionId:
           type: string
-          description: Groups related requests for the same user session
         requestedAt:
           type: string
           format: date-time
-          description: ISO 8601 timestamp of when the request was initiated
         parentTraceId:
           type: string
-          description: For nested agent calls
 
     MigrateResolveRequest:
       type: object
@@ -170,15 +411,12 @@ components:
       properties:
         migrationId:
           type: string
-          description: Ties all phases of one migration run together
         phase:
           $ref: '#/components/schemas/MigrationPhase'
         sourceResourceId:
           type: string
-          description: Resource data comes FROM
         targetResourceId:
           type: string
-          description: Resource data goes TO
         userId:
           type: string
         provider:
@@ -190,7 +428,6 @@ components:
         dryRun:
           type: boolean
           default: false
-          description: When true, read-only credential resolution is enforced on both source and target
         batchIndex:
           type: integer
           minimum: 0
@@ -200,28 +437,27 @@ components:
 
     ResolveResponse:
       type: object
-      required:
-        - ok
-        - resolvedFor
+      required: [ok, resolvedFor]
       properties:
         ok:
           type: boolean
         resolvedFor:
           type: string
-          description: "'service' for fixed credentials; userId for user-delegated"
+        credentialId:
+          type: string
+        isCanary:
+          type: boolean
+          description: True if the canary credential was selected
         expiresAt:
           type: string
           format: date-time
-          description: When the credential expires; absent if it does not expire
+        credentialAttestation:
+          type: string
+          description: Signed JWT attestation (present only if AttestationSigner configured)
 
     MigrateResolveResponse:
       type: object
-      required:
-        - migrationId
-        - phase
-        - sourceResolvedFor
-        - targetResolvedFor
-        - dryRun
+      required: [migrationId, phase, sourceResolvedFor, targetResolvedFor, dryRun]
       properties:
         migrationId:
           type: string
@@ -236,12 +472,242 @@ components:
         expiresAt:
           type: string
           format: date-time
-          description: Earliest expiry of source or target credential
+
+    # ── Attestation ───────────────────────────────────────────────────────────
+
+    AttestVerifyRequest:
+      type: object
+      required: [token]
+      properties:
+        token:
+          type: string
+          description: JWT attestation token produced by buildAttestation()
+
+    AttestVerifyResponse:
+      type: object
+      required: [valid]
+      properties:
+        valid:
+          type: boolean
+        payload:
+          type: object
+          description: Decoded JWT payload (iss, sub, credentialId, action, ruleId, iat, exp)
+          additionalProperties: true
+
+    AttestSignResponse:
+      type: object
+      required: [token]
+      properties:
+        token:
+          type: string
+          description: Signed JWT attestation
+        expiresAt:
+          type: string
+          format: date-time
+
+    # ── Approvals ─────────────────────────────────────────────────────────────
+
+    ApproveRequest:
+      type: object
+      required: [requestId, decision, resolvedBy]
+      properties:
+        requestId:
+          type: string
+        decision:
+          type: string
+          enum: [approved, rejected]
+        resolvedBy:
+          type: string
+          description: ID of the approver
+        reason:
+          type: string
+
+    ApproveResponse:
+      type: object
+      required: [ok, requestId, status]
+      properties:
+        ok:
+          type: boolean
+        requestId:
+          type: string
+        status:
+          type: string
+          enum: [approved, rejected]
+
+    BreakGlassRequest:
+      type: object
+      required: [credentialRef, requestedBy, justification]
+      properties:
+        credentialRef:
+          type: string
+        requestedBy:
+          type: string
+        justification:
+          type: string
+          minLength: 20
+          description: Must be substantive — stored in non-deletable audit log
+
+    BreakGlassResponse:
+      type: object
+      required: [ok, auditEntryId, breakGlass]
+      properties:
+        ok:
+          type: boolean
+        auditEntryId:
+          type: string
+        breakGlass:
+          type: boolean
+          enum: [true]
+
+    # ── Budget ────────────────────────────────────────────────────────────────
+
+    BudgetResponse:
+      type: object
+      required: [credentials]
+      properties:
+        credentials:
+          type: array
+          items:
+            type: object
+            required: [credentialId, hourlyCount, hourlyLimit]
+            properties:
+              credentialId:
+                type: string
+              hourlyCount:
+                type: integer
+              hourlyLimit:
+                type: integer
+              dailyCount:
+                type: integer
+              dailyLimit:
+                type: integer
+              sessionCount:
+                type: integer
+              sessionLimit:
+                type: integer
+              softThresholdPct:
+                type: integer
+              status:
+                type: string
+                enum: [ok, warning, exceeded]
+
+    BudgetResetRequest:
+      type: object
+      required: [credentialId, period]
+      properties:
+        credentialId:
+          type: string
+        period:
+          type: string
+          enum: [hourly, daily]
+
+    # ── Federation ────────────────────────────────────────────────────────────
+
+    FederationIssueResponse:
+      type: object
+      required: [chain]
+      properties:
+        chain:
+          type: array
+          items:
+            $ref: '#/components/schemas/IdentityChainEntry'
+
+    FederationVerifyRequest:
+      type: object
+      required: [chain]
+      properties:
+        chain:
+          type: array
+          items:
+            $ref: '#/components/schemas/IdentityChainEntry'
+
+    FederationVerifyResponse:
+      type: object
+      required: [valid]
+      properties:
+        valid:
+          type: boolean
+        reason:
+          type: string
+          description: Present when valid is false
+
+    IdentityChainEntry:
+      type: object
+      required: [org, userId, agentId, issuedAt, signature, trustDomain]
+      properties:
+        org:
+          type: string
+        userId:
+          type: string
+        agentId:
+          type: string
+        issuedAt:
+          type: string
+          format: date-time
+        signature:
+          type: string
+        trustDomain:
+          type: string
+
+    # ── Anomaly ───────────────────────────────────────────────────────────────
+
+    AnomalyObserveResponse:
+      type: object
+      required: [ok, observed, anomalies, blocked]
+      properties:
+        ok:
+          type: boolean
+        observed:
+          type: string
+          description: userId that was scored
+        anomalies:
+          type: array
+          items:
+            $ref: '#/components/schemas/AnomalyEvent'
+        blocked:
+          type: boolean
+          description: True if a block-policy anomaly prevented resolution
+
+    AnomalyEvent:
+      type: object
+      required: [signal, severity, baselineValue, observedValue, userId, timestamp]
+      properties:
+        signal:
+          type: string
+          enum:
+            - rate_spike
+            - new_credential_type
+            - new_action_type
+            - new_resource_kind
+            - off_hours
+            - new_provider
+        severity:
+          type: string
+          enum: [low, medium, high]
+        baselineValue:
+          description: The known-good value or set
+        observedValue:
+          description: The value that triggered the anomaly
+        userId:
+          type: string
+        credentialId:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+
+    # ── Shared ────────────────────────────────────────────────────────────────
+
+    OkResponse:
+      type: object
+      required: [ok]
+      properties:
+        ok:
+          type: boolean
 
     ResourceKind:
       type: string
       enum: [shared, personal]
-      description: "shared = uniform access for all users; personal = per-user delegated access"
 
     SupportedProvider:
       type: string
@@ -253,8 +719,7 @@ components:
 
     Error:
       type: object
-      required:
-        - error
+      required: [error]
       properties:
         error:
           type: string

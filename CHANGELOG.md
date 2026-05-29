@@ -6,6 +6,58 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [Unreleased] — v0.3.0
+
+### Added
+
+**Dashboard — `AnomalyTab` (tab #11)**
+- `src/components/AnomalyTab.tsx` — full interactive anomaly detection dashboard
+  - Live agent baseline table showing sample count, known actions/resources/providers, and EWMA call rate
+  - Anomaly event feed with severity badges (low/medium/high), signal labels, and relative timestamps
+  - Decoded baseline vs. observed values side-by-side for each event
+  - Policy configuration panel — per-severity action (warn/throttle/block), baseline samples, rate spike threshold
+  - Run `observe()` simulator for any selected agent — generates real anomaly events and updates baseline state
+  - Reset baseline button per agent; filters by severity (all/high/medium/low)
+  - Live code snippet: copy-paste `AnomalyDetector` config for your app
+- `src/app/api/anomaly/route.ts` — `POST /api/anomaly` (observe) + `DELETE /api/anomaly?userId=` (reset baseline)
+- `src/lib/anomaly.ts` — re-export shim for `@datacules/agent-identity-anomaly`, mirrors the approval/budget/federation pattern
+- `src/app/page.tsx` — `AnomalyTab` added as tab #11 with `IconAlertTriangle` (AlertTriangle SVG)
+
+**OpenAPI spec v0.3.0**
+- `docs/openapi.yaml` bumped from `0.1.0` to `0.3.0`
+- All 9 endpoints added since v0.1.0 are now documented:
+  `POST /api/attest`, `POST /api/attest/sign`, `POST /api/approve`, `POST /api/approve/break-glass`,
+  `GET /api/budget`, `POST /api/budget/reset`, `POST /api/federation/issue`, `POST /api/federation/verify`,
+  `POST /api/anomaly`
+- Full request/response schemas for all new endpoints
+
+**Test coverage — Phase 1–4 modules (PR #17)**
+- 86 new Vitest test cases across 6 files:
+  - `packages/core/src/attestation.test.ts` — 18 cases (`HmacAttestationSigner`, `buildAttestation`, `verifyAttestation`)
+  - `packages/core/src/budget.test.ts` — 16 cases (`MemoryBudgetStore`, `BudgetEnforcer`, audit events)
+  - `packages/core/src/approval.test.ts` — 14 cases (`MemoryApprovalStore`, `ApprovalManager`, break-glass, notifiers)
+  - `packages/core/src/federation.test.ts` — 12 cases (`FederationVerifier`, `FederationIssuer`, chain issue/extend/verify)
+  - `packages/core/src/rotation.test.ts` — 12 cases (`CredentialRotationScheduler`, audit events, start/stop)
+  - `packages/integrations/compliance/src/hashchain.test.ts` — 14 cases (`HashChainAuditLogger`, `ChainVerifier`, tamper detection)
+
+**Test coverage — anomaly package (this PR)**
+- 16 new Vitest test cases in `packages/integrations/anomaly/src/anomaly.test.ts`:
+  - Baseline collection phase (3): no events during collection, resolveFunc still called, baseline learning
+  - Scoring phase detection (5): new_provider, new_action_type, new_resource_kind, no events on known values, rate_spike
+  - Policy actions (2): block returns null + skips resolveFunc, warn continues resolving
+  - Audit logger integration (3): credential.anomaly entries, signal/severity fields, onAnomaly callback
+  - Baseline management (2): resetBaseline() restores collecting state, independent baselines per agent
+  - Edge cases (1): baseline not updated when resolveFunc returns null
+
+### Fixed
+
+- `approval.ts`: `SlackApprovalNotifier` — renamed `_policy` parameter to `policy` (TypeScript TS2304 — parameter was used in body but prefixed with underscore)
+- `types.ts`: `AuditLogger.log()` signature changed from `Promise<void>` to `void | Promise<void>` — the interface now accepts both sync and async implementations correctly
+- `approval.ts`: `ApprovalPolicy` type reconciliation — aligned `approval.ts` to use the canonical `ApprovalPolicy` from `types.ts`
+- `router.ts`: Added `resolvePairAsync()` — async counterpart of `resolvePair()` closing gap G7 from the status report
+
+---
+
 ## [0.2.0] — 2026-05-28
 
 Major release. Transforms `agent-identity` from a single-repo Next.js application into a
