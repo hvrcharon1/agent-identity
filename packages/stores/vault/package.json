@@ -11,7 +11,7 @@
     "type-check": "tsc --noEmit"
   },
   "peerDependencies": {
-    "@datacules/agent-identity": "^0.1.0"
+    "@datacules/agent-identity": "^0.3.0"
   },
   "devDependencies": {
     "@datacules/agent-identity": "*",
