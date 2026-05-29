@@ -138,17 +138,18 @@ export class AnomalyDetector {
   }
 
   private score(ctx: AgentRequestContext, b: AgentBaseline): AnomalyEvent[] {
-    if (b.sampleCount < this.policy.baselineSamples) return []; // still collecting baseline
-    const events: AnomalyEvent[] = [];
     const now = Date.now();
-    const ts = new Date().toISOString();
 
-    // Roll hourly window
+    // Roll hourly window and count calls even during baseline collection
     if (now - b.hourWindowStart > 3_600_000) {
       b.callsThisHour = 0;
       b.hourWindowStart = now;
     }
     b.callsThisHour += 1;
+
+    if (b.sampleCount < this.policy.baselineSamples) return []; // still collecting baseline
+    const events: AnomalyEvent[] = [];
+    const ts = new Date().toISOString();
 
     // Rate spike: current hourly rate vs EWMA
     const currentRate = b.callsThisHour;

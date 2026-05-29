@@ -49,7 +49,12 @@ describe('DynamicCredentialStore', () => {
       id: 'test-provisioner',
       provision: vi.fn(async (ref: string) => ({
         leaseId: `lease-${ref}`,
-        expiresAt: new Date(Date.now() + 60_000).toISOString(), // 60s TTL
+        // 120 s TTL — must be well above the default renewBeforeExpireSeconds (60 s)
+        // so the cache check `cached.expiresAt > Date.now() + 60_000` is reliably
+        // true on a second call within the same test. A 60 s TTL would fail because
+        // (t + 60 000) > (t + 60 000) is a strict greater-than that evaluates to
+        // false when only milliseconds have elapsed since the entry was cached.
+        expiresAt: new Date(Date.now() + 120_000).toISOString(),
         secret: 'top-secret',
       })),
       revoke: vi.fn(async () => {}),
@@ -73,7 +78,7 @@ describe('DynamicCredentialStore', () => {
     const provisioner = makeProvisioner();
     const store = new DynamicCredentialStore({ provisioner, cache: true });
 
-    await store.findByRef('anthropic-slot'); // first call — provisions
+    await store.findByRef('anthropic-slot'); // first call — provisions and caches
     await store.findByRef('anthropic-slot'); // second call — should hit cache
 
     expect(provisioner.provision).toHaveBeenCalledOnce();
@@ -91,16 +96,17 @@ describe('DynamicCredentialStore', () => {
 
   it('re-provisions when cached entry is within renewBeforeExpireSeconds of expiry', async () => {
     const provisioner = makeProvisioner();
-    // Expire in 30s, renew threshold 60s → cached entry always triggers re-provision
+    // Override the default TTL: expire in 30 s, renew threshold 60 s → always triggers
+    // re-provision because (Date.now() + 30 000) > (Date.now() + 60 000) is false.
     provisioner.provision.mockResolvedValue({
       leaseId: 'lease-expiring',
-      expiresAt: new Date(Date.now() + 30_000).toISOString(), // only 30s away
+      expiresAt: new Date(Date.now() + 30_000).toISOString(), // only 30 s away
       secret: 'secret',
     });
     const store = new DynamicCredentialStore({
       provisioner,
       cache: true,
-      renewBeforeExpireSeconds: 60, // 60s > 30s remaining → always re-provisions
+      renewBeforeExpireSeconds: 60, // 60 s > 30 s remaining → always re-provisions
     });
 
     await store.findByRef('near-expiry');
