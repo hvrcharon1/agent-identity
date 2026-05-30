@@ -31,6 +31,6 @@
     "typescript": "^5"
   },
   "peerDependencies": {
-    "@datacules/agent-identity": "^0.3.0"
+    "@datacules/agent-identity": "^0.4.0"
   }
 }
