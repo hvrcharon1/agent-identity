@@ -10,6 +10,77 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Added
 
+**Test coverage — `AwsCredentialStore` (`packages/stores/aws/src/aws.test.ts`) — 16 cases**
+- Previously the only cloud-store package backed by the AWS SDK with zero Vitest test coverage.
+- Both SDK packages are mocked via `vi.mock('@aws-sdk/client-secrets-manager')` and
+  `vi.mock('@aws-sdk/client-dynamodb')`. Mocked constructors return objects with `vi.fn()` send
+  methods, accessed post-construction via `(store as any).sm.send` and `(store as any).dynamo.send`.
+  No live AWS endpoint or credentials required.
+- `findByRef()` (5 cases): returns active credential on active SecretString; returns null when
+  `status` is not `active`; returns null when `SecretString` is absent; returns null without
+  throwing when `send()` throws; sends `GetSecretValueCommand` with the correct `SecretId`.
+- `listActive()` (4 cases): returns credentials with `agent-identity-status` tag=`active` parsed
+  from the `Description` field; skips secrets where the tag value is not `active`; returns empty
+  array when `SecretList` is undefined; skips secrets with malformed `Description` JSON.
+- `listByKind()` (2 cases): returns only credentials matching the requested kind; returns empty
+  array when no credentials match.
+- `reserve()` (3 cases): returns `true` when DynamoDB `PutItem` succeeds; returns `false` when
+  DynamoDB throws `ConditionalCheckFailedException`; sends `PutItemCommand` to the configured
+  `locksTable` name.
+- `release()` (2 cases): issues a `DeleteItemCommand` with the correct ref key; resolves without
+  throwing when `DeleteItem` throws (idempotent).
+
+**Test coverage — `AzureKeyVaultCredentialStore` (`packages/stores/azure/src/azure.test.ts`) — 17 cases**
+- All Azure SDK packages mocked via `vi.mock('@azure/identity')`, `vi.mock('@azure/keyvault-secrets')`,
+  and `vi.mock('@azure/data-tables')`. Mock clients are accessed post-construction via
+  `(store as any).secrets` and `(store as any).table`. No Azure authentication or network calls
+  required.
+- `constructor` (2 cases): throws `'keyVaultUrl is required'` when neither the option nor
+  `AZURE_KEYVAULT_URL` env var is set; throws `'tablesEndpoint is required'` when neither the
+  option nor `AZURE_TABLES_ENDPOINT` env var is set.
+- `findByRef()` (4 cases): returns active credential when `contentType=active` and value parses;
+  returns null when `contentType` is not `active`; returns null when secret value is undefined;
+  returns null without throwing when `getSecret()` throws.
+- `listActive()` (4 cases): returns credentials iterated from the async `listPropertiesOfSecrets`
+  generator and fetched individually via `getSecret()`; skips secrets with `contentType !== active`
+  without calling `getSecret()`; skips secrets with `enabled=false`; returns empty array when
+  `listPropertiesOfSecrets` throws (Key Vault unreachable — outer catch).
+- `listByKind()` (1 case): returns only credentials matching the requested kind.
+- `reserve()` (3 cases): returns `true` when `getEntity` throws `EntityNotFound` and `upsertEntity`
+  succeeds; returns `false` when a different migration holds an unexpired lock; returns `true` when
+  the same migration re-acquires its own lock.
+- `release()` (3 cases): calls `deleteEntity('lock', ref)` when `migrationId` matches; does not
+  call `deleteEntity` when `migrationId` does not match; resolves without throwing when `getEntity`
+  throws (lock already released — idempotent).
+
+**Test coverage — `McpCredentialStore` + `McpToolCaller` (`packages/integrations/mcp-client/src/mcp-client.test.ts`) — 16 cases**
+- Both classes use a lazy-connect pattern (`ensureConnected()` checks `this.client` first). A mock
+  MCP `Client` object is injected directly via `(store/caller as any).client` after construction,
+  so `_connect()` and the `@modelcontextprotocol/sdk` transports are never invoked. No running MCP
+  server is required.
+- `McpCredentialStore` (9 cases):
+  - `listActive()` (5 cases): returns only active credentials from the server's `list_credentials`
+    response; caches results — `callTool` invoked once despite two `listActive()` calls; `invalidateCache()`
+    forces a fresh server fetch (callTool called twice); throws `'non-JSON response'` when the server
+    returns unparseable text; throws `'missing credentials array'` when the response lacks the
+    `credentials` field.
+  - `findByRef()` (2 cases): returns the matching active credential by ref; returns null when the
+    ref is absent from the server list.
+  - `listByKind()` (1 case): returns only credentials matching the requested kind.
+  - `disconnect()` (1 case): calls `close()` on the injected client and sets `this.client` to null.
+- `McpToolCaller` (7 cases): `resolveCredential()` calls `resolve_credential` with forwarded args
+  and returns the parsed result; `resolveMigrationCredential()` calls `resolve_migration_credential`
+  and returns pair; `health()` calls `health` tool and returns status; `callTool()` generic escape
+  hatch returns parsed result for any tool; throws `'non-JSON'` on unparseable response; throws the
+  tool error message when result contains an `error` field; `disconnect()` calls `close()` on the
+  injected client.
+
+---
+
+## [Unreleased — previous]
+
+### Added
+
 **Test coverage — `VaultCredentialStore` (`packages/stores/vault/src/vault.test.ts`) — 16 cases**
 - Previously the only cloud credential store backed entirely by `fetch` with zero Vitest test coverage.
 - All HTTP calls are mocked via `vi.stubGlobal('fetch', ...)` — no live HashiCorp Vault instance is required.
