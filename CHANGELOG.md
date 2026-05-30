@@ -10,38 +10,46 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Added
 
-**Express middleware test coverage (`packages/integrations/express/src/express.test.ts`) — 13 cases**
-- Previously the only framework integration package with zero Vitest test coverage.
-- No express runtime dependency required — `express` is only used via `import type`
-  in the source, so type imports are erased and req/res/next are plain `vi.fn()` mocks.
-- `passThrough behavior` (4 cases): absent agentContext + passThrough=true calls next;
-  undefined req.body + passThrough=true calls next; passThrough=false sends 400;
-  400 error message names the missing contextKey field.
-- `credential resolution` (7 cases): resolvedCredential attached to req on match;
-  next() called and no response sent on match; resolvedFor='service' for fixed creds;
-  resolvedFor=ctx.userId for user-delegated creds; 403 when no rule matches;
-  403 when matched credential is expired; audit logger invoked synchronously on success.
-- `custom contextKey` (2 cases): reads context from correct body field;
+**Fastify plugin test coverage (`packages/integrations/fastify/src/fastify.test.ts`) — 12 cases**
+- Previously the only framework integration package (alongside NestJS) with zero Vitest test coverage.
+- No fastify runtime dependency required — Fastify uses `import type` for
+  `FastifyPluginAsync`, `FastifyRequest`, `FastifyReply`; type imports are erased
+  at runtime. A minimal mock Fastify instance captures `decorateRequest` and
+  `addHook` calls; the preHandler hook is extracted directly and invoked in tests.
+- `plugin registration` (1 case): `agentIdentityPlugin` is a valid fastify-plugin —
+  `Symbol.for('skip-override')` is set to `true` by `fp()`, confirming the
+  encapsulation bypass is in place.
+- `passThrough behavior` (4 cases): absent agentContext + passThrough=true sends no
+  reply; undefined req.body + passThrough=true sends no reply; passThrough=false
+  sends 400; 400 error message names the missing contextKey field.
+- `credential resolution` (5 cases): resolvedCredential attached to request on
+  successful resolution; resolvedFor='service' for fixed creds; resolvedFor=ctx.userId
+  for user-delegated creds; 403 when no rule matches; 403 when matched credential
+  is expired.
+- `custom contextKey` (2 cases): reads agent context from correct body field;
   400 error message names the custom contextKey when passThrough=false.
 
-**MCP tools test coverage (`packages/integrations/mcp/src/mcp.test.ts`) — 14 cases**
-- Previously the only MCP integration package with zero Vitest test coverage.
-- `tools.ts` imports only `zod` and `@datacules/agent-identity` — no
-  `@modelcontextprotocol/sdk` runtime dependency needed (the SDK is only imported
-  in `index.ts` and `transports.ts`). Tool handlers are called directly with a
-  `ToolDeps` object containing a `MemoryCredentialStore` and routing rules.
-- `resolve_credential` (4 cases): credentialId/kind/resolvedFor returned on success;
-  raw ref never appears in response; isError=true when no rule matches;
-  isError=true with Zod validation error.
-- `resolve_migration_credential` (3 cases): source/target/migrationId returned on
-  success (both contexts resolved via shared openai rule); isError=true when unmatched
-  provider; isError=true with Zod validation error when migrationId is absent.
-- `list_credentials` (3 cases): all active credentials returned with safe metadata
-  and no raw ref field; filtered to fixed only; filtered to user-delegated only.
-- `list_rules` (2 cases): rules returned sorted by priority descending; both rule ids
-  present in result.
-- `health` (2 cases): status=ok with credentialsLoaded/rulesLoaded/timestamp;
-  timestamp is a valid ISO 8601 string.
+**NestJS integration test coverage (`packages/integrations/nestjs/src/nestjs.test.ts`) — 12 cases**
+- Previously the only NestJS integration package with zero Vitest test coverage.
+- NestJS decorators (`@Injectable`, `@Inject`, `CanActivate`, `ExecutionContext`,
+  `ForbiddenException`, `createParamDecorator`) are mocked via `vi.mock()` factory
+  hoisted before module import — no `@nestjs/common` runtime dependency required.
+  `AgentIdentityService` and `AgentIdentityGuard` are instantiated directly,
+  bypassing the NestJS DI container entirely.
+- `AgentIdentityService.resolve()` (4 cases): returns ResolvedCredential with correct
+  credentialId; resolvedFor='service' for fixed creds; resolvedFor=ctx.userId for
+  user-delegated creds; returns null when no rule matches.
+- `AgentIdentityService.resolveAsync()` (2 cases): returns the same result as
+  resolve() via the async path; returns null on no match.
+- `AgentIdentityService.resolvePairAsync()` (2 cases): returns ResolvedCredentialPair
+  with source, target, and migrationId when both rules match; returns null when no
+  rule matches the migration context.
+- `AgentIdentityGuard.canActivate()` (3 cases): returns true and does not attach
+  credential when no agentContext is present (non-agent route pass-through); returns
+  true and attaches resolvedCredential to request under `RESOLVED_CREDENTIAL_KEY`
+  on success; throws ForbiddenException when resolveAsync() returns null.
+- `AgentIdentityGuard.extractContext()` (2 cases): returns the agentContext object
+  from request.body; returns null when request.body is absent.
 
 ### Fixed
 
@@ -83,6 +91,39 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - `createAgentIdentityNode` (4 cases): `resolvedCredential` injected into state,
   all existing state properties preserved, throws on missing `agentContext`,
   throws on no-match credential.
+
+**Express middleware test coverage (`packages/integrations/express/src/express.test.ts`) — 13 cases**
+- Previously the only framework integration package with zero Vitest test coverage.
+- No express runtime dependency required — `express` is only used via `import type`
+  in the source, so type imports are erased and req/res/next are plain `vi.fn()` mocks.
+- `passThrough behavior` (4 cases): absent agentContext + passThrough=true calls next;
+  undefined req.body + passThrough=true calls next; passThrough=false sends 400;
+  400 error message names the missing contextKey field.
+- `credential resolution` (7 cases): resolvedCredential attached to req on match;
+  next() called and no response sent on match; resolvedFor='service' for fixed creds;
+  resolvedFor=ctx.userId for user-delegated creds; 403 when no rule matches;
+  403 when matched credential is expired; audit logger invoked synchronously on success.
+- `custom contextKey` (2 cases): reads context from correct body field;
+  400 error message names the custom contextKey when passThrough=false.
+
+**MCP tools test coverage (`packages/integrations/mcp/src/mcp.test.ts`) — 14 cases**
+- Previously the only MCP integration package with zero Vitest test coverage.
+- `tools.ts` imports only `zod` and `@datacules/agent-identity` — no
+  `@modelcontextprotocol/sdk` runtime dependency needed (the SDK is only imported
+  in `index.ts` and `transports.ts`). Tool handlers are called directly with a
+  `ToolDeps` object containing a `MemoryCredentialStore` and routing rules.
+- `resolve_credential` (4 cases): credentialId/kind/resolvedFor returned on success;
+  raw ref never appears in response; isError=true when no rule matches;
+  isError=true with Zod validation error.
+- `resolve_migration_credential` (3 cases): source/target/migrationId returned on
+  success (both contexts resolved via shared openai rule); isError=true when unmatched
+  provider; isError=true with Zod validation error when migrationId is absent.
+- `list_credentials` (3 cases): all active credentials returned with safe metadata
+  and no raw ref field; filtered to fixed only; filtered to user-delegated only.
+- `list_rules` (2 cases): rules returned sorted by priority descending; both rule ids
+  present in result.
+- `health` (2 cases): status=ok with credentialsLoaded/rulesLoaded/timestamp;
+  timestamp is a valid ISO 8601 string.
 
 ---
 
