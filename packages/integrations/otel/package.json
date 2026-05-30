@@ -20,7 +20,7 @@
     "lint": "eslint src --ext .ts"
   },
   "dependencies": {
-    "@datacules/agent-identity": "^0.4.0"
+    "@datacules/agent-identity": "^0.5.0"
   },
   "peerDependencies": {
     "@opentelemetry/api": ">=1.0.0"
