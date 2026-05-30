@@ -8,6 +8,62 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added
+
+**Test coverage — `VaultCredentialStore` (`packages/stores/vault/src/vault.test.ts`) — 16 cases**
+- Previously the only cloud credential store backed entirely by `fetch` with zero Vitest test coverage.
+- All HTTP calls are mocked via `vi.stubGlobal('fetch', ...)` — no live HashiCorp Vault instance is required.
+- `findByRef()` (5 cases): returns active credential on 200 Vault KV v2 response; sends `X-Vault-Token` header;
+  returns null when credential status is not active; returns null on non-ok response (e.g. 404);
+  returns null without throwing on a network-level fetch error.
+- `listActive()` (3 cases): returns all active credentials found via metadata LIST + individual GETs;
+  returns empty array on non-ok metadata response; returns empty array when fetch throws.
+- `listByKind()` (2 cases): returns only credentials matching the requested kind; returns empty array
+  when no credentials match.
+- `reserve()` (3 cases): returns true and writes the lock when no prior lock exists (read → 404 → write);
+  returns false when the lock is held by a different migration within TTL (write not attempted);
+  returns true when the same migration re-acquires its own active lock.
+- `release()` (3 cases): issues a DELETE when the migrationId matches the stored lock;
+  makes only the read request when the migrationId does not match (no DELETE);
+  resolves without throwing when the lock is already gone (fetch throws).
+
+**Test coverage — `SpiffeCredentialStore` (`packages/stores/spiffe/src/spiffe.test.ts`) — 12 cases**
+- No `@spiffe/spiffe-workload-api` runtime dependency required.
+  A mock `WorkloadApiClient` is injected directly via `(store as any).client` before each test
+  that exercises `findByRef()`, bypassing the dynamic import in `getClient()` entirely.
+  `reserve()` and `release()` use the private in-memory `reservations` Map — no external calls.
+- `findByRef()` — SVID resolution (5 cases): returns credential with SVID PEM as ref when hint
+  matches; returns credential when matched by SPIFFE ID path segment; returns credential when
+  matched by full SPIFFE ID string; returns null when ref is not in configured credentials;
+  returns null (no throw) when the workload API rejects.
+- SVID caching (2 cases): `fetchX509Svids` called once despite two `findByRef()` calls on the
+  same ref (cache hit); re-fetches after `flushCache()` — `fetchX509Svids` called twice.
+- `listActive()` and `listByKind()` (2 cases): `listActive()` returns only credentials with
+  `status=active` from the options array; `listByKind()` filters correctly between `fixed` and
+  `user-delegated`.
+- `reserve()` and `release()` (2 cases): `reserve()` returns false when a different migration
+  holds the lock within TTL; `release()` clears the lock so a new migration can acquire it.
+- `close()` (1 case): calls `close()` on the injected `WorkloadApiClient`.
+
+**Test coverage — Audit sinks (`packages/audit/src/audit.test.ts`) — 15 cases**
+- Previously the only package with five implementations and zero Vitest test coverage.
+  All `fetch` calls are mocked via `vi.stubGlobal('fetch', ...)`. `console.log`/`console.warn`
+  are spied and silenced where needed.
+- `ConsoleAuditLogger` (2 cases): calls `console.log` with the `[agent-identity audit]` prefix and
+  the JSON-serialised entry; resolves without throwing on any valid `AuditLogEntry`.
+- `WebhookAuditLogger` (4 cases): POSTs the entry as JSON to the configured URL; adds the
+  `X-Webhook-Secret` header when a secret is configured; resolves without throwing when fetch fails
+  and `silent=true` (default); throws when fetch fails and `silent=false`.
+- `DatadogAuditLogger` (3 cases): POSTs to the Datadog log intake URL with the `DD-API-KEY`
+  header; uses a custom Datadog site (`datadoghq.eu`) when the `site` option is set; is silent by
+  default when fetch fails.
+- `SplunkAuditLogger` (3 cases): POSTs to the HEC URL with a `Splunk <token>` `Authorization`
+  header; includes the full audit entry inside the Splunk event payload; is silent by default when
+  fetch fails.
+- `CompositeAuditLogger` (3 cases): forwards the entry to all registered loggers; continues via
+  `Promise.allSettled` even when one logger rejects (logB still receives the entry); works correctly
+  with a single logger.
+
 ---
 
 ## [0.4.0] — 2026-05-30
