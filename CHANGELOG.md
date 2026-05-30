@@ -8,6 +8,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+---
+
+## [0.4.0] — 2026-05-30
+
 ### Added
 
 **Fastify plugin test coverage (`packages/integrations/fastify/src/fastify.test.ts`) — 12 cases**
