@@ -6,6 +6,53 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [Unreleased]
+
+### Fixed
+
+**`@datacules/agent-identity-otel` — `resolvePairAsync()` correctness gap**
+- `TracedRouter` interface was missing `resolvePairAsync()`, which was added
+  to `CredentialRouter` in the v0.3.0 hardening pass (PR #19). Any consumer
+  who called `resolvePairAsync()` on a `withOtel()`-wrapped router received a
+  runtime "not a function" error. The method is now added to both the interface
+  and the `withOtel()` return object, so all four resolution paths are covered.
+- Extracted `annotateMigrationCtx()` private helper to avoid repeating the
+  three migration attribute `setAttribute` calls in `resolvePair` and
+  `resolvePairAsync`.
+
+### Added
+
+**OTEL test coverage (`packages/integrations/otel/src/otel.test.ts`) — 13 cases**
+- Previously the only feature package with zero Vitest test coverage.
+- Mock tracer and span are plain `vi.fn()` objects — no `@opentelemetry/api`
+  runtime dependency is required (the source only uses `import type`).
+- `withOtel — resolve()` (5 cases): span name, standard attributes,
+  `routing.resolved=true` with credential attributes, `routing.resolved=false`
+  on null, span ends even when router throws.
+- `withOtel — resolveAsync()` (3 cases): span name, awaited result propagated,
+  exception recorded + span ended on rejection.
+- `withOtel — resolvePair()` (3 cases): span name + migration attrs, pair
+  returned with `routing.resolved=true`, span ends on throw.
+- `withOtel — resolvePairAsync()` (2 cases): span name, `routing.resolved=false`
+  on null; rejection records exception and ends span.
+
+**LangChain test coverage (`packages/integrations/langchain/src/langchain.test.ts`) — 12 cases**
+- The test file described in PR #2 (`__tests__/langchain.test.ts`) was never
+  committed to the final merged branch. This PR adds full coverage.
+- `@langchain/core/callbacks/base` is mocked via `vi.mock()` factory — works
+  whether or not `@langchain/core` is installed in root node_modules.
+- `createAgentIdentityModel` (5 cases): resolved metadata returned, correct
+  `credentialId` / `resolvedFor`, `getModel` is a function, throws on no rule
+  match, `fetchSecret` called with resolved ref before unsupported-provider throw.
+- `AgentIdentityCallbackHandler` (3 cases): instantiates, `handleLLMStart`
+  attaches `agentIdentityCredentialId` and `agentIdentityResolvedFor` to
+  `extraParams`, `handleLLMEnd` resolves without throwing.
+- `createAgentIdentityNode` (4 cases): `resolvedCredential` injected into state,
+  all existing state properties preserved, throws on missing `agentContext`,
+  throws on no-match credential.
+
+---
+
 ## [0.3.0] — 2026-05-29
 
 ### Added
@@ -206,4 +253,4 @@ Seven new interactive tabs added to the dashboard (total: 10):
 - `MigrationContext`, `resolvePair()`, phase-aware routing, `reserve()` / `release()` TTL locks
 - Decision helper: `computeDecision()` with all five auth patterns
 - CI pipeline: type-check, lint, build, smoke test, Vitest unit tests
-- Datacules open-source license and branding
+- Datacules open source license and branding
