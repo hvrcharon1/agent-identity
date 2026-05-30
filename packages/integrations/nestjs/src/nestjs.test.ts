@@ -310,8 +310,14 @@ describe('AgentIdentityGuard', () => {
         agentContext: { ...BASE_CONTEXT, provider: 'gemini' as const },
       });
 
+      // The guard throws new ForbiddenException('agent-identity: no credential matched...').
+      // toThrow('ForbiddenException') would match against the message string and fail
+      // because the message is the guard's description, not the class name.
+      // toMatchObject({ name: 'ForbiddenException' }) checks the name property set by
+      // the vi.mock() stub (this.name = 'ForbiddenException'), which is the correct
+      // assertion for verifying the exception type.
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      await expect(guard.canActivate(ctx as any)).rejects.toThrow('ForbiddenException');
+      await expect(guard.canActivate(ctx as any)).rejects.toMatchObject({ name: 'ForbiddenException' });
     });
   });
 
