@@ -8,6 +8,41 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added
+
+**Express middleware test coverage (`packages/integrations/express/src/express.test.ts`) — 13 cases**
+- Previously the only framework integration package with zero Vitest test coverage.
+- No express runtime dependency required — `express` is only used via `import type`
+  in the source, so type imports are erased and req/res/next are plain `vi.fn()` mocks.
+- `passThrough behavior` (4 cases): absent agentContext + passThrough=true calls next;
+  undefined req.body + passThrough=true calls next; passThrough=false sends 400;
+  400 error message names the missing contextKey field.
+- `credential resolution` (7 cases): resolvedCredential attached to req on match;
+  next() called and no response sent on match; resolvedFor='service' for fixed creds;
+  resolvedFor=ctx.userId for user-delegated creds; 403 when no rule matches;
+  403 when matched credential is expired; audit logger invoked synchronously on success.
+- `custom contextKey` (2 cases): reads context from correct body field;
+  400 error message names the custom contextKey when passThrough=false.
+
+**MCP tools test coverage (`packages/integrations/mcp/src/mcp.test.ts`) — 14 cases**
+- Previously the only MCP integration package with zero Vitest test coverage.
+- `tools.ts` imports only `zod` and `@datacules/agent-identity` — no
+  `@modelcontextprotocol/sdk` runtime dependency needed (the SDK is only imported
+  in `index.ts` and `transports.ts`). Tool handlers are called directly with a
+  `ToolDeps` object containing a `MemoryCredentialStore` and routing rules.
+- `resolve_credential` (4 cases): credentialId/kind/resolvedFor returned on success;
+  raw ref never appears in response; isError=true when no rule matches;
+  isError=true with Zod validation error.
+- `resolve_migration_credential` (3 cases): source/target/migrationId returned on
+  success (both contexts resolved via shared openai rule); isError=true when unmatched
+  provider; isError=true with Zod validation error when migrationId is absent.
+- `list_credentials` (3 cases): all active credentials returned with safe metadata
+  and no raw ref field; filtered to fixed only; filtered to user-delegated only.
+- `list_rules` (2 cases): rules returned sorted by priority descending; both rule ids
+  present in result.
+- `health` (2 cases): status=ok with credentialsLoaded/rulesLoaded/timestamp;
+  timestamp is a valid ISO 8601 string.
+
 ### Fixed
 
 **`@datacules/agent-identity-otel` — `resolvePairAsync()` correctness gap**
@@ -19,8 +54,6 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Extracted `annotateMigrationCtx()` private helper to avoid repeating the
   three migration attribute `setAttribute` calls in `resolvePair` and
   `resolvePairAsync`.
-
-### Added
 
 **OTEL test coverage (`packages/integrations/otel/src/otel.test.ts`) — 13 cases**
 - Previously the only feature package with zero Vitest test coverage.
