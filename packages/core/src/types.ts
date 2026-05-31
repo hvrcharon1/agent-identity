@@ -170,6 +170,14 @@ export interface ResolvedCredential {
   credentialAttestation?: string;
   /** True when this resolution was routed to the canary ref */
   isCanary?: boolean;
+  /**
+   * The scope string from the matched Credential (e.g. "Read-only replica",
+   * "All projects - read/write"). Populated by the router from Credential.scope.
+   * Used by validateForMigration() for explicit read/write enforcement, replacing
+   * ref-string naming heuristics. Set Credential.scope to get authoritative
+   * enforcement; omit it to fall back to ref-string heuristics.
+   */
+  scope?: string;
 }
 
 // ─── Migration Types ──────────────────────────────────────────────────────────

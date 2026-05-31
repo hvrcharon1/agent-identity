@@ -119,6 +119,7 @@ export class CredentialRouter {
       resolvedFor: cred.kind === 'user-delegated' ? ctx.userId : 'service',
       expiresAt: cred.expiresAt,
       isCanary,
+      scope: cred.scope,
     };
 
     if (this.config.logger) {
@@ -167,6 +168,7 @@ export class CredentialRouter {
       resolvedFor: cred.kind === 'user-delegated' ? ctx.userId : 'service',
       expiresAt: cred.expiresAt,
       isCanary,
+      scope: cred.scope,
     };
 
     // Attestation

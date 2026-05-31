@@ -1,13 +1,72 @@
 import type { MigrationPhase, ProviderAdapter, ResolvedCredential, SupportedProvider } from './types';
 
-function assertMigrationScope(credential: ResolvedCredential, phase: MigrationPhase, adapterId: SupportedProvider): void {
+/**
+ * assertMigrationScope — validates that a resolved credential's scope is
+ * compatible with the requested migration phase.
+ *
+ * Enforcement order:
+ *   1. Explicit scope field (authoritative) — populated by the router from
+ *      Credential.scope. Checked case-insensitively:
+ *        read-only / readonly / read  → treats as read-only
+ *        write / read/write / readwrite → treats as write-capable
+ *   2. Ref-string heuristic (fallback) — fires when credential.scope is absent.
+ *      Checks whether the ref contains 'readonly' or ends with '-ro'.
+ *      This is a naming convention, not a cryptographic guarantee.
+ *      Error messages nudge callers to set Credential.scope instead.
+ *
+ * Called by every ProviderAdapter.validateForMigration() implementation.
+ */
+function assertMigrationScope(
+  credential: ResolvedCredential,
+  phase: MigrationPhase,
+  adapterId: SupportedProvider
+): void {
   const writePhases: MigrationPhase[] = ['load', 'rollback'];
-  const readOnlyRef = credential.ref.includes('readonly') || credential.ref.endsWith('-ro');
+
+  // ── Path 1: explicit scope field (authoritative) ────────────────────────
+  if (credential.scope !== undefined) {
+    const s = credential.scope.toLowerCase();
+    const isExplicitlyReadOnly =
+      s === 'read' || s.includes('read-only') || s.includes('readonly');
+    const isExplicitlyWritable =
+      s.includes('write') || s.includes('read/write') || s.includes('readwrite');
+
+    if (writePhases.includes(phase) && isExplicitlyReadOnly) {
+      throw new Error(
+        `[${adapterId}] Migration phase "${phase}" requires a write-scoped credential, ` +
+        `but credential scope "${credential.scope}" is read-only.`
+      );
+    }
+    if (phase === 'dry-run' && isExplicitlyWritable) {
+      console.warn(
+        `[${adapterId}] dry-run received write-capable credential ` +
+        `(scope: "${credential.scope}"). Ensure the operation is truly read-only.`
+      );
+    }
+    // Scope field is authoritative — no further heuristics needed.
+    return;
+  }
+
+  // ── Path 2: ref-string naming heuristic fallback ────────────────────────
+  // Note: naming conventions are not a cryptographic guarantee.
+  // Set Credential.scope for explicit, authoritative enforcement.
+  const readOnlyRef =
+    credential.ref.toLowerCase().includes('readonly') ||
+    credential.ref.endsWith('-ro');
+
   if (writePhases.includes(phase) && readOnlyRef) {
-    throw new Error(`[${adapterId}] Migration phase "${phase}" requires a write-scoped credential, but ref "${credential.ref}" appears read-only.`);
+    throw new Error(
+      `[${adapterId}] Migration phase "${phase}" requires a write-scoped credential, ` +
+      `but ref "${credential.ref}" appears read-only ` +
+      `(naming heuristic — set Credential.scope for authoritative enforcement).`
+    );
   }
   if (phase === 'dry-run' && !readOnlyRef) {
-    console.warn(`[${adapterId}] dry-run received potentially write-capable ref "${credential.ref}". Ensure dryRun:true is enforced.`);
+    console.warn(
+      `[${adapterId}] dry-run received potentially write-capable ref ` +
+      `"${credential.ref}". Ensure dryRun:true is enforced. ` +
+      `Set Credential.scope for explicit enforcement.`
+    );
   }
 }
 

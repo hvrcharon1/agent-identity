@@ -125,6 +125,12 @@ export interface ResolvedCredential {
   kind: CredentialKind;
   ref: string;
   resolvedFor: string; // userId or 'service'
+  /**
+   * The scope string from the matched Credential (e.g. "Read-only replica",
+   * "All projects - read/write"). Populated by the router from Credential.scope.
+   * Used by validateForMigration() for explicit read/write enforcement.
+   */
+  scope?: string;
 }
 
 // ─── Migration Types ──────────────────────────────────────────────────────────
