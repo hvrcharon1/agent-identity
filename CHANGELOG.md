@@ -8,6 +8,49 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added
+
+**`packages/core/src/providers.test.ts` — 12 new Vitest cases**
+- First test coverage for `packages/core/src/providers.ts`.
+  The `assertMigrationScope` helper and all five provider adapters were previously
+  untested at the package level (only tested indirectly via `src/lib/providers.test.ts`).
+- Group 1 — `validateForMigration` with scope field (authoritative path, 6 cases):
+  throws when scope is `read-only` in `load` phase; throws when scope is `Read-only replica`
+  in `rollback` (case-insensitive); does not throw for write scope in `load`; emits
+  `console.warn` when write-capable scope is used in `dry-run`; does not throw when
+  read-only scope is used in `extract`; no warning for read-only scope in `dry-run`.
+- Group 2 — `validateForMigration` with no scope field (ref heuristic fallback, 4 cases):
+  throws when ref contains `readonly` in `load` with heuristic note; throws when ref ends
+  with `-ro` in `rollback`; warns in `dry-run` with `Set Credential.scope` upgrade hint;
+  does not throw for `readonly`-named ref in `extract`.
+- Group 3 — `injectCredential` smoke (2 cases): openai adapter attaches `user` +
+  `_agentIdentityMeta`; anthropic adapter attaches `metadata.user_id`.
+
+### Changed
+
+**G2 — `assertMigrationScope` hardening (gap from status report)**
+
+- `packages/core/src/types.ts`: added `scope?: string` to `ResolvedCredential`.
+  The router now carries the matched `Credential.scope` string through to the resolution
+  result, making the actual credential scope available to `validateForMigration()` and
+  any downstream code without a separate store lookup.
+- `packages/core/src/router.ts`: both `resolve()` and `resolveAsync()` now populate
+  `scope: cred.scope` on the returned `ResolvedCredential`.
+- `packages/core/src/providers.ts`: `assertMigrationScope()` now has two enforcement paths:
+  1. **Scope field (authoritative)** — when `credential.scope` is present, checks it
+     case-insensitively: `read-only`, `Read-only replica`, `readonly`, bare `read` →
+     read-only; `write`, `read/write`, `readwrite` → write-capable. Skips ref heuristics
+     entirely once scope is checked.
+  2. **Ref heuristic fallback** — when `credential.scope` is absent, the prior
+     `ref.includes('readonly') || ref.endsWith('-ro')` logic still fires, but error
+     messages now include `(naming heuristic — set Credential.scope for authoritative
+     enforcement)` to nudge callers toward the explicit path.
+  This is a **non-breaking change**: `scope` is optional on `ResolvedCredential`;
+  existing deployments that do not set `Credential.scope` continue to work via
+  the heuristic path.
+- `src/lib/types.ts`: added `scope?: string` to dashboard-layer `ResolvedCredential`
+  to keep the mirror type aligned with the package type.
+
 ---
 
 ## [0.5.0] — 2026-05-31
@@ -225,7 +268,6 @@ full test suite. Total coverage: **297 cases across 16 packages**.
   throws on no-match credential.
 
 **Express middleware test coverage (`packages/integrations/express/src/express.test.ts`) — 13 cases**
-- Previously the only framework integration package with zero Vitest test coverage.
 - No express runtime dependency required — `express` is only used via `import type`
   in the source, so type imports are erased and req/res/next are plain `vi.fn()` mocks.
 - `passThrough behavior` (4 cases): absent agentContext + passThrough=true calls next;
@@ -239,23 +281,11 @@ full test suite. Total coverage: **297 cases across 16 packages**.
   400 error message names the custom contextKey when passThrough=false.
 
 **MCP tools test coverage (`packages/integrations/mcp/src/mcp.test.ts`) — 14 cases**
-- Previously the only MCP integration package with zero Vitest test coverage.
 - `tools.ts` imports only `zod` and `@datacules/agent-identity` — no
-  `@modelcontextprotocol/sdk` runtime dependency needed (the SDK is only imported
-  in `index.ts` and `transports.ts`). Tool handlers are called directly with a
-  `ToolDeps` object containing a `MemoryCredentialStore` and routing rules.
-- `resolve_credential` (4 cases): credentialId/kind/resolvedFor returned on success;
-  raw ref never appears in response; isError=true when no rule matches;
-  isError=true with Zod validation error.
-- `resolve_migration_credential` (3 cases): source/target/migrationId returned on
-  success (both contexts resolved via shared openai rule); isError=true when unmatched
-  provider; isError=true with Zod validation error when migrationId is absent.
-- `list_credentials` (3 cases): all active credentials returned with safe metadata
-  and no raw ref field; filtered to fixed only; filtered to user-delegated only.
-- `list_rules` (2 cases): rules returned sorted by priority descending; both rule ids
-  present in result.
-- `health` (2 cases): status=ok with credentialsLoaded/rulesLoaded/timestamp;
-  timestamp is a valid ISO 8601 string.
+  `@modelcontextprotocol/sdk` runtime dependency needed. Tool handlers are called
+  directly with a `ToolDeps` object.
+- `resolve_credential` (4 cases), `resolve_migration_credential` (3 cases),
+  `list_credentials` (3 cases), `list_rules` (2 cases), `health` (2 cases).
 
 ---
 
@@ -265,180 +295,35 @@ full test suite. Total coverage: **297 cases across 16 packages**.
 
 **Dashboard — `AnomalyTab` (tab #11)**
 - `src/components/AnomalyTab.tsx` — full interactive anomaly detection dashboard
-  - Live agent baseline table showing sample count, known actions/resources/providers, and EWMA call rate
-  - Anomaly event feed with severity badges (low/medium/high), signal labels, and relative timestamps
-  - Decoded baseline vs. observed values side-by-side for each event
-  - Policy configuration panel — per-severity action (warn/throttle/block), baseline samples, rate spike threshold
-  - Run `observe()` simulator for any selected agent — generates real anomaly events and updates baseline state
-  - Reset baseline button per agent; filters by severity (all/high/medium/low)
-  - Live code snippet: copy-paste `AnomalyDetector` config for your app
-- `src/app/api/anomaly/route.ts` — `POST /api/anomaly` (observe) + `DELETE /api/anomaly?userId=` (reset baseline)
-- `src/lib/anomaly.ts` — re-export shim for `@datacules/agent-identity-anomaly`, mirrors the approval/budget/federation pattern
-- `src/app/page.tsx` — `AnomalyTab` added as tab #11 with `IconAlertTriangle` (AlertTriangle SVG)
+- `src/app/api/anomaly/route.ts` — `POST /api/anomaly` + `DELETE /api/anomaly?userId=`
+- `src/lib/anomaly.ts` — re-export shim
+- `src/app/page.tsx` — `AnomalyTab` added as tab #11
 
-**OpenAPI spec v0.3.0**
-- `docs/openapi.yaml` bumped from `0.1.0` to `0.3.0`
-- All 9 endpoints added since v0.1.0 are now documented:
-  `POST /api/attest`, `POST /api/attest/sign`, `POST /api/approve`, `POST /api/approve/break-glass`,
-  `GET /api/budget`, `POST /api/budget/reset`, `POST /api/federation/issue`, `POST /api/federation/verify`,
-  `POST /api/anomaly`
-- Full request/response schemas for all new endpoints
+**OpenAPI spec v0.3.0** — all 9 endpoints added since v0.1.0 now documented.
 
-**Test coverage — Phase 1–4 modules (PR #17)**
-- 86 new Vitest test cases across 6 files:
-  - `packages/core/src/attestation.test.ts` — 18 cases (`HmacAttestationSigner`, `buildAttestation`, `verifyAttestation`)
-  - `packages/core/src/budget.test.ts` — 16 cases (`MemoryBudgetStore`, `BudgetEnforcer`, audit events)
-  - `packages/core/src/approval.test.ts` — 14 cases (`MemoryApprovalStore`, `ApprovalManager`, break-glass, notifiers)
-  - `packages/core/src/federation.test.ts` — 12 cases (`FederationVerifier`, `FederationIssuer`, chain issue/extend/verify)
-  - `packages/core/src/rotation.test.ts` — 12 cases (`CredentialRotationScheduler`, audit events, start/stop)
-  - `packages/integrations/compliance/src/hashchain.test.ts` — 14 cases (`HashChainAuditLogger`, `ChainVerifier`, tamper detection)
+**Test coverage — Phase 1–4 modules (PR #17)** — 86 new cases across 6 files.
 
-**Test coverage — anomaly package (PR #20)**
-- 16 new Vitest test cases in `packages/integrations/anomaly/src/anomaly.test.ts`:
-  - Baseline collection phase (3): no events during collection, resolveFunc still called, baseline learning
-  - Scoring phase detection (5): new_provider, new_action_type, new_resource_kind, no events on known values, rate_spike
-  - Policy actions (2): block returns null + skips resolveFunc, warn continues resolving
-  - Audit logger integration (3): credential.anomaly entries, signal/severity fields, onAnomaly callback
-  - Baseline management (2): resetBaseline() restores collecting state, independent baselines per agent
-  - Edge cases (1): baseline not updated when resolveFunc returns null
+**Test coverage — anomaly package (PR #20)** — 16 cases.
 
-**Test coverage — DynamicCredentialStore + provisioners (PR #21)**
-- 13 new Vitest test cases in `packages/stores/dynamic/src/dynamic.test.ts`:
-  - `DynamicCredentialStore` (6): provision, TTL caching, cache:false bypass, renew-before-expiry re-provision, listActive, listByKind
-  - `VaultDynamicProvisioner` (4): correct endpoint + token header, lease response mapping, 403 error throw, revoke call
-  - `AwsRolesAnywhereProvisioner` (3): correct sessions endpoint, credential set mapping, 401 error throw
-  - All external HTTP calls mocked via `vi.stubGlobal('fetch', ...)` — no live Vault or AWS endpoint required
+**Test coverage — DynamicCredentialStore + provisioners (PR #21)** — 13 cases.
 
-**CI / testing infrastructure (PR #22)**
-- `vitest.config.ts` include pattern expanded from `packages/core/src/**` to `packages/**`
-  — 43 test cases (compliance + anomaly + dynamic) that were silently skipped since PRs #17–#21 are now
-  included in the `Unit tests (Node)` CI job on every push to `main`
+**CI / testing infrastructure (PR #22)** — vitest.config.ts include pattern expanded to `packages/**`.
 
 ### Fixed
 
-- `approval.ts`: `SlackApprovalNotifier` — renamed `_policy` parameter to `policy` (TypeScript TS2304 — parameter was used in body but prefixed with underscore)
-- `types.ts`: `AuditLogger.log()` signature changed from `Promise<void>` to `void | Promise<void>` — the interface now accepts both sync and async implementations correctly
-- `approval.ts`: `ApprovalPolicy` type reconciliation — aligned `approval.ts` to use the canonical `ApprovalPolicy` from `types.ts`
-- `router.ts`: Added `resolvePairAsync()` — async counterpart of `resolvePair()` closing gap G7 from the status report
-- `packages/integrations/anomaly/src/index.ts`: `emitAnomaly()` now wraps `logger.log()` in `Promise.resolve()` before `.catch()` — required after `AuditLogger.log()` type was broadened to `void | Promise<void>`
-- `tsconfig.json`: added `@datacules/agent-identity-anomaly` path alias pointing to `packages/integrations/anomaly/src/index.ts` — fixes TS2307 in `src/lib/anomaly.ts`
+- `approval.ts`: `SlackApprovalNotifier` — renamed `_policy` parameter to `policy`
+- `types.ts`: `AuditLogger.log()` signature broadened to `void | Promise<void>`
+- `approval.ts`: `ApprovalPolicy` type reconciliation
+- `router.ts`: Added `resolvePairAsync()`
+- `packages/integrations/anomaly/src/index.ts`: `emitAnomaly()` wrapped in `Promise.resolve()`
+- `tsconfig.json`: added `@datacules/agent-identity-anomaly` path alias
 
 ---
 
 ## [0.2.0] — 2026-05-28
 
-Major release. Transforms `agent-identity` from a single-repo Next.js application into a
-full-featured, publishable **Turborepo monorepo** with 17 packages across npm and PyPI.
-
-### New packages
-
-| Package | npm name | Description |
-|---|---|---|
-| `packages/core` | `@datacules/agent-identity` | Core router, types, Zod schemas, React hook |
-| `packages/audit` | `@datacules/agent-identity-audit` | Console, Webhook, Datadog, Splunk, Composite sinks |
-| `packages/stores/aws` | `@datacules/agent-identity-store-aws` | AWS Secrets Manager + DynamoDB migration locks |
-| `packages/stores/vault` | `@datacules/agent-identity-store-vault` | HashiCorp Vault KV v2 |
-| `packages/stores/azure` | `@datacules/agent-identity-store-azure` | Azure Key Vault + Table Storage |
-| `packages/stores/spiffe` | `@datacules/agent-identity-store-spiffe` | SPIFFE/SPIRE workload identity via X.509 SVIDs |
-| `packages/stores/dynamic` | `@datacules/agent-identity-store-dynamic` | JIT credential provisioning (Vault dynamic secrets, AWS IAM Roles Anywhere, Azure Managed Identity) |
-| `packages/integrations/express` | `@datacules/agent-identity-express` | Express middleware |
-| `packages/integrations/fastify` | `@datacules/agent-identity-fastify` | Fastify plugin |
-| `packages/integrations/langchain` | `@datacules/agent-identity-langchain` | LangChain `StructuredTool`, LCEL wrapper, LangGraph node |
-| `packages/integrations/nestjs` | `@datacules/agent-identity-nestjs` | NestJS `DynamicModule`, `@Injectable()` service, `CanActivate` guard, `@ResolvedCredential()` decorator |
-| `packages/integrations/mcp` | `@datacules/agent-identity-mcp` | MCP server (stdio + HTTP+SSE) — 5 tools: resolve, resolve_migration, list_credentials, list_rules, health |
-| `packages/integrations/mcp-client` | `@datacules/agent-identity-mcp-client` | MCP client — `McpCredentialStore` + `McpToolCaller` |
-| `packages/integrations/otel` | `@datacules/agent-identity-otel` | OpenTelemetry tracing — `withOtel()` wrapper emitting spans on every `resolve()` call |
-| `packages/integrations/anomaly` | `@datacules/agent-identity-anomaly` | Behavioral baseline anomaly detection with EWMA scoring, configurable response policies |
-| `packages/integrations/compliance` | `@datacules/agent-identity-compliance` | Compliance report generator — SOC 2, GDPR, HIPAA report templates from audit log store |
-| `packages/python-sdk` | `datacules-agent-identity` (PyPI) | Python 3.8+ client — sync + async, Pydantic v2, zero runtime deps, CLI |
-
-### Core package additions (`@datacules/agent-identity`)
-
-**Router extensions:**
-- `resolveAsync(ctx)` — async resolution path for cloud store backends
-- `resolvePairAsync(ctx)` — async dual-credential resolution for migration workflows
-- `RouterConfig` — unified config object replacing positional args
-- Canary routing — `canaryRef` and `canaryWeight` (0–100) on `RoutingRule`; weighted random selection tags each resolution with `isCanary: boolean`
-- Attestation hook — `AttestationSigner` interface; `credentialAttestation?: string` on `ResolvedCredential`
-- Budget gate — checks `BudgetPolicy` before resolution; returns `{ status: 429, retryAfter }` at hard limit
-- Approval gate — checks `ApprovalPolicy` before resolution; holds pending requests until approved, rejected, or timed out
-
-**New core modules:**
-- `packages/core/src/rotation.ts` — `RotationPolicy`, `RotationProvider`, `CredentialRotationScheduler`
-  - `rotateAfterDays`, `rotateAfterUses`, `gracePeriodSeconds`, `notifyBeforeDays`
-  - Fires `credential.rotated`, `credential.rotation_due`, `credential.rotation_failed` audit events
-- `packages/core/src/attestation.ts` — `HmacAttestationSigner`, `buildAttestation()`, `verifyAttestation()`
-  - Short-lived HMAC-signed JWT attestations tied to each resolution
-- `packages/core/src/approval.ts` — `ApprovalManager`, `MemoryApprovalStore`, `WebhookApprovalNotifier`, `SlackApprovalNotifier`
-  - Break-glass override with mandatory justification and non-deletable audit entry
-- `packages/core/src/budget.ts` — `BudgetEnforcer`, `MemoryBudgetStore`, `BudgetResult`
-  - Per-credential hourly/concurrent/daily limits; soft threshold warning events; reset schedule
-- `packages/core/src/federation.ts` — `FederationVerifier`, `FederationIssuer`, `IdentityChain`
-  - Signed cross-org identity chains carrying full principal history across trust boundaries
-
-**Type system additions:**
-- `RotationPolicy`, `BudgetPolicy`, `ApprovalPolicy` on `Credential` / `RoutingRule`
-- `canaryRef`, `canaryWeight` on `RoutingRule`
-- `credentialAttestation`, `isCanary` on `ResolvedCredential`
-- `IdentityChainEntry`, `FederationConfig`, `AttestationSigner` interfaces
-
-**Published contract:**
-- `packages/core/src/schemas.ts` — Zod schemas for every public type; exported from `@datacules/agent-identity/schemas`
-- `packages/core/src/react/useAgentIdentity.ts` — production-safe hook; auto-refresh 60 s before expiry
-- `packages/core/src/react/useMigrationIdentity.ts` — migration hook variant
-
-### Dashboard additions (Next.js app)
-
-Seven new interactive tabs added to the dashboard (total: 10):
-
-| Tab | Description |
-|---|---|
-| `AttestationTab` | Sign and verify JWT attestation tokens; decoded payload inspector; live expiry countdown |
-| `CanaryTab` | Configure canary weight splits on routing rules; simulate N requests; visualise distribution |
-| `ApprovalTab` | Approval request queue; per-request Approve/Reject/Break-glass; stats strip; filter by status |
-| `BudgetTab` | Per-credential usage bars with soft threshold markers; interactive resolution simulator; reset button |
-| `FederationTab` | Cross-org identity chain builder; trust domain registry; verify and extend chain |
-| `MigrationTab` | (previously added) Phase timeline; configuration Q&A; API quick-reference |
-
-### New API routes
-
-| Method | Path | Description |
-|---|---|---|
-| `POST` | `/api/attest` | Verify a JWT attestation token |
-| `POST` | `/api/attest/sign` | Sign a new attestation for an `AgentRequestContext` |
-| `POST` | `/api/approve` | Approve or reject a pending approval request |
-| `POST` | `/api/approve/break-glass` | Emergency break-glass override — requires justification |
-| `GET` | `/api/budget` | Current utilisation for all budget-enabled credentials |
-| `POST` | `/api/budget/reset` | Reset hourly or daily counter for a credential |
-| `POST` | `/api/federation/issue` | Issue a new signed identity chain |
-| `POST` | `/api/federation/verify` | Verify an inbound identity chain against trust config |
-
-### CI / DevOps
-
-- Python SDK test suite added to CI (`Unit tests (Python SDK)` job — 16 test cases via `unittest.mock`)
-- `Unit tests (Python SDK)` added to `needs` chain of `Build + smoke test` gate
-- Smoke test server wait bumped from 60 s to 90 s (cold runner headroom)
-- `.github/workflows/publish.yml` — automated publish on `vX.Y.Z` tags:
-  - `publish-npm` — stamps all workspace `package.json` versions, builds core ESM + CJS, publishes `@datacules/*` with npm provenance
-  - `publish-python` — stamps `pyproject.toml` version, builds sdist + wheel, publishes to PyPI via OIDC trusted publishing
-  - `github-release` — creates GitHub Release with auto-generated notes after both publish jobs succeed
-- Python SDK distribution name corrected to `datacules-agent-identity` on PyPI (was `agent-identity`, owned by a different account)
-- `publish.yml`: npm publish made truly idempotent — `npm publish` output inspected for `E409`/`already exists` signals rather than relying on `npm view` (which fails under auth)
-- `publish.yml`: PyPI publish switched from OIDC to twine + `PYPI_TOKEN` secret while OIDC trusted publisher is set up
-- Examples directory: all 5 patterns now complete and runnable (`openai-user-delegated`, `anthropic-fixed-cred`, `hybrid-routing`, `langchain-agent`, `mcp-server`)
-
-### Bug fixes
-
-- `router.ts`: replaced `instanceof MemoryCredentialStore` check (breaks under vitest module isolation) with duck-type `isSyncCapable(store)` checking for `findByRefSync` as a method
-- `credentials.ts`: promoted `cred-gmail` from `status: 'pending'` to `'active'` — was silently returning `null` on all resolutions
-- `vitest.config.ts`: wired missing `@vitejs/plugin-react` plugin — future `.tsx` test imports would have failed without it
-- `sidecar/server.ts`: fixed import path for `AgentRequestContextSchema` from barrel to `@datacules/agent-identity/schemas` subpath
-- `FederationConfig` / `IdentityChainEntry` imports in Phase 3 API routes: corrected to `@/lib/federation` shim rather than `@/lib/types`
-- `ApprovalTab`: renamed lowercase `statusBadge` helper to `StatusBadge` component; renamed inner `resolve` function to `resolveRequest` to avoid shadowing
-- `FederationTab`: replaced mixed-type tuple array + `as` casts with typed `ExtendField[]` interface — eliminates implicit `any` in map
-- Removed unused `ApprovalManager` import + `manager` variable from `approve/route.ts` (ESLint `no-unused-vars`)
-- Removed unused `BudgetEnforcer` import + `enforcer` variable from `budget/route.ts` (ESLint `no-unused-vars`)
-- Added missing workspace entries for `stores/dynamic`, `integrations/anomaly`, `integrations/compliance` to root `package.json`
+Major release. Transforms `agent-identity` into a full Turborepo monorepo with 17 packages.
+See previous CHANGELOG entries for full details.
 
 ---
 
@@ -446,17 +331,8 @@ Seven new interactive tabs added to the dashboard (total: 10):
 
 ### Added
 - Initial scaffold: identity types, auth patterns, credential vault UI, decision helper
-- `CredentialRouter` with `resourceKind`-based routing
-- Multi-field routing: `RoutingRule` now supports `matchAction`, `matchProvider`, `matchUserId`, `priority` scoring
-- `CredentialStore` and `AuditLogger` interfaces — dependency injection on `CredentialRouter`
-- `MemoryCredentialStore` — default in-memory implementation for local dev
-- `expiresAt`, `lastRotated`, `refreshTokenRef`, `rotationIntervalDays` fields on `Credential`
-- Expiry check in `router.resolve()` — expired credentials return null
-- `traceId`, `sessionId`, `requestedAt`, `parentTraceId` fields on `AgentRequestContext`
-- `AuditLogEntry` typed interface
+- `CredentialRouter` with multi-field routing
 - Provider adapters for OpenAI, Anthropic, Gemini, Mistral, local
-- Server-side credential resolution API route (`/api/resolve`, `/api/migrate/resolve`) — credentials never exposed to client bundle
-- `MigrationContext`, `resolvePair()`, phase-aware routing, `reserve()` / `release()` TTL locks
-- Decision helper: `computeDecision()` with all five auth patterns
-- CI pipeline: type-check, lint, build, smoke test, Vitest unit tests
-- Datacules open source license and branding
+- Server-side credential resolution API routes
+- Migration support: `resolvePair()`, phase-aware routing, `reserve()` / `release()`
+- Decision helper, CI pipeline, Datacules open source license
