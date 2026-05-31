@@ -18,13 +18,7 @@ export default defineConfig({
     // Include tests from:
     //   src/            — Next.js app layer (API routes, components)
     //   packages/core/  — @datacules/agent-identity core package
-    //   packages/**     — all other publishable packages (anomaly, compliance,
-    //                     dynamic store, and any future packages)
-    //
-    // Previously this only covered packages/core/src/**. The result was that
-    // test files added in packages/integrations/compliance, packages/integrations/anomaly,
-    // and packages/stores/dynamic were silently skipped by CI even though they
-    // are fully valid Vitest suites (43 test cases total).
+    //   packages/**     — all other publishable packages
     include: [
       'src/**/*.test.ts',
       'src/**/*.test.tsx',
@@ -36,9 +30,15 @@ export default defineConfig({
       '@': path.resolve(__dirname, './src'),
       // Resolve workspace package imports to source during vitest runs
       // so tests don't require a prior `npm run build:packages`.
-      '@datacules/agent-identity': path.resolve(__dirname, './packages/core/src/index.ts'),
-      '@datacules/agent-identity/schemas': path.resolve(__dirname, './packages/core/src/schemas.ts'),
-      '@datacules/agent-identity/react': path.resolve(__dirname, './packages/core/src/react/index.ts'),
+      '@datacules/agent-identity':             path.resolve(__dirname, './packages/core/src/index.ts'),
+      '@datacules/agent-identity/schemas':     path.resolve(__dirname, './packages/core/src/schemas.ts'),
+      '@datacules/agent-identity/react':       path.resolve(__dirname, './packages/core/src/react/index.ts'),
+      '@datacules/agent-identity-anomaly':     path.resolve(__dirname, './packages/integrations/anomaly/src/index.ts'),
+      // Cloud store packages — resolved to source so tests and credentialStore.ts
+      // can import them without a prior build step.
+      '@datacules/agent-identity-store-vault': path.resolve(__dirname, './packages/stores/vault/src/index.ts'),
+      '@datacules/agent-identity-store-aws':   path.resolve(__dirname, './packages/stores/aws/src/index.ts'),
+      '@datacules/agent-identity-store-azure': path.resolve(__dirname, './packages/stores/azure/src/index.ts'),
     },
   },
 });
