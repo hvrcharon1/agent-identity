@@ -1,54 +1,72 @@
 /**
- * POST /api/migrate/resolve — Dual-credential resolution for migration operations.
+ * POST /api/migrate/resolve
  *
- * A migration job calls this endpoint ONCE at the start of each phase to
- * establish both source (read) and target (write) credentials upfront.
- * The response returns only metadata (no secrets) plus an expiry window
- * the agent can use to decide when to refresh before the batch loop ends.
+ * Dual-credential resolution for data migration operations.
  *
- * Architecture:
- *   Migration agent → POST /api/migrate/resolve → Server resolves pair →
- *   Encrypted store → Agent proceeds with batch loop
+ * A migration job calls this endpoint once per phase to resolve both source
+ * (read) and target (write) credentials upfront. The response carries only
+ * credential metadata — the raw secrets never leave the server.
  *
- * Benefits over calling /api/resolve twice:
- * - One round-trip per phase instead of N round-trips per row
- * - Response carries the earliest expiry of both credentials
- * - Phase is logged together with both credential IDs in one audit entry
+ * Unlike the original implementation which used the dashboard-local router
+ * (sync-only, no cloud store support), this route now uses:
+ *   - createRouterFromStore() from @datacules/agent-identity (full-featured)
+ *   - resolvePairAsync() — parallel async resolution with correct expiresAt
+ *   - getServerStore() — the configured cloud store (Vault / AWS / Azure / Memory)
+ *
+ * Request body:
+ *   migrationId      string   — ties all phases of one run together
+ *   phase            string   — dry-run | extract | transform | load | verify | rollback
+ *   sourceResourceId string   — resource data is coming FROM
+ *   targetResourceId string   — resource data is going TO
+ *   userId           string   — identity of the migration agent
+ *   provider         string   — openai | anthropic | gemini | mistral | local
+ *   model            string
+ *   traceId          string
+ *   dryRun           boolean
+ *   batchIndex?      number
+ *   totalBatches?    number
+ *
+ * Response:
+ *   200  MigrateResolveResponse (see type below)
+ *   400  { error: string }   — validation failure
+ *   403  { error: string }   — no rules matched source or target
  */
 import { NextRequest, NextResponse } from 'next/server';
-import { createRouter } from '@/lib/router';
-import { getServerCredentials, getServerRules } from '@/lib/server/credentialStore';
+import { createRouterFromStore } from '@datacules/agent-identity';
+import { getServerStore, getServerRules } from '@/lib/server/credentialStore';
 import type { MigrationContext, MigrationPhase, SupportedProvider } from '@/lib/types';
 
-// ─── Request / Response shapes ────────────────────────────────────────────────
+// ─── Request / Response types ─────────────────────────────────────────────────
 
 interface MigrateResolveRequest {
-  migrationId: string;
-  phase: MigrationPhase;
+  migrationId:      string;
+  phase:            MigrationPhase;
   sourceResourceId: string;
   targetResourceId: string;
-  userId: string;
-  provider: SupportedProvider;
-  model: string;
-  traceId: string;
-  dryRun: boolean;
-  batchIndex?: number;
-  totalBatches?: number;
+  userId:           string;
+  provider:         SupportedProvider;
+  model:            string;
+  traceId:          string;
+  dryRun:           boolean;
+  batchIndex?:      number;
+  totalBatches?:    number;
 }
 
 interface MigrateResolveResponse {
-  migrationId: string;
-  phase: MigrationPhase;
-  /** resolvedFor value of the source credential */
-  sourceResolvedFor: string;
-  /** resolvedFor value of the target credential */
-  targetResolvedFor: string;
-  dryRun: boolean;
-  /** ISO 8601 — earliest expiry of the two credentials; undefined if neither expires */
-  expiresAt?: string;
+  migrationId:        string;
+  phase:              MigrationPhase;
+  sourceCredentialId: string;
+  sourceResolvedFor:  string;
+  targetCredentialId: string;
+  targetResolvedFor:  string;
+  dryRun:             boolean;
+  /** ISO 8601 — earliest expiry across both resolved credentials */
+  expiresAt?:         string;
 }
 
-const VALID_PHASES: MigrationPhase[] = ['dry-run', 'extract', 'transform', 'load', 'verify', 'rollback'];
+const VALID_PHASES: MigrationPhase[] = [
+  'dry-run', 'extract', 'transform', 'load', 'verify', 'rollback',
+];
 
 // ─── Route handler ────────────────────────────────────────────────────────────
 
@@ -61,14 +79,17 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
   }
 
-  // Validate required fields
+  // Field-level validation — migrationId and phase are always required
   const requiredFields: (keyof MigrateResolveRequest)[] = [
     'migrationId', 'phase', 'sourceResourceId', 'targetResourceId',
     'userId', 'provider', 'model', 'traceId',
   ];
   for (const field of requiredFields) {
     if (body[field] === undefined || body[field] === null || body[field] === '') {
-      return NextResponse.json({ error: `Missing required field: ${field}` }, { status: 400 });
+      return NextResponse.json(
+        { error: `Missing required field: ${field}` },
+        { status: 400 }
+      );
     }
   }
 
@@ -79,35 +100,38 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // Build MigrationContext
+  // Build a full MigrationContext from the request fields.
+  // action is derived from phase: dry-run / extract / transform / verify → read;
+  // load / rollback → write (the router enforces readOnly rules independently).
   const ctx: MigrationContext = {
-    userId: body.userId,
-    resourceId: body.sourceResourceId, // router.resolvePair overrides this per credential
-    resourceKind: 'shared',            // migrations operate on shared/service resources
-    provider: body.provider,
-    model: body.model,
-    action: body.phase === 'dry-run' ? 'read' : body.phase === 'load' || body.phase === 'rollback' ? 'write' : 'read',
-    traceId: body.traceId,
-    requestedAt: new Date().toISOString(),
-    migrationId: body.migrationId,
-    phase: body.phase,
+    userId:           body.userId,
+    resourceId:       body.sourceResourceId, // overridden per-credential in resolvePairAsync
+    resourceKind:     'shared',              // migrations operate on shared / service resources
+    provider:         body.provider,
+    model:            body.model,
+    action:           (body.phase === 'load' || body.phase === 'rollback') ? 'write' : 'read',
+    traceId:          body.traceId,
+    requestedAt:      new Date().toISOString(),
+    migrationId:      body.migrationId,
+    phase:            body.phase,
     sourceResourceId: body.sourceResourceId,
     targetResourceId: body.targetResourceId,
-    dryRun: body.dryRun ?? false,
-    batchIndex: body.batchIndex,
-    totalBatches: body.totalBatches,
+    dryRun:           body.dryRun ?? false,
+    batchIndex:       body.batchIndex,
+    totalBatches:     body.totalBatches,
   };
 
-  const credentials = await getServerCredentials();
-  const rules = await getServerRules();
-  const router = createRouter(credentials, rules);
-
-  const pair = router.resolvePair(ctx);
+  // Resolve both credentials in parallel using the configured cloud store.
+  const store  = await getServerStore();
+  const rules  = await getServerRules();
+  const router = createRouterFromStore(store, rules);
+  const pair   = await router.resolvePairAsync(ctx);
 
   if (!pair) {
     return NextResponse.json(
       {
-        error: 'Could not resolve credentials for this migration context. ' +
+        error:
+          'Could not resolve credentials for this migration context. ' +
           'Check that routing rules exist for both sourceResourceId and targetResourceId ' +
           `with phase "${body.phase}" and provider "${body.provider}".`,
       },
@@ -116,12 +140,14 @@ export async function POST(req: NextRequest) {
   }
 
   const response: MigrateResolveResponse = {
-    migrationId: pair.migrationId,
-    phase: body.phase,
-    sourceResolvedFor: pair.source.resolvedFor,
-    targetResolvedFor: pair.target.resolvedFor,
-    dryRun: ctx.dryRun,
-    expiresAt: pair.expiresAt,
+    migrationId:        pair.migrationId,
+    phase:              body.phase,
+    sourceCredentialId: pair.source.credentialId,
+    sourceResolvedFor:  pair.source.resolvedFor,
+    targetCredentialId: pair.target.credentialId,
+    targetResolvedFor:  pair.target.resolvedFor,
+    dryRun:             ctx.dryRun,
+    expiresAt:          pair.expiresAt,
   };
 
   return NextResponse.json(response);

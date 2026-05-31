@@ -19,16 +19,15 @@
     "build": "tsc -p tsconfig.build.json && tsc -p tsconfig.cjs.json",
     "type-check": "tsc --noEmit"
   },
-  "dependencies": {
-    "@datacules/agent-identity": "*"
-  },
   "peerDependencies": {
+    "@datacules/agent-identity": "^0.5.0",
     "@spiffe/spiffe-workload-api": "^1.0.0"
   },
   "peerDependenciesMeta": {
     "@spiffe/spiffe-workload-api": { "optional": true }
   },
   "devDependencies": {
+    "@datacules/agent-identity": "*",
     "typescript": "^5"
   },
   "license": "MIT",

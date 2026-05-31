@@ -1,15 +1,22 @@
 /**
- * POST /api/resolve — updated to use Zod validation (suggestion #7).
+ * POST /api/resolve
  *
- * Replaces the manual field-by-field validation loop with a single
- * AgentRequestContextSchema.safeParse() call. Error messages now include
- * the exact field path and constraint that failed, not just the field name.
+ * Server-side credential resolution. Validates the request with Zod,
+ * resolves via the configured CredentialStore (Vault / AWS / Azure / Memory),
+ * and returns safe metadata — never the raw credential secret.
+ *
+ * The store backend is selected by CREDENTIAL_STORE_TYPE; see
+ * src/lib/server/credentialStore.ts for full configuration reference.
+ *
+ * Response:
+ *   200  { ok: true, credentialId, resolvedFor, expiresAt? }
+ *   400  { error: ZodFlattenedError }   — request schema validation failed
+ *   403  { error: string }              — no rule matched / credential expired
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { createRouterFromStore } from '@datacules/agent-identity';
 import { AgentRequestContextSchema } from '@datacules/agent-identity/schemas';
-import { getServerCredentials, getServerRules } from '@/lib/server/credentialStore';
-import { MemoryCredentialStore } from '@datacules/agent-identity';
+import { getServerStore, getServerRules } from '@/lib/server/credentialStore';
 
 export async function POST(req: NextRequest) {
   let body: unknown;
@@ -28,11 +35,17 @@ export async function POST(req: NextRequest) {
   }
 
   const ctx = parsed.data;
-  const credentials = await getServerCredentials();
-  const rules = await getServerRules();
-  const store = new MemoryCredentialStore(credentials);
+
+  // getServerStore() returns the configured cloud store (Vault / AWS / Azure)
+  // or MemoryCredentialStore when no production store is configured.
+  const store  = await getServerStore();
+  const rules  = await getServerRules();
   const router = createRouterFromStore(store, rules);
-  const resolved = router.resolve(ctx);
+
+  // resolveAsync works with all CredentialStore implementations (sync + async),
+  // and also applies approval gates, budget enforcement, and attestation signing
+  // when those features are configured via RouterConfig.
+  const resolved = await router.resolveAsync(ctx);
 
   if (!resolved) {
     return NextResponse.json(
@@ -41,5 +54,11 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  return NextResponse.json({ ok: true, resolvedFor: resolved.resolvedFor });
+  // Return safe metadata only — never the raw credential ref or secret.
+  return NextResponse.json({
+    ok: true,
+    credentialId: resolved.credentialId,
+    resolvedFor:  resolved.resolvedFor,
+    expiresAt:    resolved.expiresAt,
+  });
 }
