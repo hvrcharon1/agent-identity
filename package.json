@@ -19,6 +19,7 @@
     "packages/integrations/otel",
     "packages/integrations/anomaly",
     "packages/integrations/compliance",
+    "packages/integrations/token-exchange",
     "packages/python-sdk"
   ],
   "scripts": {

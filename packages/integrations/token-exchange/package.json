@@ -1,0 +1,49 @@
+{
+  "name": "@datacules/agent-identity-token-exchange",
+  "version": "0.1.0",
+  "private": false,
+  "description": "RFC 8693 OAuth 2.0 Token Exchange CredentialStore for @datacules/agent-identity — exchanges user access tokens for scoped downstream tokens at any OAuth 2.0 AS",
+  "author": "Datacules LLC",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/hvrcharon1/agent-identity.git",
+    "directory": "packages/integrations/token-exchange"
+  },
+  "main": "./dist/cjs/index.js",
+  "module": "./dist/esm/index.js",
+  "types": "./dist/types/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/esm/index.js",
+      "require": "./dist/cjs/index.js",
+      "types": "./dist/types/index.d.ts"
+    }
+  },
+  "files": ["dist", "README.md"],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json && tsc -p tsconfig.cjs.json",
+    "type-check": "tsc --noEmit",
+    "lint": "eslint src --ext .ts"
+  },
+  "devDependencies": {
+    "@datacules/agent-identity": "*",
+    "@types/node": "^20",
+    "typescript": "^5",
+    "vitest": "^1.6.0"
+  },
+  "peerDependencies": {
+    "@datacules/agent-identity": "^0.5.0"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "keywords": [
+    "oauth",
+    "token-exchange",
+    "rfc8693",
+    "agent-identity",
+    "credential",
+    "datacules"
+  ]
+}

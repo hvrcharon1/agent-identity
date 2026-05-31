@@ -22,7 +22,8 @@
       "@datacules/agent-identity-anomaly": ["./packages/integrations/anomaly/src/index.ts"],
       "@datacules/agent-identity-store-vault": ["./packages/stores/vault/src/index.ts"],
       "@datacules/agent-identity-store-aws": ["./packages/stores/aws/src/index.ts"],
-      "@datacules/agent-identity-store-azure": ["./packages/stores/azure/src/index.ts"]
+      "@datacules/agent-identity-store-azure": ["./packages/stores/azure/src/index.ts"],
+      "@datacules/agent-identity-token-exchange": ["./packages/integrations/token-exchange/src/index.ts"]
     }
   },
   "include": ["next-env.d.ts", "src/**/*.ts", "src/**/*.tsx", ".next/types/**/*.ts"],

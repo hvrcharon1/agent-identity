@@ -30,15 +30,17 @@ export default defineConfig({
       '@': path.resolve(__dirname, './src'),
       // Resolve workspace package imports to source during vitest runs
       // so tests don't require a prior `npm run build:packages`.
-      '@datacules/agent-identity':             path.resolve(__dirname, './packages/core/src/index.ts'),
-      '@datacules/agent-identity/schemas':     path.resolve(__dirname, './packages/core/src/schemas.ts'),
-      '@datacules/agent-identity/react':       path.resolve(__dirname, './packages/core/src/react/index.ts'),
-      '@datacules/agent-identity-anomaly':     path.resolve(__dirname, './packages/integrations/anomaly/src/index.ts'),
+      '@datacules/agent-identity':              path.resolve(__dirname, './packages/core/src/index.ts'),
+      '@datacules/agent-identity/schemas':      path.resolve(__dirname, './packages/core/src/schemas.ts'),
+      '@datacules/agent-identity/react':        path.resolve(__dirname, './packages/core/src/react/index.ts'),
+      '@datacules/agent-identity-anomaly':      path.resolve(__dirname, './packages/integrations/anomaly/src/index.ts'),
       // Cloud store packages — resolved to source so tests and credentialStore.ts
       // can import them without a prior build step.
-      '@datacules/agent-identity-store-vault': path.resolve(__dirname, './packages/stores/vault/src/index.ts'),
-      '@datacules/agent-identity-store-aws':   path.resolve(__dirname, './packages/stores/aws/src/index.ts'),
-      '@datacules/agent-identity-store-azure': path.resolve(__dirname, './packages/stores/azure/src/index.ts'),
+      '@datacules/agent-identity-store-vault':  path.resolve(__dirname, './packages/stores/vault/src/index.ts'),
+      '@datacules/agent-identity-store-aws':    path.resolve(__dirname, './packages/stores/aws/src/index.ts'),
+      '@datacules/agent-identity-store-azure':  path.resolve(__dirname, './packages/stores/azure/src/index.ts'),
+      // Token exchange integration — resolved to source
+      '@datacules/agent-identity-token-exchange': path.resolve(__dirname, './packages/integrations/token-exchange/src/index.ts'),
     },
   },
 });
