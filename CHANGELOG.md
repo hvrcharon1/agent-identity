@@ -10,6 +10,38 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Added
 
+**CI — Windows OS test coverage** (`.github/workflows/ci.yml`)
+
+Two new GitHub Actions jobs extend the pipeline from 6 to 8 jobs,
+running the full test suite and Next.js application on `windows-latest`
+in addition to the existing `ubuntu-latest` coverage:
+
+- **`test-windows`** (`Unit tests (Windows)`) — runs all 352 Vitest cases
+  on `windows-latest` using `shell: bash` (Git Bash) throughout, keeping
+  commands identical to the Linux `test` job. Runs in parallel with the
+  Linux unit test job.
+
+- **`smoke-windows`** (`Build + smoke test (Windows)`) — full Next.js
+  production build and HTTP smoke test on `windows-latest`. Restores the
+  OS-agnostic `core-dist` artifact built by `build-packages`, runs
+  `npm run build`, then starts `npx next start --port 3000` in the
+  background within a single bash step and polls `localhost:3000` via
+  `curl` for up to 90 s. Asserts HTTP 200 and that the response body
+  contains the `agent` content marker. Gates on both Linux and Windows
+  unit tests passing.
+
+The `build-and-smoke` (Linux) smoke job now also lists `test-windows`
+in its `needs` array, so both platforms' unit tests must be green before
+either smoke job runs. Job display names updated: `Unit tests (Node)` →
+`Unit tests (Linux)` and `Build + smoke test` → `Build + smoke test (Linux)`
+for clarity in the GitHub Actions summary panel.
+
+---
+
+## [0.7.0] — 2026-06-02
+
+### Added
+
 **`packages/core/src/router.test.ts` — expanded from 14 to 35 cases (+21)**
 
 Ten new describe groups fill all previously uncovered `CredentialRouter` code paths:
