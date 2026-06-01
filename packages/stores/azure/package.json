@@ -23,14 +23,11 @@
     "@azure/identity": "^4.3.0"
   },
   "peerDependencies": {
-    "@datacules/agent-identity": "^0.5.0"
+    "@datacules/agent-identity": "^0.6.0"
   },
   "devDependencies": {
     "@datacules/agent-identity": "*",
     "typescript": "^5"
   },
-  "files": [
-    "dist",
-    "src"
-  ]
+  "files": ["dist", "src"]
 }

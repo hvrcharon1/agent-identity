@@ -4,11 +4,9 @@
   "private": true,
   "description": "agent-identity example: LangChain agent with credential routing",
   "type": "module",
-  "scripts": {
-    "dev": "node index.js"
-  },
+  "scripts": { "dev": "node index.js" },
   "dependencies": {
-    "@datacules/agent-identity": "^0.5.0",
+    "@datacules/agent-identity": "^0.6.0",
     "@datacules/agent-identity-langchain": "^0.2.0",
     "@datacules/agent-identity-audit": "^0.2.0"
   }
