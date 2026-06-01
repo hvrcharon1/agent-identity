@@ -8,6 +8,46 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added
+
+**`packages/core/src/router.test.ts` — expanded from 14 to 35 cases (+21)**
+
+Ten new describe groups fill all previously uncovered `CredentialRouter` code paths:
+
+- **Canary routing** (4 cases) — `Math.random`-seeded tests confirm that `canaryWeight: 0`
+  always returns the primary credential, `canaryWeight: 100` always returns the canary,
+  and `canaryWeight: 50` splits correctly at the boundary. Both `credentialId` and
+  `isCanary` are asserted on every path.
+- **Expiry enforcement** (3 cases) — expired credential (`expiresAt` 1 minute ago) returns
+  null; future expiry resolves; absent `expiresAt` resolves (no expiry check fires).
+- **`readOnly` scope enforcement** (2 cases) — `readOnly: true` with scope `'read:write'`
+  (includes 'read') resolves; scope `'write'` (no 'read') returns null.
+- **Audit logger** (1 case) — `logger.log()` called exactly once; entry fields
+  (`credentialId`, `userId`, `action`, `traceId`) match the context and resolution.
+- **Budget enforcer** (2 cases) — `allowed: true` resolves and `check()` is called;
+  `allowed: false` returns null and `check()` is still called once.
+- **Approval gate** (3 cases) — `'approved'` resolves to `cred-linear`, `'rejected'`
+  returns null, `'break_glass'` resolves (emergency override). All paths verify
+  `request()` is called exactly once.
+- **Attestation signer** (2 cases) — `attestationSigner` configured: `credentialAttestation`
+  is a defined string and `sign()` is called once; no signer: `credentialAttestation`
+  is `undefined`.
+- **`matchSpiffeId` rule matching** (2 cases) — context SPIFFE ID equal to
+  `rule.matchSpiffeId` resolves to the expected credential; a different SPIFFE ID returns null.
+- **`isSyncCapable` guard** (1 case) — calling `resolve()` on an async-only store (no
+  `findByRefSync` method) returns null and emits a `console.warn` containing
+  `'findByRefSync'`.
+- **`createRouterWithConfig` factory** (1 case) — attestation signer and logger both
+  configured simultaneously; a single `resolveAsync()` call fires both `sign()` and
+  `log()` exactly once.
+
+All mocks use `vi.fn()` (Vitest). `ApprovalManager` and `BudgetEnforcer` are mocked
+via `as unknown as T` — no live approval servers, budget stores, or token endpoints
+required. `Math.random` is spied on and restored after each canary test via
+`vi.restoreAllMocks()`.
+
+**Total test coverage: 352 cases across 17 packages** (was 331).
+
 ---
 
 ## [0.7.0] — 2026-06-02

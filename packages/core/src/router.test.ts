@@ -1,12 +1,29 @@
 /**
- * router.test.ts — adds resolvePairAsync() coverage to the existing suite.
+ * router.test.ts — comprehensive coverage for CredentialRouter.
  *
- * The original tests (sync resolve, rule matching, pending credential) are
- * preserved unchanged. New describe blocks are appended at the end.
+ * Groups:
+ *  1. Sync resolve                            (3 cases — original)
+ *  2. Pending credential                      (1 case  — original)
+ *  3. resolveAsync — basic                    (2 cases — original)
+ *  4. resolvePairAsync — migration pair       (8 cases — original)
+ *  5. Canary routing                          (4 cases — new)
+ *  6. Expiry enforcement                      (3 cases — new)
+ *  7. readOnly scope enforcement              (2 cases — new)
+ *  8. Audit logger                            (1 case  — new)
+ *  9. Budget enforcer                         (2 cases — new)
+ * 10. Approval gate                           (3 cases — new)
+ * 11. Attestation signer                      (2 cases — new)
+ * 12. matchSpiffeId rule matching             (2 cases — new)
+ * 13. isSyncCapable guard                     (1 case  — new)
+ * 14. createRouterWithConfig factory          (1 case  — new)
+ *
+ * Total: 35 test cases (14 original + 21 new)
  */
-import { describe, it, expect, beforeEach } from 'vitest';
-import { CredentialRouter, MemoryCredentialStore, createRouter } from './router';
-import type { Credential, RoutingRule, MigrationContext, AgentRequestContext } from './types';
+import { describe, it, expect, vi } from 'vitest';
+import { CredentialRouter, MemoryCredentialStore, createRouter, createRouterWithConfig } from './router';
+import type { Credential, RoutingRule, MigrationContext, AgentRequestContext, AttestationSigner, ApprovalPolicy } from './types';
+import type { ApprovalManager } from './approval';
+import type { BudgetEnforcer } from './budget';
 
 // ─── Shared fixtures ──────────────────────────────────────────────────────────
 
@@ -244,5 +261,429 @@ describe('CredentialRouter — resolvePairAsync', () => {
     expect(pair).not.toBeNull();
     expect(pair?.source.credentialId).toBe('cred-source');
     expect(pair?.target.credentialId).toBe('cred-target');
+  });
+});
+
+// ─── CredentialRouter — canary routing ───────────────────────────────────────
+
+describe('CredentialRouter — canary routing', () => {
+  const canaryCredentials: Credential[] = [
+    {
+      id: 'cred-primary',
+      kind: 'fixed',
+      name: 'Primary API',
+      scope: 'read:write',
+      status: 'active',
+      ref: 'primary-api-slot',
+    },
+    {
+      id: 'cred-canary',
+      kind: 'fixed',
+      name: 'Canary API',
+      scope: 'read:write',
+      status: 'active',
+      ref: 'canary-api-slot',
+    },
+  ];
+
+  const canaryCtx: AgentRequestContext = {
+    userId: 'svc-canary-test',
+    resourceId: 'api-gateway',
+    resourceKind: 'shared',
+    provider: 'openai',
+    model: 'gpt-4o',
+    action: 'call',
+    traceId: 'trace-canary-001',
+    requestedAt: new Date().toISOString(),
+  };
+
+  it('routes to canary credential when Math.random falls below canaryWeight', async () => {
+    vi.spyOn(Math, 'random').mockReturnValueOnce(0.3); // 30 < 50 → canary
+    const rule: RoutingRule = {
+      id: 'rule-canary-50',
+      description: 'Canary split at 50%',
+      credentialRef: 'primary-api-slot',
+      credentialKind: 'fixed',
+      priority: 10,
+      canaryRef: 'canary-api-slot',
+      canaryWeight: 50,
+    };
+    const router = createRouter(canaryCredentials, [rule]);
+    const resolved = await router.resolveAsync(canaryCtx);
+    expect(resolved?.credentialId).toBe('cred-canary');
+    expect(resolved?.isCanary).toBe(true);
+    vi.restoreAllMocks();
+  });
+
+  it('routes to primary credential when Math.random is at or above canaryWeight', async () => {
+    vi.spyOn(Math, 'random').mockReturnValueOnce(0.7); // 70 >= 50 → primary
+    const rule: RoutingRule = {
+      id: 'rule-canary-50',
+      description: 'Canary split at 50%',
+      credentialRef: 'primary-api-slot',
+      credentialKind: 'fixed',
+      priority: 10,
+      canaryRef: 'canary-api-slot',
+      canaryWeight: 50,
+    };
+    const router = createRouter(canaryCredentials, [rule]);
+    const resolved = await router.resolveAsync(canaryCtx);
+    expect(resolved?.credentialId).toBe('cred-primary');
+    expect(resolved?.isCanary).toBe(false);
+    vi.restoreAllMocks();
+  });
+
+  it('always routes to primary when canaryWeight is 0', async () => {
+    const rule: RoutingRule = {
+      id: 'rule-no-canary',
+      description: 'Canary disabled (weight 0)',
+      credentialRef: 'primary-api-slot',
+      credentialKind: 'fixed',
+      priority: 10,
+      canaryRef: 'canary-api-slot',
+      canaryWeight: 0,
+    };
+    const router = createRouter(canaryCredentials, [rule]);
+    const resolved = await router.resolveAsync(canaryCtx);
+    expect(resolved?.credentialId).toBe('cred-primary');
+    expect(resolved?.isCanary).toBe(false);
+  });
+
+  it('always routes to canary when canaryWeight is 100', async () => {
+    vi.spyOn(Math, 'random').mockReturnValueOnce(0.99); // 99 < 100 → canary
+    const rule: RoutingRule = {
+      id: 'rule-full-canary',
+      description: 'Full canary rollout (weight 100)',
+      credentialRef: 'primary-api-slot',
+      credentialKind: 'fixed',
+      priority: 10,
+      canaryRef: 'canary-api-slot',
+      canaryWeight: 100,
+    };
+    const router = createRouter(canaryCredentials, [rule]);
+    const resolved = await router.resolveAsync(canaryCtx);
+    expect(resolved?.credentialId).toBe('cred-canary');
+    expect(resolved?.isCanary).toBe(true);
+    vi.restoreAllMocks();
+  });
+});
+
+// ─── CredentialRouter — expiry enforcement ────────────────────────────────────
+
+describe('CredentialRouter — expiry enforcement', () => {
+  const expiryRule: RoutingRule = {
+    id: 'rule-expiry-test',
+    description: 'Single-credential expiry test rule',
+    credentialRef: 'expiry-test-slot',
+    credentialKind: 'fixed',
+    priority: 10,
+  };
+
+  it('returns null when the matched credential has already expired', async () => {
+    const expiredCreds: Credential[] = [{
+      id: 'cred-expired',
+      kind: 'fixed',
+      name: 'Expired Key',
+      scope: 'read:write',
+      status: 'active',
+      ref: 'expiry-test-slot',
+      expiresAt: new Date(Date.now() - 60_000).toISOString(), // 1 minute ago
+    }];
+    const router = createRouter(expiredCreds, [expiryRule]);
+    expect(await router.resolveAsync(baseCtx)).toBeNull();
+  });
+
+  it('resolves successfully when credential expiry is in the future', async () => {
+    const activeCreds: Credential[] = [{
+      id: 'cred-future-expiry',
+      kind: 'fixed',
+      name: 'Valid Key',
+      scope: 'read:write',
+      status: 'active',
+      ref: 'expiry-test-slot',
+      expiresAt: new Date(Date.now() + 3600_000).toISOString(), // 1 hour from now
+    }];
+    const router = createRouter(activeCreds, [expiryRule]);
+    const resolved = await router.resolveAsync(baseCtx);
+    expect(resolved).not.toBeNull();
+    expect(resolved?.credentialId).toBe('cred-future-expiry');
+  });
+
+  it('resolves successfully when credential has no expiresAt set', async () => {
+    const permanentCreds: Credential[] = [{
+      id: 'cred-permanent',
+      kind: 'fixed',
+      name: 'Permanent Key',
+      scope: 'read:write',
+      status: 'active',
+      ref: 'expiry-test-slot',
+      // expiresAt intentionally omitted — never expires
+    }];
+    const router = createRouter(permanentCreds, [expiryRule]);
+    const resolved = await router.resolveAsync(baseCtx);
+    expect(resolved).not.toBeNull();
+    expect(resolved?.credentialId).toBe('cred-permanent');
+  });
+});
+
+// ─── CredentialRouter — readOnly scope enforcement ───────────────────────────
+
+describe('CredentialRouter — readOnly scope enforcement', () => {
+  const readOnlyRule: RoutingRule = {
+    id: 'rule-readonly-test',
+    description: 'readOnly gate — credential must contain "read" in scope',
+    credentialRef: 'scope-test-slot',
+    credentialKind: 'fixed',
+    priority: 10,
+    readOnly: true,
+  };
+
+  it('resolves when readOnly is true and credential scope contains "read"', async () => {
+    const creds: Credential[] = [{
+      id: 'cred-read-write',
+      kind: 'fixed',
+      name: 'Read-Write Key',
+      scope: 'read:write',
+      status: 'active',
+      ref: 'scope-test-slot',
+    }];
+    const router = createRouter(creds, [readOnlyRule]);
+    const resolved = await router.resolveAsync(baseCtx);
+    expect(resolved).not.toBeNull();
+    expect(resolved?.credentialId).toBe('cred-read-write');
+  });
+
+  it('returns null when readOnly is true but credential scope does not contain "read"', async () => {
+    const creds: Credential[] = [{
+      id: 'cred-write-only',
+      kind: 'fixed',
+      name: 'Write-Only Key',
+      scope: 'write',
+      status: 'active',
+      ref: 'scope-test-slot',
+    }];
+    const router = createRouter(creds, [readOnlyRule]);
+    const resolved = await router.resolveAsync(baseCtx);
+    expect(resolved).toBeNull();
+  });
+});
+
+// ─── CredentialRouter — audit logger ─────────────────────────────────────────
+
+describe('CredentialRouter — audit logger', () => {
+  it('calls logger.log() with the correct audit entry fields on resolveAsync()', async () => {
+    const logSpy = vi.fn();
+    const router = createRouterWithConfig({
+      store: new MemoryCredentialStore(credentials),
+      rules,
+      logger: { log: logSpy },
+    });
+    const resolved = await router.resolveAsync(baseCtx);
+    expect(resolved).not.toBeNull();
+    expect(logSpy).toHaveBeenCalledOnce();
+    const entry = logSpy.mock.calls[0]?.[0];
+    expect(entry.credentialId).toBe(resolved?.credentialId);
+    expect(entry.userId).toBe(baseCtx.userId);
+    expect(entry.action).toBe(baseCtx.action);
+    expect(entry.traceId).toBe(baseCtx.traceId);
+  });
+});
+
+// ─── CredentialRouter — budget enforcer ──────────────────────────────────────
+
+describe('CredentialRouter — budget enforcer', () => {
+  it('resolves credential when budget check returns allowed: true', async () => {
+    const mockBudgetEnforcer = {
+      check: vi.fn().mockResolvedValue({ allowed: true }),
+    } as unknown as BudgetEnforcer;
+    const router = createRouterWithConfig({
+      store: new MemoryCredentialStore(credentials),
+      rules,
+      budgetEnforcer: mockBudgetEnforcer,
+    });
+    const resolved = await router.resolveAsync(baseCtx);
+    expect(resolved).not.toBeNull();
+    expect(mockBudgetEnforcer.check).toHaveBeenCalledOnce();
+  });
+
+  it('returns null when budget check returns allowed: false', async () => {
+    const mockBudgetEnforcer = {
+      check: vi.fn().mockResolvedValue({ allowed: false, reason: 'hourly_limit' }),
+    } as unknown as BudgetEnforcer;
+    const router = createRouterWithConfig({
+      store: new MemoryCredentialStore(credentials),
+      rules,
+      budgetEnforcer: mockBudgetEnforcer,
+    });
+    const resolved = await router.resolveAsync(baseCtx);
+    expect(resolved).toBeNull();
+    expect(mockBudgetEnforcer.check).toHaveBeenCalledOnce();
+  });
+});
+
+// ─── CredentialRouter — approval gate ────────────────────────────────────────
+
+describe('CredentialRouter — approval gate', () => {
+  const approvalPolicy: ApprovalPolicy = {
+    requiredApprovers: 1,
+    approvers: [{ kind: 'slack', target: '#credential-approvals' }],
+  };
+
+  const approvalRule: RoutingRule = {
+    id: 'rule-approval-gate',
+    description: 'High-risk operation — requires human approval before resolving',
+    credentialRef: 'linear-service-account-slot',
+    credentialKind: 'fixed',
+    priority: 50,
+    approval: approvalPolicy,
+  };
+
+  it('resolves credential when approval status is "approved"', async () => {
+    const mockApprovalManager = {
+      request: vi.fn().mockResolvedValue('approved'),
+    } as unknown as ApprovalManager;
+    const router = createRouterWithConfig({
+      store: new MemoryCredentialStore(credentials),
+      rules: [approvalRule],
+      approvalManager: mockApprovalManager,
+    });
+    const resolved = await router.resolveAsync(baseCtx);
+    expect(resolved).not.toBeNull();
+    expect(resolved?.credentialId).toBe('cred-linear');
+    expect(mockApprovalManager.request).toHaveBeenCalledOnce();
+  });
+
+  it('returns null when approval status is "rejected"', async () => {
+    const mockApprovalManager = {
+      request: vi.fn().mockResolvedValue('rejected'),
+    } as unknown as ApprovalManager;
+    const router = createRouterWithConfig({
+      store: new MemoryCredentialStore(credentials),
+      rules: [approvalRule],
+      approvalManager: mockApprovalManager,
+    });
+    const resolved = await router.resolveAsync(baseCtx);
+    expect(resolved).toBeNull();
+    expect(mockApprovalManager.request).toHaveBeenCalledOnce();
+  });
+
+  it('resolves credential when approval status is "break_glass" (emergency override)', async () => {
+    const mockApprovalManager = {
+      request: vi.fn().mockResolvedValue('break_glass'),
+    } as unknown as ApprovalManager;
+    const router = createRouterWithConfig({
+      store: new MemoryCredentialStore(credentials),
+      rules: [approvalRule],
+      approvalManager: mockApprovalManager,
+    });
+    const resolved = await router.resolveAsync(baseCtx);
+    expect(resolved).not.toBeNull();
+    expect(resolved?.credentialId).toBe('cred-linear');
+    expect(mockApprovalManager.request).toHaveBeenCalledOnce();
+  });
+});
+
+// ─── CredentialRouter — attestation signer ───────────────────────────────────
+
+describe('CredentialRouter — attestation signer', () => {
+  it('attaches credentialAttestation when attestationSigner is configured', async () => {
+    const mockSigner: AttestationSigner = {
+      sign: vi.fn().mockResolvedValue('eyJhbGciOiJIUzI1NiJ9.mock-body.mock-sig'),
+      verify: vi.fn().mockResolvedValue({ credentialId: 'cred-alice' }),
+    };
+    const router = createRouterWithConfig({
+      store: new MemoryCredentialStore(credentials),
+      rules,
+      attestationSigner: mockSigner,
+    });
+    const resolved = await router.resolveAsync(baseCtx);
+    expect(resolved).not.toBeNull();
+    expect(resolved?.credentialAttestation).toBeDefined();
+    expect(typeof resolved?.credentialAttestation).toBe('string');
+    expect(mockSigner.sign).toHaveBeenCalledOnce();
+  });
+
+  it('leaves credentialAttestation undefined when no attestationSigner is configured', async () => {
+    const router = createRouter(credentials, rules);
+    const resolved = await router.resolveAsync(baseCtx);
+    expect(resolved).not.toBeNull();
+    expect(resolved?.credentialAttestation).toBeUndefined();
+  });
+});
+
+// ─── CredentialRouter — matchSpiffeId rule matching ──────────────────────────
+
+describe('CredentialRouter — matchSpiffeId rule matching', () => {
+  const spiffeRule: RoutingRule = {
+    id: 'rule-spiffe-restricted',
+    description: 'Restricted to a specific SPIFFE workload identity',
+    credentialRef: 'linear-service-account-slot',
+    credentialKind: 'fixed',
+    priority: 20,
+    matchSpiffeId: 'spiffe://datacules.com/workload/payment-processor',
+  };
+
+  it('matches rule when context spiffeId equals matchSpiffeId', async () => {
+    const router = createRouter(credentials, [spiffeRule]);
+    const resolved = await router.resolveAsync({
+      ...baseCtx,
+      spiffeId: 'spiffe://datacules.com/workload/payment-processor',
+    });
+    expect(resolved).not.toBeNull();
+    expect(resolved?.credentialId).toBe('cred-linear');
+  });
+
+  it('returns null when context spiffeId does not match matchSpiffeId', async () => {
+    const router = createRouter(credentials, [spiffeRule]);
+    const resolved = await router.resolveAsync({
+      ...baseCtx,
+      spiffeId: 'spiffe://datacules.com/workload/different-service',
+    });
+    expect(resolved).toBeNull();
+  });
+});
+
+// ─── CredentialRouter — isSyncCapable guard ──────────────────────────────────
+
+describe('CredentialRouter — isSyncCapable guard', () => {
+  it('warns and returns null when resolve() is called on an async-only store', () => {
+    const asyncOnlyStore = {
+      findByRef: async (ref: string) =>
+        credentials.find((c) => c.ref === ref && c.status === 'active') ?? null,
+      listActive: async () => credentials.filter((c) => c.status === 'active'),
+      listByKind: async (kind: Credential['kind']) =>
+        credentials.filter((c) => c.kind === kind),
+    };
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const router = new CredentialRouter({ store: asyncOnlyStore, rules });
+    const result = router.resolve(baseCtx);
+    expect(result).toBeNull();
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining('findByRefSync')
+    );
+    vi.restoreAllMocks();
+  });
+});
+
+// ─── createRouterWithConfig factory ──────────────────────────────────────────
+
+describe('createRouterWithConfig factory', () => {
+  it('wires attestationSigner and logger simultaneously via RouterConfig', async () => {
+    const logSpy = vi.fn();
+    const mockSigner: AttestationSigner = {
+      sign: vi.fn().mockResolvedValue('config-factory-jwt-token'),
+      verify: vi.fn().mockResolvedValue({}),
+    };
+    const router = createRouterWithConfig({
+      store: new MemoryCredentialStore(credentials),
+      rules,
+      logger: { log: logSpy },
+      attestationSigner: mockSigner,
+    });
+    const resolved = await router.resolveAsync(baseCtx);
+    expect(resolved).not.toBeNull();
+    expect(resolved?.credentialAttestation).toBeDefined();
+    expect(logSpy).toHaveBeenCalledOnce();
+    expect(mockSigner.sign).toHaveBeenCalledOnce();
   });
 });
