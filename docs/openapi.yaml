@@ -1,15 +1,19 @@
 openapi: 3.1.0
 info:
   title: agent-identity credential resolution API
-  version: 0.3.0
+  version: 0.6.0
   description: |
     Language-agnostic REST contract for resolving agent credentials.
     Any application (Python, Go, Ruby, Java) can POST to /api/resolve or
     /api/migrate/resolve. The server resolves the credential from an encrypted
     store and returns only safe metadata — never the raw secret.
 
-    v0.3.0 adds attestation, approval, budget, federation, and anomaly endpoints
-    that were introduced in the Phase 1–4 feature build.
+    v0.6.0 updates:
+      - MigrateResolveResponse: added sourceCredentialId + targetCredentialId
+        (both now required in the response, added in the PR #32 route rewrite)
+      - ResolveResponse: credentialId and expiresAt already present since v0.3.0
+      - TokenExchangeStore is a library (no new REST endpoints)
+      - All existing endpoint schemas remain backward-compatible
   contact:
     name: Datacules LLC
     url: https://github.com/hvrcharon1/agent-identity
@@ -24,7 +28,7 @@ servers:
 
 paths:
 
-  # ── Core resolution ─────────────────────────────────────────────────────────
+  # ── Core resolution ─────────────────────────────────────────────────────────────────────
 
   /api/resolve:
     post:
@@ -33,7 +37,8 @@ paths:
       description: |
         The caller sends an AgentRequestContext describing the current task.
         The server matches it against routing rules, resolves the credential
-        from the encrypted store, and returns only safe metadata.
+        from the configured store (Vault, AWS Secrets Manager, Azure Key Vault,
+        or in-memory), and returns only safe metadata.
         The raw secret never leaves the server.
       tags: [Core]
       requestBody:
@@ -87,6 +92,11 @@ paths:
         (read) and target (write) credentials upfront. Returns the earliest
         expiry of the two, so the agent knows when to refresh before the
         batch loop ends. One round-trip per phase, not per row.
+
+        As of v0.6.0 the response includes sourceCredentialId and
+        targetCredentialId in addition to the resolvedFor strings, enabling
+        downstream services to trace exactly which credentials were used
+        for each phase without a second lookup.
       requestBody:
         required: true
         content:
@@ -118,7 +128,7 @@ paths:
         '403':
           $ref: '#/components/responses/NoCredential'
 
-  # ── Attestation ──────────────────────────────────────────────────────────────
+  # ── Attestation ──────────────────────────────────────────────────────────────────────
 
   /api/attest:
     post:
@@ -176,7 +186,7 @@ paths:
         '400':
           $ref: '#/components/responses/BadRequest'
 
-  # ── Approvals ────────────────────────────────────────────────────────────────
+  # ── Approvals ──────────────────────────────────────────────────────────────────────
 
   /api/approve:
     post:
@@ -230,7 +240,7 @@ paths:
         '400':
           $ref: '#/components/responses/BadRequest'
 
-  # ── Budget ───────────────────────────────────────────────────────────────────
+  # ── Budget ─────────────────────────────────────────────────────────────────────────
 
   /api/budget:
     get:
@@ -264,7 +274,7 @@ paths:
         '400':
           $ref: '#/components/responses/BadRequest'
 
-  # ── Federation ───────────────────────────────────────────────────────────────
+  # ── Federation ─────────────────────────────────────────────────────────────────────
 
   /api/federation/issue:
     post:
@@ -308,7 +318,7 @@ paths:
         '400':
           $ref: '#/components/responses/BadRequest'
 
-  # ── Anomaly ──────────────────────────────────────────────────────────────────
+  # ── Anomaly ────────────────────────────────────────────────────────────────────────
 
   /api/anomaly:
     post:
@@ -359,7 +369,7 @@ paths:
 components:
   schemas:
 
-    # ── Core ──────────────────────────────────────────────────────────────────
+    # ── Core ────────────────────────────────────────────────────────────────────────
 
     AgentRequestContext:
       type: object
@@ -445,35 +455,60 @@ components:
           type: string
         credentialId:
           type: string
+          description: Stable credential identifier for audit correlation
         isCanary:
           type: boolean
-          description: True if the canary credential was selected
+          description: True if the canary credential was selected for this request
         expiresAt:
           type: string
           format: date-time
+          description: ISO 8601 expiry of the resolved credential, if applicable
         credentialAttestation:
           type: string
-          description: Signed JWT attestation (present only if AttestationSigner configured)
+          description: Signed JWT attestation (present only if AttestationSigner is configured)
 
     MigrateResolveResponse:
       type: object
-      required: [migrationId, phase, sourceResolvedFor, targetResolvedFor, dryRun]
+      required:
+        - migrationId
+        - phase
+        - sourceCredentialId
+        - sourceResolvedFor
+        - targetCredentialId
+        - targetResolvedFor
+        - dryRun
       properties:
         migrationId:
           type: string
         phase:
           $ref: '#/components/schemas/MigrationPhase'
+        sourceCredentialId:
+          type: string
+          description: >
+            Stable identifier of the source (read) credential. Added in v0.6.0
+            alongside targetCredentialId to allow downstream services and audit
+            systems to trace exactly which credential was used for each phase
+            without a second store lookup.
         sourceResolvedFor:
           type: string
+          description: userId or 'service' — who the source credential was resolved for
+        targetCredentialId:
+          type: string
+          description: >
+            Stable identifier of the target (write) credential. Added in v0.6.0.
         targetResolvedFor:
           type: string
+          description: userId or 'service' — who the target credential was resolved for
         dryRun:
           type: boolean
         expiresAt:
           type: string
           format: date-time
+          description: >
+            Earliest expiry across both resolved credentials. The migration job
+            should refresh before this timestamp to avoid mid-batch 401 errors.
 
-    # ── Attestation ───────────────────────────────────────────────────────────
+    # ── Attestation ─────────────────────────────────────────────────────────────────
 
     AttestVerifyRequest:
       type: object
@@ -505,7 +540,7 @@ components:
           type: string
           format: date-time
 
-    # ── Approvals ─────────────────────────────────────────────────────────────
+    # ── Approvals ──────────────────────────────────────────────────────────────────
 
     ApproveRequest:
       type: object
@@ -559,7 +594,7 @@ components:
           type: boolean
           enum: [true]
 
-    # ── Budget ────────────────────────────────────────────────────────────────
+    # ── Budget ───────────────────────────────────────────────────────────────────────
 
     BudgetResponse:
       type: object
@@ -601,7 +636,7 @@ components:
           type: string
           enum: [hourly, daily]
 
-    # ── Federation ────────────────────────────────────────────────────────────
+    # ── Federation ──────────────────────────────────────────────────────────────────
 
     FederationIssueResponse:
       type: object
@@ -649,7 +684,7 @@ components:
         trustDomain:
           type: string
 
-    # ── Anomaly ───────────────────────────────────────────────────────────────
+    # ── Anomaly ───────────────────────────────────────────────────────────────────────
 
     AnomalyObserveResponse:
       type: object
@@ -666,7 +701,7 @@ components:
             $ref: '#/components/schemas/AnomalyEvent'
         blocked:
           type: boolean
-          description: True if a block-policy anomaly prevented resolution
+          description: True if a block-policy anomaly prevented credential resolution
 
     AnomalyEvent:
       type: object
@@ -696,7 +731,7 @@ components:
           type: string
           format: date-time
 
-    # ── Shared ────────────────────────────────────────────────────────────────
+    # ── Shared ────────────────────────────────────────────────────────────────────────
 
     OkResponse:
       type: object

@@ -1,20 +1,21 @@
 'use client';
 
 import { useState } from 'react';
-import { IdentitiesTab } from '@/components/IdentitiesTab';
-import { PatternsTab } from '@/components/PatternsTab';
-import { CredentialsTab } from '@/components/CredentialsTab';
-import { DecisionTab } from '@/components/DecisionTab';
-import { MigrationTab } from '@/components/MigrationTab';
-import { AttestationTab } from '@/components/AttestationTab';
-import { CanaryTab } from '@/components/CanaryTab';
-import { ApprovalTab } from '@/components/ApprovalTab';
-import { BudgetTab } from '@/components/BudgetTab';
-import { FederationTab } from '@/components/FederationTab';
-import { AnomalyTab } from '@/components/AnomalyTab';
+import { IdentitiesTab }     from '@/components/IdentitiesTab';
+import { PatternsTab }       from '@/components/PatternsTab';
+import { CredentialsTab }    from '@/components/CredentialsTab';
+import { DecisionTab }       from '@/components/DecisionTab';
+import { MigrationTab }      from '@/components/MigrationTab';
+import { AttestationTab }    from '@/components/AttestationTab';
+import { CanaryTab }         from '@/components/CanaryTab';
+import { ApprovalTab }       from '@/components/ApprovalTab';
+import { BudgetTab }         from '@/components/BudgetTab';
+import { FederationTab }     from '@/components/FederationTab';
+import { AnomalyTab }        from '@/components/AnomalyTab';
+import { TokenExchangeTab }  from '@/components/TokenExchangeTab';
 import type { SupportedProvider } from '@/lib/types';
 
-// ─── Inline SVG tab icons ────────────────────────────────────────────
+// ─── Inline SVG tab icons ────────────────────────────────────────────────────────────────────
 function IconShield({ className }: { className?: string }) {
   return (
     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
@@ -111,29 +112,40 @@ function IconAlertTriangle({ className }: { className?: string }) {
     </svg>
   );
 }
+function IconRepeat({ className }: { className?: string }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
+      <path d="m17 2 4 4-4 4"/>
+      <path d="M3 11V9a4 4 0 0 1 4-4h14"/>
+      <path d="m7 22-4-4 4-4"/>
+      <path d="M21 13v2a4 4 0 0 1-4 4H3"/>
+    </svg>
+  );
+}
 
 const TABS = [
-  { id: 'identities',   label: 'Identity types',    Icon: IconShield         },
-  { id: 'patterns',     label: 'Auth patterns',      Icon: IconGitBranch      },
-  { id: 'credentials',  label: 'Credentials',        Icon: IconKey            },
-  { id: 'decide',       label: 'Decision helper',    Icon: IconHelpCircle     },
-  { id: 'migration',    label: 'Data migration',     Icon: IconArrowLeftRight  },
-  { id: 'attestation',  label: 'Attestation',        Icon: IconFingerprint    },
-  { id: 'canary',       label: 'Canary routing',     Icon: IconZap            },
-  { id: 'approval',     label: 'Approvals',          Icon: IconCheckCircle    },
-  { id: 'budget',       label: 'Budgets',            Icon: IconGauge          },
-  { id: 'federation',   label: 'Federation',         Icon: IconNetwork        },
-  { id: 'anomaly',      label: 'Anomaly',            Icon: IconAlertTriangle  },
+  { id: 'identities',     label: 'Identity types',    Icon: IconShield        },
+  { id: 'patterns',       label: 'Auth patterns',      Icon: IconGitBranch     },
+  { id: 'credentials',    label: 'Credentials',        Icon: IconKey           },
+  { id: 'decide',         label: 'Decision helper',    Icon: IconHelpCircle    },
+  { id: 'migration',      label: 'Data migration',     Icon: IconArrowLeftRight },
+  { id: 'attestation',    label: 'Attestation',        Icon: IconFingerprint   },
+  { id: 'canary',         label: 'Canary routing',     Icon: IconZap           },
+  { id: 'approval',       label: 'Approvals',          Icon: IconCheckCircle   },
+  { id: 'budget',         label: 'Budgets',            Icon: IconGauge         },
+  { id: 'federation',     label: 'Federation',         Icon: IconNetwork       },
+  { id: 'anomaly',        label: 'Anomaly',            Icon: IconAlertTriangle },
+  { id: 'token-exchange', label: 'Token exchange',     Icon: IconRepeat        },
 ] as const;
 
 type TabId = (typeof TABS)[number]['id'];
 
 const PROVIDERS: { id: SupportedProvider; label: string }[] = [
-  { id: 'openai',    label: 'OpenAI'              },
-  { id: 'anthropic', label: 'Anthropic'           },
-  { id: 'gemini',    label: 'Gemini'              },
-  { id: 'mistral',   label: 'Mistral'             },
-  { id: 'local',     label: 'Local / self-hosted'  },
+  { id: 'openai',    label: 'OpenAI'             },
+  { id: 'anthropic', label: 'Anthropic'          },
+  { id: 'gemini',    label: 'Gemini'             },
+  { id: 'mistral',   label: 'Mistral'            },
+  { id: 'local',     label: 'Local / self-hosted' },
 ];
 
 export default function Home() {
@@ -209,17 +221,18 @@ export default function Home() {
         </div>
 
         {/* Tab content */}
-        {activeTab === 'identities'  && <IdentitiesTab />}
-        {activeTab === 'patterns'    && <PatternsTab provider={activeProvider} />}
-        {activeTab === 'credentials' && <CredentialsTab provider={activeProvider} />}
-        {activeTab === 'decide'      && <DecisionTab />}
-        {activeTab === 'migration'   && <MigrationTab />}
-        {activeTab === 'attestation' && <AttestationTab />}
-        {activeTab === 'canary'      && <CanaryTab />}
-        {activeTab === 'approval'    && <ApprovalTab />}
-        {activeTab === 'budget'      && <BudgetTab />}
-        {activeTab === 'federation'  && <FederationTab />}
-        {activeTab === 'anomaly'     && <AnomalyTab />}
+        {activeTab === 'identities'     && <IdentitiesTab />}
+        {activeTab === 'patterns'       && <PatternsTab provider={activeProvider} />}
+        {activeTab === 'credentials'    && <CredentialsTab provider={activeProvider} />}
+        {activeTab === 'decide'         && <DecisionTab />}
+        {activeTab === 'migration'      && <MigrationTab />}
+        {activeTab === 'attestation'    && <AttestationTab />}
+        {activeTab === 'canary'         && <CanaryTab />}
+        {activeTab === 'approval'       && <ApprovalTab />}
+        {activeTab === 'budget'         && <BudgetTab />}
+        {activeTab === 'federation'     && <FederationTab />}
+        {activeTab === 'anomaly'        && <AnomalyTab />}
+        {activeTab === 'token-exchange' && <TokenExchangeTab />}
 
       </div>
     </main>

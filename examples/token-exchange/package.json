@@ -1,0 +1,15 @@
+{
+  "name": "example-token-exchange",
+  "version": "0.0.1",
+  "private": true,
+  "description": "agent-identity example: RFC 8693 OAuth 2.0 token exchange with Keycloak",
+  "type": "module",
+  "scripts": {
+    "dev": "node index.js"
+  },
+  "dependencies": {
+    "@datacules/agent-identity": "^0.6.0",
+    "@datacules/agent-identity-token-exchange": "^0.1.0",
+    "@datacules/agent-identity-audit": "^0.2.0"
+  }
+}
