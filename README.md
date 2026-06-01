@@ -669,7 +669,7 @@ npm install
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000). Twelve interactive tabs:
+Open [http://localhost:3000](http://localhost:3000). Seventeen interactive tabs:
 
 | Tab | Description |
 |-----|-------------|
@@ -685,6 +685,11 @@ Open [http://localhost:3000](http://localhost:3000). Twelve interactive tabs:
 | Federation | Cross-org identity chain builder, trust domain registry, chain verifier |
 | Anomaly | Live agent baseline table; anomaly event feed with severity badges; EWMA policy simulator |
 | Token exchange | RFC 8693 OAuth token exchange — interactive `findByRef()` simulator, cache state UI, AS switcher (Keycloak / Auth0 / Azure AD / Okta), generated TypeScript snippet |
+| Rotation | `CredentialRotationScheduler` demo — rotation-age progress bars, `runOnce()` simulator, audit event reference |
+| OTEL tracing | Live span emitter — `withOtel()` wrapper; span schema, attribute grid, backend compatibility |
+| JIT provisioning | `DynamicCredentialStore` demo — provisioner selector (Vault / AWS / Azure), TTL countdown, cache-state flow |
+| SPIFFE / SPIRE | `SpiffeCredentialStore` demo — trust domain registry, SVID certificate panel, `matchSpiffeId` rule matcher |
+| Compliance | `ComplianceReportGenerator` + `HashChainAuditLogger` — SOC 2 / GDPR / HIPAA report generator, hash chain visualizer, CLI reference |
 
 ---
 
@@ -749,6 +754,9 @@ These two patterns, plus **hybrid / context-switched** (both in one workflow) an
 - 🛡️ **Detects anomalous credential usage** with EWMA behavioral baselines
 - 📄 **Generates SOC 2, GDPR, and HIPAA compliance reports** from audit log stores
 - 🔄 **RFC 8693 OAuth token exchange** — exchange user access tokens for scoped downstream tokens at any OAuth 2.0 AS; no long-term token storage required
+- 🔐 **JIT credential provisioning** — mint short-lived secrets on demand via Vault, AWS IAM Roles Anywhere, or Azure Managed Identity; zero static secrets at rest
+- 🪪 **SPIFFE/SPIRE workload identity** — X.509 SVIDs auto-renewed from SPIRE agent; cryptographic attestation, no stored secrets
+- ♻️ **Automated credential rotation** — `CredentialRotationScheduler` with configurable policies, grace-period dual-ref resolution, and full audit trail
 
 ---
 
@@ -909,6 +917,8 @@ Visual flow diagram, clickable phase timeline, configuration Q&A for common misc
 - **MCP tool responses never include raw secrets** — `list_credentials` returns safe metadata only; `resolve_credential` returns `resolvedFor` and `credentialId`, not refs
 - **Zero-trust attestation** — every `resolve()` call can sign a short-lived HMAC JWT attestation that downstream services verify independently
 - **RFC 8693 token exchange** — no long-lived user tokens stored server-side; subject tokens are exchanged at request time and cached briefly; `invalidateCache()` / `flushCache()` for immediate revocation
+- **JIT provisioning** — credentials are minted on demand and auto-revoked at TTL; a full store compromise yields zero usable long-lived secrets
+- **SPIFFE/SPIRE** — workload identity cryptographically attested by SPIRE; SVIDs are short-lived X.509 certificates, no static secrets
 
 ---
 
@@ -970,6 +980,15 @@ const migrationExtractRule: RoutingRule = {
   credentialKind: 'fixed',
   priority: 60,
 };
+
+// SPIFFE workload identity rule
+const spiffeRule: RoutingRule = {
+  id: 'rule-orders-agent',
+  matchSpiffeId: 'spiffe://acme.com/ns/production/sa/orders-agent',
+  credentialRef: 'orders-db-slot',
+  credentialKind: 'fixed',
+  priority: 90,
+};
 ```
 
 ---
@@ -1012,7 +1031,7 @@ agent-identity/
 │       ├── compliance/                    # @datacules/agent-identity-compliance
 │       └── token-exchange/                # @datacules/agent-identity-token-exchange (RFC 8693)
 ├── packages/python-sdk/               # pip install datacules-agent-identity
-├── src/                               # Next.js 14 dashboard app (12 tabs)
+├── src/                               # Next.js 14 dashboard app (17 tabs)
 ├── docs/openapi.yaml
 ├── Dockerfile + docker-compose.yml
 └── .github/workflows/

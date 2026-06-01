@@ -13,6 +13,11 @@ import { BudgetTab }         from '@/components/BudgetTab';
 import { FederationTab }     from '@/components/FederationTab';
 import { AnomalyTab }        from '@/components/AnomalyTab';
 import { TokenExchangeTab }  from '@/components/TokenExchangeTab';
+import { RotationTab }       from '@/components/RotationTab';
+import { OtelTab }           from '@/components/OtelTab';
+import { JitTab }            from '@/components/JitTab';
+import { SpiffeTab }         from '@/components/SpiffeTab';
+import { ComplianceTab }     from '@/components/ComplianceTab';
 import type { SupportedProvider } from '@/lib/types';
 
 // ─── Inline SVG tab icons ────────────────────────────────────────────────────────────────────
@@ -122,6 +127,51 @@ function IconRepeat({ className }: { className?: string }) {
     </svg>
   );
 }
+function IconRefreshCw({ className }: { className?: string }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
+      <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/>
+      <path d="M21 3v5h-5"/>
+      <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/>
+      <path d="M8 16H3v5"/>
+    </svg>
+  );
+}
+function IconActivity({ className }: { className?: string }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
+      <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+    </svg>
+  );
+}
+function IconDatabase({ className }: { className?: string }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
+      <ellipse cx="12" cy="5" rx="9" ry="3"/>
+      <path d="M3 5V19A9 3 0 0 0 21 19V5"/>
+      <path d="M3 12A9 3 0 0 0 21 12"/>
+    </svg>
+  );
+}
+function IconLock2({ className }: { className?: string }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
+      <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+      <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+    </svg>
+  );
+}
+function IconFileText({ className }: { className?: string }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+      <polyline points="14 2 14 8 20 8"/>
+      <line x1="16" y1="13" x2="8" y2="13"/>
+      <line x1="16" y1="17" x2="8" y2="17"/>
+      <polyline points="10 9 9 9 8 9"/>
+    </svg>
+  );
+}
 
 const TABS = [
   { id: 'identities',     label: 'Identity types',    Icon: IconShield        },
@@ -136,6 +186,11 @@ const TABS = [
   { id: 'federation',     label: 'Federation',         Icon: IconNetwork       },
   { id: 'anomaly',        label: 'Anomaly',            Icon: IconAlertTriangle },
   { id: 'token-exchange', label: 'Token exchange',     Icon: IconRepeat        },
+  { id: 'rotation',       label: 'Rotation',           Icon: IconRefreshCw     },
+  { id: 'otel',           label: 'OTEL tracing',       Icon: IconActivity      },
+  { id: 'jit',            label: 'JIT provisioning',   Icon: IconDatabase      },
+  { id: 'spiffe',         label: 'SPIFFE / SPIRE',     Icon: IconLock2         },
+  { id: 'compliance',     label: 'Compliance',         Icon: IconFileText      },
 ] as const;
 
 type TabId = (typeof TABS)[number]['id'];
@@ -233,6 +288,11 @@ export default function Home() {
         {activeTab === 'federation'     && <FederationTab />}
         {activeTab === 'anomaly'        && <AnomalyTab />}
         {activeTab === 'token-exchange' && <TokenExchangeTab />}
+        {activeTab === 'rotation'       && <RotationTab />}
+        {activeTab === 'otel'           && <OtelTab />}
+        {activeTab === 'jit'            && <JitTab />}
+        {activeTab === 'spiffe'         && <SpiffeTab />}
+        {activeTab === 'compliance'     && <ComplianceTab />}
 
       </div>
     </main>

@@ -10,6 +10,68 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Added
 
+**Dashboard — five missing feature tabs (#13–#17)**
+
+Five packages have been fully implemented and tested across multiple releases
+(PRs #10–#22) but lacked any interactive dashboard representation. This closes
+that gap by adding one tab per package and wiring them into `page.tsx`.
+
+`src/components/RotationTab.tsx` — **tab #13 — Credential Rotation**
+- Credential list with rotation-age progress bars and health badges (Healthy / Due soon / Overdue).
+- Policy detail panel: rotateAfterDays, notifyBeforeDays, gracePeriodSeconds, provisioner.
+- `runOnce()` simulator: streams scheduler events into a live log pane — check → mint → store → grace period → revoke.
+- Audit event reference table: `credential.rotated`, `credential.rotation_due`, `credential.rotation_failed`.
+- Code snippet for `CredentialRotationScheduler` + `VaultRotationProvider` setup.
+
+`src/components/OtelTab.tsx` — **tab #14 — OpenTelemetry Tracing**
+- Live span emitter: `router.resolveAsync(ctx)` button streams `agent_identity.store.get`,
+  `agent_identity.resolve_async`, and `agent_identity.audit.emit` spans into a trace pane
+  with timing and all attributes visible inline.
+- Span schema reference table (resolve / resolve_async / resolve_pair / resolve_pair_async).
+- Span attributes grid with example values for all 12 attributes.
+- Backend compatibility switcher: Datadog APM / Honeycomb / Jaeger / AWS X-Ray.
+- Code snippet for `withOtel()` wrapper setup.
+
+`src/components/JitTab.tsx` — **tab #15 — JIT Provisioning**
+- Provisioner selector: Vault Dynamic Secrets / AWS IAM Roles Anywhere / Azure Managed Identity.
+- Live provision() simulator with real-time TTL countdown bar (cache miss → cached → expired → re-provision).
+- Per-provisioner code snippets showing exact constructor configuration.
+- How-it-works step list explaining the findByRef → cache check → provision → cache → expire flow.
+
+`src/components/SpiffeTab.tsx` — **tab #16 — SPIFFE / SPIRE**
+- Trust domain registry with SPIFFE ID pattern list (two demo domains).
+- `matchSpiffeId` rule matcher: type any workload SPIFFE ID, click Match, see which routing rule fires.
+- Active SVID certificate panel: Subject URI SAN, not-before/after, serial, signature algorithm,
+  auto-renew-at timestamp, and a TTL progress bar.
+- Code snippet for `SpiffeCredentialStore` + routing rule with `matchSpiffeId` glob pattern.
+
+`src/components/ComplianceTab.tsx` — **tab #17 — Compliance**
+- Report type selector: SOC 2 CC6 / GDPR Article 30 / HIPAA §164.312.
+- `generator.generate()` button produces a sample JSON report; section tabs let the user
+  browse agentAccessSummary, piiResourceAccess, credentialRotationHistory, anomalyEvents.
+- Hash chain visualizer: 4-entry chain with SHA-256 hash and prevHash annotations;
+  explains that modifying any entry breaks all subsequent hashes.
+- CLI reference: `agent-identity audit verify` and `agent-identity report soc2/gdpr/hipaa`.
+- Code snippet for `ComplianceReportGenerator` + `HashChainAuditLogger` setup.
+
+`src/app/page.tsx` — wiring
+- 5 new imports (RotationTab, OtelTab, JitTab, SpiffeTab, ComplianceTab).
+- 5 new inline SVG icon functions (IconRefreshCw, IconActivity, IconDatabase, IconLock2, IconFileText).
+- 5 new entries in the TABS `as const` array (tabs #13–17).
+- 5 new `activeTab` render conditions.
+- Tab count: **12 → 17**.
+
+`README.md` — documentation
+- Dashboard section: "Twelve" → "Seventeen" interactive tabs.
+- Tab table: 5 new rows (Rotation, OTEL tracing, JIT provisioning, SPIFFE/SPIRE, Compliance).
+- Project structure annotation: `(12 tabs)` → `(17 tabs)`.
+
+---
+
+## [Unreleased]
+
+### Added
+
 **CI — Windows OS test coverage** (`.github/workflows/ci.yml`)
 
 Two new GitHub Actions jobs extend the pipeline from 6 to 8 jobs,
