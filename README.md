@@ -17,8 +17,8 @@
   <a href="https://github.com/hvrcharon1/agent-identity/actions/workflows/ci.yml">
     <img src="https://img.shields.io/github/actions/workflow/status/hvrcharon1/agent-identity/ci.yml?branch=main&style=flat-square&label=CI&color=black" alt="CI"/>
   </a>
-  <img src="https://img.shields.io/badge/version-0.4.0-black?style=flat-square" alt="Version"/>
-  <img src="https://img.shields.io/badge/packages-17%20(npm%20%2B%20PyPI)-black?style=flat-square" alt="Packages"/>
+  <img src="https://img.shields.io/badge/version-0.7.0-black?style=flat-square" alt="Version"/>
+  <img src="https://img.shields.io/badge/packages-18%20(npm%20%2B%20PyPI)-black?style=flat-square" alt="Packages"/>
   <img src="https://img.shields.io/badge/providers-OpenAI%20%7C%20Anthropic%20%7C%20Gemini%20%7C%20Mistral%20%7C%20Local-black?style=flat-square" alt="Supported providers"/>
   <img src="https://img.shields.io/badge/MCP-server%20%2B%20client-black?style=flat-square" alt="MCP support"/>
   <img src="https://img.shields.io/badge/stack-Next.js%20%2B%20TypeScript-black?style=flat-square" alt="Stack"/>
@@ -79,6 +79,7 @@ A provider-agnostic framework for AI agents that act on behalf of users and serv
 | `@datacules/agent-identity-otel` | `npm install @datacules/agent-identity-otel` | OpenTelemetry tracing — `withOtel()` wraps any router, emits spans on every `resolve()` |
 | `@datacules/agent-identity-anomaly` | `npm install @datacules/agent-identity-anomaly` | Behavioral baseline anomaly detection with EWMA scoring and configurable response policies |
 | `@datacules/agent-identity-compliance` | `npm install @datacules/agent-identity-compliance` | Compliance report generator — SOC 2, GDPR, HIPAA templates from audit log store |
+| `@datacules/agent-identity-token-exchange` | `npm install @datacules/agent-identity-token-exchange` | RFC 8693 OAuth 2.0 Token Exchange CredentialStore — exchanges user access tokens for scoped downstream tokens at any OAuth 2.0 AS (Keycloak, Auth0, Azure AD, Okta) |
 | `datacules-agent-identity` (PyPI) | `pip install datacules-agent-identity` | Python SDK — sync + async client, zero runtime deps, CLI |
 
 ---
@@ -181,6 +182,41 @@ const report = await generator.generate({
 });
 // report.agentAccessSummary, .piiResourceAccess, .offHoursAccess,
 // .credentialRotationHistory, .anomalyEvents
+```
+
+---
+
+### RFC 8693 Token Exchange
+
+```bash
+npm install @datacules/agent-identity-token-exchange
+```
+
+`TokenExchangeStore` implements `CredentialStore`. On `findByRef()` it POSTs a standard RFC 8693 token exchange request to any OAuth 2.0 Authorization Server (Keycloak, Auth0, Azure AD, Okta) and caches the returned access token with a 30-second expiry buffer. No long-term user token storage required.
+
+```typescript
+import { TokenExchangeStore } from '@datacules/agent-identity-token-exchange';
+import { createRouterFromStore } from '@datacules/agent-identity';
+
+const store = new TokenExchangeStore([
+  {
+    ref: 'crm-service',
+    credentialId: 'crm-delegated',
+    kind: 'user-delegated',
+    scope: 'crm.read crm.write',
+    status: 'active',
+    tokenEndpoint: 'https://auth.acme.com/realms/prod/protocol/openid-connect/token',
+    clientId: process.env.CRM_CLIENT_ID!,
+    clientSecret: process.env.CRM_CLIENT_SECRET!,
+    audience: 'crm-api',
+    // Provide the current user's access/ID token as a closure over request context
+    subjectTokenProvider: async () => getUserAccessToken(req),
+  },
+]);
+
+const router = createRouterFromStore(store, rules, logger);
+const resolved = await router.resolveAsync(ctx);
+// resolved.ref IS the exchanged downstream access_token — injected server-side by the provider adapter
 ```
 
 ---
@@ -633,7 +669,7 @@ npm install
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000). Eleven interactive tabs:
+Open [http://localhost:3000](http://localhost:3000). Twelve interactive tabs:
 
 | Tab | Description |
 |-----|-------------|
@@ -648,6 +684,7 @@ Open [http://localhost:3000](http://localhost:3000). Eleven interactive tabs:
 | Budget | Per-credential usage bars with soft threshold markers; resolution simulator |
 | Federation | Cross-org identity chain builder, trust domain registry, chain verifier |
 | Anomaly | Live agent baseline table; anomaly event feed with severity badges; EWMA policy simulator |
+| Token exchange | RFC 8693 OAuth token exchange — interactive `findByRef()` simulator, cache state UI, AS switcher (Keycloak / Auth0 / Azure AD / Okta), generated TypeScript snippet |
 
 ---
 
@@ -708,9 +745,10 @@ These two patterns, plus **hybrid / context-switched** (both in one workflow) an
 - 🔌 **Plugs into OpenAI, Anthropic, Gemini, Mistral, or any local model**
 - 🤝 **Works as both an MCP server and an MCP client** — integrates with the full MCP ecosystem in both directions
 - 🗄️ **Supports safe, auditable data migration with phase-aware credential routing**
-- 📊 **Emits OpenTelemetry spans** on every resolution — auth spans nest inside your existing application traces
+- 📊 **Emits OpenTelemetry spans** on every resolution — auth spans nest inside your existing application traces in Datadog, Honeycomb, Jaeger, or X-Ray.
 - 🛡️ **Detects anomalous credential usage** with EWMA behavioral baselines
 - 📄 **Generates SOC 2, GDPR, and HIPAA compliance reports** from audit log stores
+- 🔄 **RFC 8693 OAuth token exchange** — exchange user access tokens for scoped downstream tokens at any OAuth 2.0 AS; no long-term token storage required
 
 ---
 
@@ -870,6 +908,7 @@ Visual flow diagram, clickable phase timeline, configuration Q&A for common misc
 - **Concurrent migration corruption is prevented by design** — `reserve()` locks a write credential to one migration ID for the duration of the batch; a second job receives `false` and must abort
 - **MCP tool responses never include raw secrets** — `list_credentials` returns safe metadata only; `resolve_credential` returns `resolvedFor` and `credentialId`, not refs
 - **Zero-trust attestation** — every `resolve()` call can sign a short-lived HMAC JWT attestation that downstream services verify independently
+- **RFC 8693 token exchange** — no long-lived user tokens stored server-side; subject tokens are exchanged at request time and cached briefly; `invalidateCache()` / `flushCache()` for immediate revocation
 
 ---
 
@@ -970,9 +1009,10 @@ agent-identity/
 │       ├── mcp-client/                    # @datacules/agent-identity-mcp-client (outbound)
 │       ├── otel/                          # @datacules/agent-identity-otel
 │       ├── anomaly/                       # @datacules/agent-identity-anomaly
-│       └── compliance/                    # @datacules/agent-identity-compliance
+│       ├── compliance/                    # @datacules/agent-identity-compliance
+│       └── token-exchange/                # @datacules/agent-identity-token-exchange (RFC 8693)
 ├── packages/python-sdk/               # pip install datacules-agent-identity
-├── src/                               # Next.js 14 dashboard app (11 tabs)
+├── src/                               # Next.js 14 dashboard app (12 tabs)
 ├── docs/openapi.yaml
 ├── Dockerfile + docker-compose.yml
 └── .github/workflows/
@@ -987,11 +1027,11 @@ agent-identity/
 The publish workflow fires automatically on a version tag push:
 
 ```bash
-git tag v0.4.0
-git push origin v0.4.0
+git tag v0.7.0
+git push origin v0.7.0
 ```
 
-This stamps all 16 workspace `package.json` versions from the tag, builds core ESM + CJS, publishes all `@datacules/*` packages to npm with provenance, and publishes the Python wheel to PyPI. A GitHub Release with auto-generated notes is created once both publish jobs succeed.
+This stamps all 17 workspace `package.json` versions from the tag, builds core ESM + CJS, publishes all `@datacules/*` packages to npm with provenance, and publishes the Python wheel to PyPI. A GitHub Release with auto-generated notes is created once both publish jobs succeed.
 
 See `.github/workflows/publish.yml` and `CONTRIBUTING.md` for setup instructions.
 
