@@ -8,40 +8,64 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added
+
+**`packages/cli` — `@datacules/agent-identity-cli` (18th workspace package)** (PR #43)
+
+A fully-testable TypeScript CLI package that backs the `agent-identity` commands
+shown in the ComplianceTab dashboard UI. All I/O is injected via function closures
+so every public function can be unit-tested without a live server or filesystem.
+
+Published as `@datacules/agent-identity-cli`; delegates all business logic to
+`@datacules/agent-identity-compliance` (`ChainVerifier`, `ComplianceReportGenerator`,
+`MemoryReportStore`).
+
+Commands:
+
+```
+agent-identity audit verify --file <path> [--from <ISO>] [--to <ISO>]
+  Verify the SHA-256 hash chain of a JSONL audit log. Exit 0 = intact, 1 = broken.
+
+agent-identity report soc2|gdpr|hipaa --file <path> [--from] [--to] [--format json|markdown] [--output <dir>]
+  Generate a compliance report; write to stdout or a directory.
+
+agent-identity health [--url <base>]
+  Check if the agent-identity server is healthy (GET /api/health).
+
+agent-identity resolve --provider <p> --user <userId> [--url <base>]
+  POST /api/resolve and print the result — useful for verifying routing rules.
+```
+
+Test suite — 14 cases across 5 suites (`packages/cli/src/cli.test.ts`):
+- `parseArguments` (2): positional command · --help flag
+- `runAuditVerify` (4): intact chain · broken/tampered chain · unreadable file · date-range filter
+- `runReport` (5): SOC2 JSON sections · GDPR piiResourceAccess · HIPAA markdown · write to disk · unreadable file
+- `runHealth` (2): HTTP 200 · ECONNREFUSED
+- `runResolve` (2): 200 with JSON body · 403 no matching rule
+
+**`vitest.config.ts` — added two source aliases** (PR #43)
+
+```
+'@datacules/agent-identity-compliance' → packages/integrations/compliance/src/index.ts
+'@datacules/agent-identity-audit'      → packages/audit/src/index.ts
+```
+
+Vitest resolves workspace imports to source (no build step in the test job).
+Without these aliases the resolver fell back to the workspace symlink which
+points to `dist/cjs/index.js` — a file that does not exist in CI.
+
+**Total test coverage: 366 cases across 18 packages** (was 352 in v0.8.0).
+
 ### Fixed
 
 **Windows local-dev — webpack cache ENOENT error** (PR #41)
 
 `next.config.js`: added a `webpack` callback that sets `cache.type = 'memory'`
-when `dev === true`. Eliminates the recurring hot-reload warning on Windows:
+when `dev === true`. Eliminates the recurring hot-reload warning on Windows.
 
-```
-[webpack.cache.PackFileCacheStrategy] Caching failed for pack: Error:
-ENOENT: no such file or directory, rename '...0.pack.gz_' → '...0.pack.gz'
-```
+**`package.json` — `clean`, `dev:clean`, `clean:modules` scripts** (PR #41–#42)
 
-The error occurs because webpack uses an atomic rename to swap in a new cache
-file, and the Next.js file watcher briefly holds a lock on the existing file
-on Windows. In-memory cache avoids the rename entirely. Production builds
-(`next build`) set `dev:false` and are unaffected.
-
-**`package.json` — `clean` and `dev:clean` scripts** (PR #41)
-
-Two new npm scripts:
-- `clean` — deletes the `.next` directory with a cross-platform Node.js one-liner
-  (`fs.rmSync`); no dependency on platform-specific `rm` or `rimraf`.
-- `dev:clean` — runs `clean` then `next dev`; shortcut for the common Windows
-  troubleshooting step of deleting the cache before restarting the dev server.
-
-**`.env.example` — `NODE_ENV` and `PORT` developer notes** (PR #41)
-
-Added a `# Development` section documenting:
-- `NODE_ENV`: explains that Next.js owns this variable and that setting it to a
-  non-standard value (e.g. `local`, `staging`) causes the warning seen in the
-  Windows terminal output. Includes instructions for finding and removing the
-  assignment from shell profiles (`.bashrc`, `.zshrc`, `.profile`).
-- `PORT`: documents the auto-fallback to 3001, the `-- --port N` override, and
-  the `PORT=` `.env.local` approach for a permanent pin.
+**README — version badge 0.7.0 → 0.8.0 and `--legacy-peer-deps` install flag** (PR #42)
 
 ---
 
