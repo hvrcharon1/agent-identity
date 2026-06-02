@@ -20,6 +20,7 @@
     "packages/integrations/anomaly",
     "packages/integrations/compliance",
     "packages/integrations/token-exchange",
+    "packages/cli",
     "packages/python-sdk"
   ],
   "scripts": {

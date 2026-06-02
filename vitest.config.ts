@@ -33,6 +33,10 @@ export default defineConfig({
       '@datacules/agent-identity':              path.resolve(__dirname, './packages/core/src/index.ts'),
       '@datacules/agent-identity/schemas':      path.resolve(__dirname, './packages/core/src/schemas.ts'),
       '@datacules/agent-identity/react':        path.resolve(__dirname, './packages/core/src/react/index.ts'),
+      // Audit package — hash-chain logging
+      '@datacules/agent-identity-audit':        path.resolve(__dirname, './packages/audit/src/index.ts'),
+      // Compliance package — ChainVerifier, ComplianceReportGenerator, MemoryReportStore
+      '@datacules/agent-identity-compliance':   path.resolve(__dirname, './packages/integrations/compliance/src/index.ts'),
       '@datacules/agent-identity-anomaly':      path.resolve(__dirname, './packages/integrations/anomaly/src/index.ts'),
       // Cloud store packages — resolved to source so tests and credentialStore.ts
       // can import them without a prior build step.
