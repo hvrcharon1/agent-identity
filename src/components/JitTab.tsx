@@ -49,9 +49,9 @@ const PROVISIONERS: Provisioner[] = [
       '',
       'const store = new DynamicCredentialStore({',
       '  provisioner: new AwsIamRolesAnywhereProvisioner({',
-      "    profileArn:     'arn:aws:rolesanywhere:us-east-1:123:profile/…',",
+      "    profileArn:     'arn:aws:rolesanywhere:us-east-1:123:profile/\u2026',",
       "    roleArn:        'arn:aws:iam::123:role/AgentReadRole',",
-      "    trustAnchorArn: 'arn:aws:rolesanywhere:us-east-1:123:trust-anchor/…',",
+      "    trustAnchorArn: 'arn:aws:rolesanywhere:us-east-1:123:trust-anchor/\u2026',",
       "    certPem:        process.env.AGENT_CERT_PEM!,",
       "    keyPem:         process.env.AGENT_KEY_PEM!,",
       '  }),',
@@ -63,8 +63,8 @@ const PROVISIONERS: Provisioner[] = [
     name: 'Azure Managed Identity',
     label: 'AzureManagedIdentityProvisioner',
     description:
-      'Fetches MSAL access tokens for a specified Azure AD application using the workload\'s managed '
-      + 'identity. Zero secrets stored — the identity is attested by the Azure compute fabric.',
+      "Fetches MSAL access tokens for a specified Azure AD application using the workload's managed "
+      + 'identity. Zero secrets stored \u2014 the identity is attested by the Azure compute fabric.',
     ttlSeconds: 3600,
     configLines: [
       "import { DynamicCredentialStore } from '@datacules/agent-identity-store-dynamic';",
@@ -90,16 +90,20 @@ export function JitTab() {
 
   const provisioner = PROVISIONERS.find((p) => p.id === activeId)!;
 
+  // Start the countdown when state transitions to 'cached'.
+  // ttlLeft is read only through the functional updater (prev => prev - 1),
+  // so it does not need to be in the deps array — one interval per provision
+  // lifecycle rather than one per tick.
   useEffect(() => {
-    if (state !== 'cached' || ttlLeft <= 0) return;
+    if (state !== 'cached') return;
     const t = setInterval(() => {
-      setTtlLeft((s) => {
-        if (s <= 1) { setState('expired'); clearInterval(t); return 0; }
-        return s - 1;
+      setTtlLeft((prev) => {
+        if (prev <= 1) { setState('expired'); clearInterval(t); return 0; }
+        return prev - 1;
       });
     }, 1000);
     return () => clearInterval(t);
-  }, [state, ttlLeft]);
+  }, [state]);
 
   const provision = async () => {
     if (state === 'provisioning') return;
@@ -126,8 +130,8 @@ export function JitTab() {
         <p className="text-sm text-gray-500">
           <code className="text-xs bg-gray-100 px-1 rounded">DynamicCredentialStore</code> from{' '}
           <code className="text-xs bg-gray-100 px-1 rounded">@datacules/agent-identity-store-dynamic</code> eliminates
-          static long-lived secrets. Credentials don't exist until{' '}
-          <code className="text-xs bg-gray-100 px-1 rounded">resolve()</code> is called — a{' '}
+          static long-lived secrets. Credentials don&apos;t exist until{' '}
+          <code className="text-xs bg-gray-100 px-1 rounded">resolve()</code> is called \u2014 a{' '}
           <code className="text-xs bg-gray-100 px-1 rounded">CredentialProvisioner</code> mints a short-lived secret
           on demand, caches it for its TTL, and lets the upstream system revoke it automatically when the TTL expires.
         </p>
@@ -163,14 +167,14 @@ export function JitTab() {
         <div className="border border-gray-200 rounded-lg p-4 space-y-3">
           {state === 'idle' && (
             <div>
-              <p className="text-sm text-gray-500 mb-3">No credential in cache — next resolve() will call the provisioner.</p>
+              <p className="text-sm text-gray-500 mb-3">No credential in cache \u2014 next resolve() will call the provisioner.</p>
               <button onClick={provision} className="px-4 py-2 text-sm bg-gray-900 text-white rounded-md hover:bg-gray-700 transition-colors">
                 Call provision()
               </button>
             </div>
           )}
           {state === 'provisioning' && (
-            <p className="text-sm text-gray-500 animate-pulse">Calling {provisioner.label}… minting credential</p>
+            <p className="text-sm text-gray-500 animate-pulse">Calling {provisioner.label}\u2026 minting credential</p>
           )}
           {state === 'cached' && (
             <div className="space-y-3">
@@ -200,7 +204,7 @@ export function JitTab() {
           )}
           {state === 'expired' && (
             <div className="space-y-3">
-              <span className="text-xs bg-red-50 text-red-700 border border-red-200 px-2 py-0.5 rounded-full">Expired — upstream revoked</span>
+              <span className="text-xs bg-red-50 text-red-700 border border-red-200 px-2 py-0.5 rounded-full">Expired \u2014 upstream revoked</span>
               <p className="text-sm text-gray-500">The provisioner will mint a fresh credential on the next resolve() call.</p>
               <button onClick={reset} className="px-3 py-1.5 text-xs border border-gray-300 rounded-md hover:bg-gray-50 transition-colors">Reset</button>
             </div>
@@ -210,7 +214,7 @@ export function JitTab() {
 
       {/* Code snippet */}
       <div>
-        <div className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-2">Integration — {provisioner.name}</div>
+        <div className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-2">Integration \u2014 {provisioner.name}</div>
         <pre className="bg-gray-950 rounded-md p-4 text-xs text-gray-300 overflow-x-auto leading-relaxed">
           <code>{provisioner.configLines.join('\n')}</code>
         </pre>
@@ -221,7 +225,7 @@ export function JitTab() {
         <div className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-3">How it works</div>
         <ol className="space-y-1.5 text-sm text-gray-600 list-decimal list-inside">
           <li>resolve() calls DynamicCredentialStore.findByRef(ref)</li>
-          <li>Store checks in-memory cache — returns hit if unexpired</li>
+          <li>Store checks in-memory cache \u2014 returns hit if unexpired</li>
           <li>On miss: provisioner.provision() calls the upstream system</li>
           <li>Fresh secret cached with provisionedAt + ttl metadata</li>
           <li>Secret ref returned to router; never stored statically</li>

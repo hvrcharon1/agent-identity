@@ -11,7 +11,7 @@ interface TrustDomain {
 const TRUST_DOMAINS: TrustDomain[] = [
   {
     domain: 'acme.com',
-    description: 'Production cluster — Kubernetes workloads on GKE',
+    description: 'Production cluster \u2014 Kubernetes workloads on GKE',
     patterns: [
       'spiffe://acme.com/ns/production/sa/orders-agent',
       'spiffe://acme.com/ns/production/sa/analytics-agent',
@@ -20,7 +20,7 @@ const TRUST_DOMAINS: TrustDomain[] = [
   },
   {
     domain: 'staging.acme.com',
-    description: 'Staging cluster — EKS, node-level TPM attestation',
+    description: 'Staging cluster \u2014 EKS, node-level TPM attestation',
     patterns: [
       'spiffe://staging.acme.com/ns/staging/sa/orders-agent',
       'spiffe://staging.acme.com/agent/*',
@@ -56,11 +56,11 @@ export function SpiffeTab() {
       const pattern = rule.matchSpiffeId;
       const regex = new RegExp('^' + pattern.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '[^/]*') + '$');
       if (regex.test(matchInput)) {
-        setMatchResult(`Matched rule "${rule.id}" → credentialRef: ${rule.credentialRef} (priority ${rule.priority})`);
+        setMatchResult(`Matched rule "${rule.id}" \u2192 credentialRef: ${rule.credentialRef} (priority ${rule.priority})`);
         return;
       }
     }
-    setMatchResult('No rule matched — resolve() returns null');
+    setMatchResult('No rule matched \u2014 resolve() returns null');
   };
 
   const snippet = `import { SpiffeCredentialStore } from '@datacules/agent-identity-store-spiffe';
@@ -90,7 +90,7 @@ const rules: RoutingRule[] = [
 ];
 
 const router = createRouterFromStore(store, rules, logger);
-// SVID obtained from SPIRE agent — renewed automatically 10 min before expiry
+// SVID obtained from SPIRE agent \u2014 renewed automatically 10 min before expiry
 const resolved = await router.resolveAsync(ctx);
 // resolved.spiffeId written to AuditLogEntry for workload-level traceability`;
 
@@ -108,7 +108,7 @@ const resolved = await router.resolveAsync(ctx);
           <code className="text-xs bg-gray-100 px-1 rounded">SpiffeCredentialStore</code> from{' '}
           <code className="text-xs bg-gray-100 px-1 rounded">@datacules/agent-identity-store-spiffe</code> obtains
           X.509 SVIDs from a local SPIRE agent socket. SVIDs are short-lived certificates that cryptographically
-          prove the workload's identity — no static secrets stored anywhere. Auto-renewed before expiry;
+          prove the workload&apos;s identity \u2014 no static secrets stored anywhere. Auto-renewed before expiry;
           works identically across AWS, GCP, Azure, and on-prem.
         </p>
       </div>
@@ -202,7 +202,7 @@ const resolved = await router.resolveAsync(ctx);
             <div key={r.id} className="flex items-center gap-3 text-xs">
               <span className="text-gray-400 font-mono w-5 text-right">{r.priority}</span>
               <code className="bg-gray-50 px-2 py-0.5 rounded text-gray-700">{r.matchSpiffeId}</code>
-              <span className="text-gray-400">→ {r.credentialRef}</span>
+              <span className="text-gray-400">\u2192 {r.credentialRef}</span>
             </div>
           ))}
         </div>
