@@ -1,6 +1,12 @@
+<p align="center">
+  <img src="../../assets/logo.svg" alt="Agent Identity — by Datacules LLC" width="360"/>
+</p>
+
 # @datacules/agent-identity-cli
 
-CLI for [`@datacules/agent-identity`](https://github.com/hvrcharon1/agent-identity). Verify audit chain integrity, generate SOC 2/GDPR/HIPAA compliance reports, and test credential resolution — all from the command line.
+CLI for [`@datacules/agent-identity`](https://github.com/hvrcharon1/agent-identity). Verify audit chain integrity, generate SOC 2 / GDPR / HIPAA compliance reports, and test credential resolution — all from the command line.
+
+Part of the [agent-identity monorepo](https://github.com/hvrcharon1/agent-identity) by [Datacules LLC](https://datacules.com).
 
 ## Installation
 
@@ -27,10 +33,10 @@ Verify the SHA-256 hash chain of a JSONL audit log produced by `HashChainAuditLo
 
 ```bash
 # Verify an entire log
-agent-identity audit verify --file ./audit.jsonl
+agent-identity-cli audit verify --file ./audit.jsonl
 
 # Verify only entries within a date range
-agent-identity audit verify --file ./audit.jsonl --from 2026-01-01 --to 2026-03-31
+agent-identity-cli audit verify --file ./audit.jsonl --from 2026-01-01 --to 2026-03-31
 ```
 
 **Output on success:**
@@ -58,13 +64,13 @@ Generate a compliance report from a JSONL audit log.
 
 ```bash
 # SOC 2 CC6 report — JSON to stdout
-agent-identity report soc2 --file ./audit.jsonl --from 2026-01-01 --to 2026-03-31
+agent-identity-cli report soc2 --file ./audit.jsonl --from 2026-01-01 --to 2026-03-31
 
 # GDPR Article 30 report — Markdown format
-agent-identity report gdpr --file ./audit.jsonl --format markdown
+agent-identity-cli report gdpr --file ./audit.jsonl --format markdown
 
 # HIPAA §164.312 report — write to directory
-agent-identity report hipaa --file ./audit.jsonl --output ./compliance-reports/
+agent-identity-cli report hipaa --file ./audit.jsonl --output ./compliance-reports/
 ```
 
 **Flags:**
@@ -81,11 +87,11 @@ agent-identity report hipaa --file ./audit.jsonl --output ./compliance-reports/
 
 ### `health`
 
-Check if the agent-identity server (Next.js dashboard or sidecar) is running.
+Check if the agent-identity server (Next.js dashboard or Docker sidecar) is running.
 
 ```bash
-agent-identity health
-agent-identity health --url http://localhost:3001   # sidecar
+agent-identity-cli health
+agent-identity-cli health --url http://localhost:3001   # sidecar
 ```
 
 ---
@@ -95,8 +101,8 @@ agent-identity health --url http://localhost:3001   # sidecar
 Test credential resolution against the running server. Useful for verifying routing rules.
 
 ```bash
-agent-identity resolve --provider openai --user user-123
-agent-identity resolve --provider anthropic --user user-456 --url http://localhost:3001
+agent-identity-cli resolve --provider openai --user user-123
+agent-identity-cli resolve --provider anthropic --user user-456 --url http://localhost:3001
 ```
 
 **Output on success:**
@@ -114,15 +120,14 @@ agent-identity resolve --provider anthropic --user user-456 --url http://localho
 
 ```bash
 # 1. Your agent runs. The HashChainAuditLogger writes JSONL to a file.
-#    (Configure a WebhookAuditLogger or custom sink to write entries.)
 
 # 2. At quarter end, verify the log is untampered:
-agent-identity audit verify --file /var/log/agent-identity/audit.jsonl \
+agent-identity-cli audit verify --file /var/log/agent-identity/audit.jsonl \\
   --from 2026-01-01 --to 2026-03-31
 
 # 3. Generate the compliance report:
-agent-identity report soc2 --file /var/log/agent-identity/audit.jsonl \
-  --from 2026-01-01 --to 2026-03-31 \
+agent-identity-cli report soc2 --file /var/log/agent-identity/audit.jsonl \\
+  --from 2026-01-01 --to 2026-03-31 \\
   --output ./compliance-reports/
 
 # 4. Attach the report to your SOC 2 audit package.
@@ -143,6 +148,13 @@ const auditLogger = new HashChainAuditLogger(fileSink);
 const router = createRouterFromStore(store, rules, auditLogger);
 ```
 
+## Architecture note
+
+All CLI I/O is injected via function closures (`readFile`, `fetch`, `writeFile`) so every
+public function (`parseArguments`, `runAuditVerify`, `runReport`, `runHealth`, `runResolve`)
+can be unit-tested without a live server or filesystem. The test suite covers 14 cases
+across 5 suites in `packages/cli/src/cli.test.ts`.
+
 ## License
 
-MIT
+[Datacules Open Source License](../../LICENSE) — permissive, commercial-friendly.
