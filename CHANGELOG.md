@@ -8,9 +8,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+---
+
+## [0.8.0] — 2026-06-02
+
 ### Added
 
-**Dashboard — five missing feature tabs (#13–#17)**
+**Dashboard — five missing feature tabs (#13–#17)** (PR #39)
 
 Five packages have been fully implemented and tested across multiple releases
 (PRs #10–#22) but lacked any interactive dashboard representation. This closes
@@ -66,13 +70,7 @@ that gap by adding one tab per package and wiring them into `page.tsx`.
 - Tab table: 5 new rows (Rotation, OTEL tracing, JIT provisioning, SPIFFE/SPIRE, Compliance).
 - Project structure annotation: `(12 tabs)` → `(17 tabs)`.
 
----
-
-## [Unreleased]
-
-### Added
-
-**CI — Windows OS test coverage** (`.github/workflows/ci.yml`)
+**CI — Windows OS test coverage** (PR #38)
 
 Two new GitHub Actions jobs extend the pipeline from 6 to 8 jobs,
 running the full test suite and Next.js application on `windows-latest`
@@ -98,13 +96,7 @@ either smoke job runs. Job display names updated: `Unit tests (Node)` →
 `Unit tests (Linux)` and `Build + smoke test` → `Build + smoke test (Linux)`
 for clarity in the GitHub Actions summary panel.
 
----
-
-## [0.7.0] — 2026-06-02
-
-### Added
-
-**`packages/core/src/router.test.ts` — expanded from 14 to 35 cases (+21)**
+**`packages/core/src/router.test.ts` — expanded from 14 to 35 cases (+21)** (PR #37)
 
 Ten new describe groups fill all previously uncovered `CredentialRouter` code paths:
 
@@ -140,7 +132,7 @@ via `as unknown as T` — no live approval servers, budget stores, or token endp
 required. `Math.random` is spied on and restored after each canary test via
 `vi.restoreAllMocks()`.
 
-**Total test coverage: 352 cases across 17 packages** (was 331).
+**Total test coverage: 352 cases across 17 packages** (was 331 in v0.7.0).
 
 ---
 
