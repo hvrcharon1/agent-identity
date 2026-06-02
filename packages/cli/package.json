@@ -1,0 +1,35 @@
+{
+  "name": "@datacules/agent-identity-cli",
+  "version": "0.1.0",
+  "description": "CLI for @datacules/agent-identity — audit chain verification, compliance reports, credential resolution testing",
+  "private": false,
+  "bin": {
+    "agent-identity": "./bin/agent-identity.js"
+  },
+  "exports": {
+    ".": {
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js"
+    }
+  },
+  "main": "./dist/index.js",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "files": ["dist", "bin"],
+  "scripts": {
+    "build": "tsup src/index.ts --format cjs,esm --dts --clean --treeshake",
+    "dev": "tsup src/index.ts --format cjs,esm --watch"
+  },
+  "dependencies": {
+    "@datacules/agent-identity-compliance": "^0.8.0"
+  },
+  "devDependencies": {
+    "@datacules/agent-identity": "*",
+    "@datacules/agent-identity-compliance": "*",
+    "tsup": "^8.0.0",
+    "typescript": "^5"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
