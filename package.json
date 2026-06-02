@@ -24,6 +24,8 @@
   ],
   "scripts": {
     "dev": "next dev",
+    "dev:clean": "node -e \"require('fs').rmSync('.next',{recursive:true,force:true})\" && next dev",
+    "clean": "node -e \"require('fs').rmSync('.next',{recursive:true,force:true})\"",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",

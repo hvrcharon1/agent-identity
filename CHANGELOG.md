@@ -8,6 +8,41 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Fixed
+
+**Windows local-dev — webpack cache ENOENT error** (PR #41)
+
+`next.config.js`: added a `webpack` callback that sets `cache.type = 'memory'`
+when `dev === true`. Eliminates the recurring hot-reload warning on Windows:
+
+```
+[webpack.cache.PackFileCacheStrategy] Caching failed for pack: Error:
+ENOENT: no such file or directory, rename '...0.pack.gz_' → '...0.pack.gz'
+```
+
+The error occurs because webpack uses an atomic rename to swap in a new cache
+file, and the Next.js file watcher briefly holds a lock on the existing file
+on Windows. In-memory cache avoids the rename entirely. Production builds
+(`next build`) set `dev:false` and are unaffected.
+
+**`package.json` — `clean` and `dev:clean` scripts** (PR #41)
+
+Two new npm scripts:
+- `clean` — deletes the `.next` directory with a cross-platform Node.js one-liner
+  (`fs.rmSync`); no dependency on platform-specific `rm` or `rimraf`.
+- `dev:clean` — runs `clean` then `next dev`; shortcut for the common Windows
+  troubleshooting step of deleting the cache before restarting the dev server.
+
+**`.env.example` — `NODE_ENV` and `PORT` developer notes** (PR #41)
+
+Added a `# Development` section documenting:
+- `NODE_ENV`: explains that Next.js owns this variable and that setting it to a
+  non-standard value (e.g. `local`, `staging`) causes the warning seen in the
+  Windows terminal output. Includes instructions for finding and removing the
+  assignment from shell profiles (`.bashrc`, `.zshrc`, `.profile`).
+- `PORT`: documents the auto-fallback to 3001, the `-- --port N` override, and
+  the `PORT=` `.env.local` approach for a permanent pin.
+
 ---
 
 ## [0.8.0] — 2026-06-02
