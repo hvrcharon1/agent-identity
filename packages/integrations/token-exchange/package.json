@@ -33,7 +33,7 @@
     "vitest": "^1.6.0"
   },
   "peerDependencies": {
-    "@datacules/agent-identity": "^0.6.0"
+    "@datacules/agent-identity": "^0.8.0"
   },
   "engines": { "node": ">=20" },
   "keywords": ["oauth", "token-exchange", "rfc8693", "agent-identity", "credential", "datacules"]
