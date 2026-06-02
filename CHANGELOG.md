@@ -10,7 +10,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Added
 
-**`packages/cli` — `@datacules/agent-identity-cli` (18th workspace package)** (PR #43)
+**`packages/cli` — `@datacules/agent-identity-cli` (19th workspace package)** (PR #43)
 
 A fully-testable TypeScript CLI package that backs the `agent-identity` commands
 shown in the ComplianceTab dashboard UI. All I/O is injected via function closures
@@ -20,19 +20,22 @@ Published as `@datacules/agent-identity-cli`; delegates all business logic to
 `@datacules/agent-identity-compliance` (`ChainVerifier`, `ComplianceReportGenerator`,
 `MemoryReportStore`).
 
+Binary: `agent-identity-cli` (renamed from `agent-identity` to avoid conflict with the
+binary already registered by `@datacules/agent-identity-compliance`).
+
 Commands:
 
 ```
-agent-identity audit verify --file <path> [--from <ISO>] [--to <ISO>]
+agent-identity-cli audit verify --file <path> [--from <ISO>] [--to <ISO>]
   Verify the SHA-256 hash chain of a JSONL audit log. Exit 0 = intact, 1 = broken.
 
-agent-identity report soc2|gdpr|hipaa --file <path> [--from] [--to] [--format json|markdown] [--output <dir>]
+agent-identity-cli report soc2|gdpr|hipaa --file <path> [--from] [--to] [--format json|markdown] [--output <dir>]
   Generate a compliance report; write to stdout or a directory.
 
-agent-identity health [--url <base>]
+agent-identity-cli health [--url <base>]
   Check if the agent-identity server is healthy (GET /api/health).
 
-agent-identity resolve --provider <p> --user <userId> [--url <base>]
+agent-identity-cli resolve --provider <p> --user <userId> [--url <base>]
   POST /api/resolve and print the result — useful for verifying routing rules.
 ```
 
@@ -54,7 +57,31 @@ Vitest resolves workspace imports to source (no build step in the test job).
 Without these aliases the resolver fell back to the workspace symlink which
 points to `dist/cjs/index.js` — a file that does not exist in CI.
 
-**Total test coverage: 366 cases across 18 packages** (was 352 in v0.8.0).
+**`public/logo.svg` + `src/app/layout.tsx` + `src/app/page.tsx` — logo footprint**
+
+- `public/logo.svg`: static copy of `assets/logo.svg` served by Next.js at `/logo.svg`.
+- `src/app/layout.tsx`: added `icons` (favicon, apple-touch) and `openGraph` metadata
+  pointing to `/logo.svg`; browser tabs, link-preview cards, and OG scrapers now display
+  the brand mark.
+- `src/app/page.tsx`: replaced the generic `IconCpu` chip + `<h1>` header with the full
+  logo wordmark (`<img src="/logo.svg" class="h-12">`); kept an `sr-only` `<h1>` for
+  screen-reader and SEO accessibility.
+
+**All guiding documents — logo header + content refresh**
+
+- `CONTRIBUTING.md`: logo header; fixed provider/type paths from stale `src/lib/` to
+  `packages/core/src/`; added `validateForMigration` to the adapter example; added
+  monorepo layout section and vitest alias note for new packages.
+- `docs/credential-routing.md`: logo header; updated router path; full rule-matching
+  dimension table; canary, migration, SPIFFE, and `resolvePair` examples.
+- `docs/patterns.md`: logo header; expanded from 4 to 6 named patterns (adds Token
+  exchange / RFC 8693 and Data migration / phase-aware); decision tree.
+- `docs/provider-integration.md`: logo header; fixed provider path; added
+  `validateForMigration` to adapter template; added OTEL span attribute table.
+- `packages/cli/README.md`: logo header; corrected binary name to `agent-identity-cli`;
+  added architecture note about injection-based testability.
+
+**Total test coverage: 366 cases across 19 packages** (was 352 in v0.8.0).
 
 ### Fixed
 
@@ -67,13 +94,36 @@ when `dev === true`. Eliminates the recurring hot-reload warning on Windows.
 
 **README — version badge 0.7.0 → 0.8.0 and `--legacy-peer-deps` install flag** (PR #42)
 
+**PR #43 CI — three root-cause failures diagnosed and resolved**
+
+The unit test jobs (`Unit tests (Linux)` and `Unit tests (Windows)`) were failing on
+the initial PR #43 commit. Root cause analysis identified three independent failures:
+
+1. **`vitest.config.ts` missing alias for `@datacules/agent-identity-compliance`** —
+   Vitest resolved the workspace symlink to `dist/cjs/index.js`, which does not exist
+   in CI (no build step runs before the test job). Fixed: source alias added (see Added
+   section above). The `@datacules/agent-identity-audit` alias was also missing and
+   added at the same time.
+
+2. **`packages/cli` absent from root `workspaces`** — The CLI package was not a proper
+   npm workspace member; `npm install` did not symlink it or register its dependencies.
+   Fixed: `"packages/cli"` added to the `workspaces` array in the root `package.json`.
+
+3. **Wrong compliance dep version `"^0.8.0"` in `packages/cli/package.json`** — The
+   compliance package is at `0.2.0`; the semver range `^0.8.0` never resolves inside
+   the workspace. Fixed: changed to `"*"` so npm always resolves to the local workspace
+   version regardless of individual package versions.
+
+All three fixes were committed to `feat/cli-package` and CI passed on the corrected
+head (Python SDK: 11 s; Linux unit tests; Windows unit tests; build + smoke).
+
 ---
 
 ## [0.8.0] — 2026-06-02
 
 ### Added
 
-**Dashboard — five missing feature tabs (#13–#17)** (PR #39)
+**Dashboard — five missing feature tabs (#13–17)** (PR #39)
 
 Five packages have been fully implemented and tested across multiple releases
 (PRs #10–#22) but lacked any interactive dashboard representation. This closes
@@ -114,7 +164,7 @@ that gap by adding one tab per package and wiring them into `page.tsx`.
   browse agentAccessSummary, piiResourceAccess, credentialRotationHistory, anomalyEvents.
 - Hash chain visualizer: 4-entry chain with SHA-256 hash and prevHash annotations;
   explains that modifying any entry breaks all subsequent hashes.
-- CLI reference: `agent-identity audit verify` and `agent-identity report soc2/gdpr/hipaa`.
+- CLI reference: `agent-identity-cli audit verify` and `agent-identity-cli report soc2/gdpr/hipaa`.
 - Code snippet for `ComplianceReportGenerator` + `HashChainAuditLogger` setup.
 
 `src/app/page.tsx` — wiring
@@ -125,7 +175,7 @@ that gap by adding one tab per package and wiring them into `page.tsx`.
 - Tab count: **12 → 17**.
 
 `README.md` — documentation
-- Dashboard section: "Twelve" → "Seventeen" interactive tabs.
+- Dashboard section: “Twelve” → “Seventeen” interactive tabs.
 - Tab table: 5 new rows (Rotation, OTEL tracing, JIT provisioning, SPIFFE/SPIRE, Compliance).
 - Project structure annotation: `(12 tabs)` → `(17 tabs)`.
 

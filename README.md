@@ -18,7 +18,7 @@
     <img src="https://img.shields.io/github/actions/workflow/status/hvrcharon1/agent-identity/ci.yml?branch=main&style=flat-square&label=CI&color=black" alt="CI"/>
   </a>
   <img src="https://img.shields.io/badge/version-0.8.0-black?style=flat-square" alt="Version"/>
-  <img src="https://img.shields.io/badge/packages-18%20(npm%20%2B%20PyPI)-black?style=flat-square" alt="Packages"/>
+  <img src="https://img.shields.io/badge/packages-19%20(npm%20%2B%20PyPI)-black?style=flat-square" alt="Packages"/>
   <img src="https://img.shields.io/badge/providers-OpenAI%20%7C%20Anthropic%20%7C%20Gemini%20%7C%20Mistral%20%7C%20Local-black?style=flat-square" alt="Supported providers"/>
   <img src="https://img.shields.io/badge/MCP-server%20%2B%20client-black?style=flat-square" alt="MCP support"/>
   <img src="https://img.shields.io/badge/stack-Next.js%20%2B%20TypeScript-black?style=flat-square" alt="Stack"/>
@@ -37,7 +37,7 @@
 >
 > *The agent did it.*
 >
-> ...That's it. That's all the trail you have.
+> ...That's all the trail you have.
 
 **This is the identity gap in agentic AI — and it's sitting quietly inside most production agent systems right now.**
 
@@ -80,6 +80,7 @@ A provider-agnostic framework for AI agents that act on behalf of users and serv
 | `@datacules/agent-identity-anomaly` | `npm install @datacules/agent-identity-anomaly` | Behavioral baseline anomaly detection with EWMA scoring and configurable response policies |
 | `@datacules/agent-identity-compliance` | `npm install @datacules/agent-identity-compliance` | Compliance report generator — SOC 2, GDPR, HIPAA templates from audit log store |
 | `@datacules/agent-identity-token-exchange` | `npm install @datacules/agent-identity-token-exchange` | RFC 8693 OAuth 2.0 Token Exchange CredentialStore — exchanges user access tokens for scoped downstream tokens at any OAuth 2.0 AS (Keycloak, Auth0, Azure AD, Okta) |
+| `@datacules/agent-identity-cli` | `npm install @datacules/agent-identity-cli` | CLI — `audit verify` chain integrity · `report soc2/gdpr/hipaa` · `health` · `resolve` |
 | `datacules-agent-identity` (PyPI) | `pip install datacules-agent-identity` | Python SDK — sync + async client, zero runtime deps, CLI |
 
 ---
@@ -183,6 +184,30 @@ const report = await generator.generate({
 // report.agentAccessSummary, .piiResourceAccess, .offHoursAccess,
 // .credentialRotationHistory, .anomalyEvents
 ```
+
+---
+
+### CLI
+
+```bash
+npm install -g @datacules/agent-identity-cli
+```
+
+```bash
+# Verify audit chain integrity before submitting a SOC 2 package
+agent-identity-cli audit verify --file ./audit.jsonl --from 2026-01-01 --to 2026-03-31
+
+# Generate a HIPAA compliance report
+agent-identity-cli report hipaa --file ./audit.jsonl --output ./compliance-reports/
+
+# Test routing rules against the running server
+agent-identity-cli resolve --provider anthropic --user user-abc
+
+# Liveness check
+agent-identity-cli health
+```
+
+See [`packages/cli/README.md`](packages/cli/README.md) for the full command reference.
 
 ---
 
@@ -705,7 +730,7 @@ Without an explicit answer to all three, you get one of these failure modes in p
 
 - An agent silently acts with more privilege than the user it represents (credential escalation)
 - A breach exposes raw API keys because the model layer received them directly
-- An audit trail that says "the agent did it" — with no traceable human principal behind the action
+- An audit trail that says “the agent did it” — with no traceable human principal behind the action
 - A multi-agent pipeline where intermediate hops are completely anonymous
 
 `agent-identity` makes those decisions explicit, configurable, and auditable — across any AI provider.
@@ -755,8 +780,9 @@ These two patterns, plus **hybrid / context-switched** (both in one workflow) an
 - 📄 **Generates SOC 2, GDPR, and HIPAA compliance reports** from audit log stores
 - 🔄 **RFC 8693 OAuth token exchange** — exchange user access tokens for scoped downstream tokens at any OAuth 2.0 AS; no long-term token storage required
 - 🔐 **JIT credential provisioning** — mint short-lived secrets on demand via Vault, AWS IAM Roles Anywhere, or Azure Managed Identity; zero static secrets at rest
-- 🪪 **SPIFFE/SPIRE workload identity** — X.509 SVIDs auto-renewed from SPIRE agent; cryptographic attestation, no stored secrets
+- 🪦 **SPIFFE/SPIRE workload identity** — X.509 SVIDs auto-renewed from SPIRE agent; cryptographic attestation, no stored secrets
 - ♻️ **Automated credential rotation** — `CredentialRotationScheduler` with configurable policies, grace-period dual-ref resolution, and full audit trail
+- 🛠️ **CLI** — `audit verify`, `report`, `health`, `resolve` — for offline chain verification and compliance report generation
 
 ---
 
@@ -779,7 +805,7 @@ The result is a generation of agentic systems that are powerful but fragile on t
 
 ### The regulatory environment is catching up
 
-GDPR, SOC 2, ISO 27001, and emerging AI-specific frameworks (EU AI Act, NIST AI RMF) are beginning to ask the same questions about AI agents that they ask about human users: who acted, on whose behalf, with what authority, and is there a log? Organisations deploying agents in customer-facing, financial, or healthcare contexts will need to answer these questions in audits. A system where "the agent did it" is the only available answer will not pass.
+GDPR, SOC 2, ISO 27001, and emerging AI-specific frameworks (EU AI Act, NIST AI RMF) are beginning to ask the same questions about AI agents that they ask about human users: who acted, on whose behalf, with what authority, and is there a log? Organisations deploying agents in customer-facing, financial, or healthcare contexts will need to answer these questions in audits. A system where “the agent did it” is the only available answer will not pass.
 
 ### Multi-agent pipelines are becoming the default architecture
 
@@ -1019,19 +1045,22 @@ agent-identity/
 │   │   ├── azure/                         # @datacules/agent-identity-store-azure
 │   │   ├── spiffe/                        # @datacules/agent-identity-store-spiffe
 │   │   └── dynamic/                       # @datacules/agent-identity-store-dynamic (JIT provisioning)
-│   └── integrations/
-│       ├── express/                       # @datacules/agent-identity-express
-│       ├── fastify/                       # @datacules/agent-identity-fastify
-│       ├── langchain/                     # @datacules/agent-identity-langchain
-│       ├── nestjs/                        # @datacules/agent-identity-nestjs
-│       ├── mcp/                           # @datacules/agent-identity-mcp (inbound)
-│       ├── mcp-client/                    # @datacules/agent-identity-mcp-client (outbound)
-│       ├── otel/                          # @datacules/agent-identity-otel
-│       ├── anomaly/                       # @datacules/agent-identity-anomaly
-│       ├── compliance/                    # @datacules/agent-identity-compliance
-│       └── token-exchange/                # @datacules/agent-identity-token-exchange (RFC 8693)
-├── packages/python-sdk/               # pip install datacules-agent-identity
+│   ├── integrations/
+│   │   ├── express/                       # @datacules/agent-identity-express
+│   │   ├── fastify/                       # @datacules/agent-identity-fastify
+│   │   ├── langchain/                     # @datacules/agent-identity-langchain
+│   │   ├── nestjs/                        # @datacules/agent-identity-nestjs
+│   │   ├── mcp/                           # @datacules/agent-identity-mcp (inbound)
+│   │   ├── mcp-client/                    # @datacules/agent-identity-mcp-client (outbound)
+│   │   ├── otel/                          # @datacules/agent-identity-otel
+│   │   ├── anomaly/                       # @datacules/agent-identity-anomaly
+│   │   ├── compliance/                    # @datacules/agent-identity-compliance
+│   │   └── token-exchange/                # @datacules/agent-identity-token-exchange (RFC 8693)
+│   ├── cli/                               # @datacules/agent-identity-cli
+│   └── python-sdk/                        # pip install datacules-agent-identity
 ├── src/                               # Next.js 14 dashboard app (17 tabs)
+├── assets/logo.svg                    # master brand mark
+├── public/logo.svg                    # static copy served by Next.js at /logo.svg
 ├── docs/openapi.yaml
 ├── Dockerfile + docker-compose.yml
 └── .github/workflows/
@@ -1050,7 +1079,7 @@ git tag v0.8.0
 git push origin v0.8.0
 ```
 
-This stamps all 17 workspace `package.json` versions from the tag, builds core ESM + CJS, publishes all `@datacules/*` packages to npm with provenance, and publishes the Python wheel to PyPI. A GitHub Release with auto-generated notes is created once both publish jobs succeed.
+This stamps all 18 workspace `package.json` versions from the tag, builds core ESM + CJS, publishes all `@datacules/*` packages to npm with provenance, and publishes the Python wheel to PyPI. A GitHub Release with auto-generated notes is created once both publish jobs succeed.
 
 See `.github/workflows/publish.yml` and `CONTRIBUTING.md` for setup instructions.
 
