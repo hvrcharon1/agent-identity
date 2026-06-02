@@ -49,17 +49,6 @@ function IconHelpCircle({ className }: { className?: string }) {
     </svg>
   );
 }
-function IconCpu({ className }: { className?: string }) {
-  return (
-    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
-      <rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/>
-      <line x1="9" y1="1" x2="9" y2="4"/><line x1="15" y1="1" x2="15" y2="4"/>
-      <line x1="9" y1="20" x2="9" y2="23"/><line x1="15" y1="20" x2="15" y2="23"/>
-      <line x1="20" y1="9" x2="23" y2="9"/><line x1="20" y1="14" x2="23" y2="14"/>
-      <line x1="1" y1="9" x2="4" y2="9"/><line x1="1" y1="14" x2="4" y2="14"/>
-    </svg>
-  );
-}
 function IconArrowLeftRight({ className }: { className?: string }) {
   return (
     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
@@ -211,13 +200,17 @@ export default function Home() {
     <main className="min-h-screen">
       <div className="max-w-3xl mx-auto px-6 py-10">
 
-        {/* Header */}
+        {/* Header — brand logo */}
         <div className="mb-8">
-          <div className="flex items-center gap-3 mb-3">
-            <div className="w-9 h-9 rounded-lg bg-brand-600 flex items-center justify-center">
-              <IconCpu className="w-5 h-5 text-white" />
-            </div>
-            <h1 className="text-2xl font-semibold tracking-tight">Agent identity &amp; auth</h1>
+          <div className="mb-4">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/logo.svg"
+              alt="Agent Identity — by Datacules LLC"
+              className="h-12"
+            />
+            {/* visually hidden h1 for screen readers and SEO */}
+            <h1 className="sr-only">Agent Identity &amp; Auth Patterns</h1>
           </div>
           <p className="text-sm text-gray-500 leading-relaxed">
             Define who your agent acts as, with which credentials, and when — across any AI provider or model.
