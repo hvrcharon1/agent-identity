@@ -29,7 +29,7 @@ export interface RotationRepository {
   update(id: string, patch: Partial<Credential>): Promise<void>;
 }
 
-// ─── CredentialRotationScheduler ─────────────────────────────────────────────
+// ─── CredentialRotationScheduler ───────────────────────────────────────────────
 
 export class CredentialRotationScheduler {
   private readonly providers = new Map<string, RotationProvider>();
@@ -53,7 +53,12 @@ export class CredentialRotationScheduler {
     const now = new Date();
 
     for (const cred of credentials) {
+      // Skip credentials with no rotation policy
       if (!cred.rotation) continue;
+
+      // Skip unclaimed auth.md credentials — they cannot be rotated until
+      // the claim ceremony is complete and status flips to 'active'
+      if (cred.status === 'unclaimed') continue;
 
       const due = this.isRotationDue(cred, cred.rotation, now);
       if (!due) {
