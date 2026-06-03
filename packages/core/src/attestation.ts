@@ -32,10 +32,21 @@ function bufToBase64url(buf: ArrayBuffer): string {
   return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
 }
 
-/** Decode a base64url string to a Uint8Array */
-function base64urlToBuffer(s: string): Uint8Array {
+/**
+ * Decode a base64url string to a Uint8Array<ArrayBuffer>.
+ *
+ * Returns Uint8Array<ArrayBuffer> (not ArrayBufferLike) so the result is
+ * directly usable as BufferSource in crypto.subtle.verify() without an
+ * extra cast — required since TypeScript 5.5 made Uint8Array generic.
+ */
+function base64urlToBuffer(s: string): Uint8Array<ArrayBuffer> {
   if (typeof Buffer !== 'undefined') {
-    return Buffer.from(s, 'base64url');
+    // Buffer.from() returns Uint8Array<ArrayBufferLike>; copy into a fresh
+    // Uint8Array<ArrayBuffer> so crypto.subtle accepts it as BufferSource.
+    const nodeBuf = Buffer.from(s, 'base64url');
+    const out = new Uint8Array(nodeBuf.length);
+    out.set(nodeBuf);
+    return out;
   }
   const b64 = s.replace(/-/g, '+').replace(/_/g, '/');
   const padded = b64 + '='.repeat((4 - (b64.length % 4)) % 4);
