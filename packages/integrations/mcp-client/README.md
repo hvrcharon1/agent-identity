@@ -1,57 +1,47 @@
-# @datacules/agent-identity-mcp-client
+<p align="center">
+  <img src="../../../assets/logo.svg" alt="Agent Identity — by Datacules LLC" width="360"/>
+</p>
 
-Outbound MCP integration for [`@datacules/agent-identity`](../../core). Consumes external MCP servers as `CredentialStore` implementations, allowing the credential router to pull credentials **from** any MCP-speaking secrets server — such as another `@datacules/agent-identity-mcp` instance, a Vault MCP server, a 1Password MCP server, or a custom server.
+# `@datacules/agent-identity-mcp-client`
 
-## Exports
+MCP client adapter for the agent-identity framework. Implements `CredentialStore` against any external MCP server, so the router can pull credentials from a Vault MCP server, 1Password MCP, or any custom credential MCP server as a drop-in backend.
 
-| Export | Description |
-|--------|-------------|
-| `McpCredentialStore` | `CredentialStore` impl — fetches via MCP `list_credentials` tool |
-| `McpToolCaller` | Direct tool caller — `resolveCredential`, `health`, arbitrary tools |
+## Install
 
-Both classes support `http` (SSE to a running server) and `stdio` (spawns a process) transports.
+```bash
+npm install @datacules/agent-identity-mcp-client @datacules/agent-identity
+```
 
-## Usage — McpCredentialStore
-
-Drop it into any `CredentialRouter` with no other changes:
+## Usage
 
 ```typescript
-import { McpCredentialStore } from '@datacules/agent-identity-mcp-client';
+import { McpCredentialStore }  from '@datacules/agent-identity-mcp-client';
 import { createRouterFromStore } from '@datacules/agent-identity';
 
-// HTTP transport (connect to a running agent-identity-mcp server)
+// HTTP + SSE — connect to a running MCP server
 const store = new McpCredentialStore({
   transport: 'http',
-  serverUrl: 'http://vault-mcp.internal:3002',
-  authToken: process.env.MCP_AUTH_TOKEN,   // optional
-  cacheTtlMs: 30_000,                       // optional, default 60s
+  serverUrl: 'http://localhost:3002',
+});
+
+// stdio — spawn a local MCP server process
+const store = new McpCredentialStore({
+  transport: 'stdio',
+  command:   'npx',
+  args:      ['@datacules/agent-identity-mcp'],
+  env: {
+    AGENT_IDENTITY_CREDENTIALS: process.env.AGENT_IDENTITY_CREDENTIALS!,
+    AGENT_IDENTITY_RULES:       process.env.AGENT_IDENTITY_RULES!,
+  },
 });
 
 const router = createRouterFromStore(store, rules, logger);
-
-// Credential resolution is now backed by the remote MCP server
-const resolved = router.resolve(ctx);
-
-// Disconnect on shutdown
-process.on('SIGTERM', () => store.disconnect());
+const resolved = await router.resolveAsync(ctx);
 ```
 
-```typescript
-// stdio transport (spawn a local server process)
-const store = new McpCredentialStore({
-  transport: 'stdio',
-  command: 'npx',
-  args: ['@datacules/agent-identity-mcp'],
-  env: {
-    AGENT_IDENTITY_CREDENTIALS: process.env.AGENT_IDENTITY_CREDENTIALS!,
-    AGENT_IDENTITY_RULES: process.env.AGENT_IDENTITY_RULES!,
-  },
-});
-```
+## Direct tool calls: `McpToolCaller`
 
-## Usage — McpToolCaller
-
-For when you want to call the MCP server directly, without a local router:
+For typed access to MCP tools without a local router:
 
 ```typescript
 import { McpToolCaller } from '@datacules/agent-identity-mcp-client';
@@ -61,49 +51,16 @@ const caller = new McpToolCaller({
   serverUrl: 'http://localhost:3002',
 });
 
-// Typed helpers
-const result = await caller.resolveCredential({
-  userId: 'user-1', resourceId: 'kb-1', resourceKind: 'personal',
-  provider: 'anthropic', model: 'claude-sonnet-4-20250514',
-  action: 'read', traceId: 'trace-001',
-});
-console.log(result.credentialId, result.resolvedFor);
-
-const health = await caller.health();
-console.log(health.credentialsLoaded, health.rulesLoaded);
-
-// Arbitrary tool call
-const rules = await caller.callTool('list_rules', {});
-
-await caller.disconnect();
+const resolved = await caller.resolveCredential(ctx);
+const pair     = await caller.resolveMigrationCredential(migCtx);
+const alive    = await caller.health();
+const rules    = await caller.callTool('list_rules', {}); // generic escape hatch
 ```
 
-## Full MCP integration picture
+## Lazy connect + caching
 
-```
-┌──────────────────────────────────────────┐
-│        MCP Client                       │
-│  (Claude Desktop / Claude Code /       │
-│   Cursor / custom agent)               │
-└──────────────────────────────────────────┘
-         │ MCP tools (resolve_credential etc.)
-         ▼  INBOUND
-┌──────────────────────────────────────────┐
-│  @datacules/agent-identity-mcp         │
-│  (MCP Server — stdio or HTTP+SSE)      │
-└──────────────────────────────────────────┘
-         │ CredentialStore interface
-         ▼
-┌──────────────────────────────────────────┐
-│  @datacules/agent-identity-mcp-client  │
-│  McpCredentialStore                    │  OUTBOUND
-│  (fetches from external MCP servers)   │
-└──────────────────────────────────────────┘
-         │ MCP tools (list_credentials)
-         ▼
-┌──────────────────────────────────────────┐
-│  External MCP Credential Server        │
-│  (Vault MCP / 1Password MCP /          │
-│   custom secrets server)               │
-└──────────────────────────────────────────┘
-```
+Both `McpCredentialStore` and `McpToolCaller` connect lazily on the first call and maintain an in-memory cache with the same TTL semantics as the local `MemoryCredentialStore`. The connection is shared across requests for the lifetime of the store instance.
+
+---
+
+Part of the [agent-identity monorepo](https://github.com/hvrcharon1/agent-identity) by [Datacules LLC](https://datacules.com).
