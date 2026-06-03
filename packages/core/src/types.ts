@@ -63,7 +63,17 @@ export interface BudgetPolicy {
 // ─── Credentials ──────────────────────────────────────────────────────────────
 
 export type CredentialKind = 'fixed' | 'user-delegated';
-export type CredentialStatus = 'active' | 'pending' | 'revoked';
+
+/**
+ * Lifecycle status for a Credential:
+ *   active    — fully trusted; scope is as declared
+ *   pending   — being provisioned; not yet usable
+ *   unclaimed — anonymous auth.md registration; holds pre-claim scopes only;
+ *               not routable until the claim ceremony completes and status
+ *               is flipped to 'active'
+ *   revoked   — invalid; must not be resolved
+ */
+export type CredentialStatus = 'active' | 'pending' | 'unclaimed' | 'revoked';
 
 export interface Credential {
   id: string;
@@ -85,6 +95,32 @@ export interface Credential {
   budget?: BudgetPolicy;
   /** Arbitrary tags e.g. ['pii', 'financial', 'prod'] — used by compliance reports */
   tags?: string[];
+
+  /**
+   * For status='unclaimed': the scopes the credential currently carries
+   * (pre-claim). Once the claim ceremony completes, replaced with
+   * postClaimScopes and status flipped to 'active'.
+   */
+  preClaimScopes?: string[];
+
+  /**
+   * For status='unclaimed': the scopes this credential will carry once
+   * the claim ceremony is completed. Informational until claim completes.
+   */
+  postClaimScopes?: string[];
+
+  /**
+   * ISO 8601 timestamp when the auth.md claim ceremony was completed.
+   * Set by AgentAuthMdStore.completeClaimCeremony().
+   */
+  claimedAt?: string;
+
+  /**
+   * Token required to complete an ongoing claim ceremony.
+   * NEVER persisted to any external store — held in memory only.
+   * Present only on the in-memory Credential inside AgentAuthMdStore's cache.
+   */
+  claimToken?: string;
 }
 
 // ─── Approval Policy ──────────────────────────────────────────────────────────
@@ -238,6 +274,24 @@ export interface CredentialStore {
   listByKind(kind: CredentialKind): Promise<Credential[]>;
   reserve?(ref: string, migrationId: string, ttlSeconds: number): Promise<boolean>;
   release?(ref: string, migrationId: string): Promise<void>;
+
+  /**
+   * Revoke all credentials that match the given identity triple.
+   *
+   * Called when a logout+jwt is received at revocation_uri from a trusted
+   * identity provider. Implementations should mark all matching credentials as
+   * status='revoked' and clear any cached resolved values.
+   *
+   * @param issuer   - iss claim from the logout+jwt (provider base URL)
+   * @param subject  - sub claim (user identifier at the provider)
+   * @param audience - aud claim (this service's auth server URL)
+   * @returns number of credentials revoked
+   */
+  revokeByIdentity?(
+    issuer: string,
+    subject: string,
+    audience: string
+  ): Promise<number>;
 }
 
 export interface AuditLogEntry {
@@ -377,4 +431,45 @@ export interface FederationConfig {
   trustDomain: string;
   /** Map of trustDomain → base64 public key for verification */
   trustedDomains: Record<string, string>;
+}
+
+// ─── Trusted Identity Providers (auth.md) ────────────────────────────────────
+
+/**
+ * A trusted identity provider whose ID-JAG assertions this service accepts.
+ * Add entries to a TrustedProviderRegistry to gate which assertion issuers
+ * are allowed during auth.md registration.
+ */
+export interface TrustedIdentityProvider {
+  /** Issuer URL — must match the iss claim in ID-JAGs from this provider. */
+  issuerUrl: string;
+  /** Human-readable label e.g. 'OpenAI', 'Anthropic', 'Cursor'. */
+  label: string;
+  /**
+   * JWKS endpoint. If omitted, derived as {issuerUrl}/.well-known/jwks.json
+   * per the ID-JAG draft spec.
+   */
+  jwksUri?: string;
+  /**
+   * Optional CIMD URL. If the ID-JAG's client_id is a URL (not opaque),
+   * fetch it as an OAuth Client ID Metadata Document and verify its jwks_uri
+   * matches the one used for signature verification.
+   */
+  cimdUri?: string;
+  /**
+   * Policy: require at least one of these AMR values in the ID-JAG.
+   * e.g. ['mfa'] enforces MFA at the provider.
+   */
+  requiredAmr?: string[];
+  /** Whether this provider entry is currently active (default: true). */
+  enabled?: boolean;
+}
+
+/** Registry of identity providers whose ID-JAG assertions are accepted. */
+export interface TrustedProviderRegistry {
+  providers: TrustedIdentityProvider[];
+  /** JWKS cache TTL in ms. Default: 3_600_000 (1 hour). */
+  jwksCacheTtlMs?: number;
+  /** Minimum JWKS cache floor in ms. Default: 600_000 (10 minutes). */
+  jwksCacheFloorMs?: number;
 }
