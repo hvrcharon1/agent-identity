@@ -43,6 +43,8 @@ export default defineConfig({
       '@datacules/agent-identity-store-vault':  path.resolve(__dirname, './packages/stores/vault/src/index.ts'),
       '@datacules/agent-identity-store-aws':    path.resolve(__dirname, './packages/stores/aws/src/index.ts'),
       '@datacules/agent-identity-store-azure':  path.resolve(__dirname, './packages/stores/azure/src/index.ts'),
+      // auth.md store — resolved to source
+      '@datacules/agent-identity-store-authmd': path.resolve(__dirname, './packages/stores/authmd/src/index.ts'),
       // Token exchange integration — resolved to source
       '@datacules/agent-identity-token-exchange': path.resolve(__dirname, './packages/integrations/token-exchange/src/index.ts'),
     },

@@ -1,0 +1,43 @@
+{
+  "name": "@datacules/agent-identity-store-authmd",
+  "version": "0.1.0",
+  "private": false,
+  "description": "auth.md registration CredentialStore for @datacules/agent-identity — ID-JAG, verified-email, and anonymous flows with OTP claim ceremony",
+  "author": "Datacules LLC",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/hvrcharon1/agent-identity.git",
+    "directory": "packages/stores/authmd"
+  },
+  "main": "./dist/cjs/index.js",
+  "module": "./dist/esm/index.js",
+  "types": "./dist/types/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/esm/index.js",
+      "require": "./dist/cjs/index.js",
+      "types": "./dist/types/index.d.ts"
+    }
+  },
+  "files": ["dist", "README.md"],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json && tsc -p tsconfig.cjs.json",
+    "type-check": "tsc --noEmit",
+    "lint": "eslint src --ext .ts"
+  },
+  "dependencies": {
+    "zod": "^3.22.4"
+  },
+  "devDependencies": {
+    "@datacules/agent-identity": "*",
+    "@types/node": "^20",
+    "typescript": "^5",
+    "vitest": "^1.6.0"
+  },
+  "peerDependencies": {
+    "@datacules/agent-identity": "^0.9.0"
+  },
+  "engines": { "node": ">=20" },
+  "keywords": ["auth.md", "id-jag", "agent-identity", "credential", "datacules", "authmd", "oauth"]
+}
