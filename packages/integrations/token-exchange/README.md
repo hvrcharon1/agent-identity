@@ -1,6 +1,10 @@
+<p align="center">
+  <img src="../../../assets/logo.svg" alt="Agent Identity — by Datacules LLC" width="360"/>
+</p>
+
 # @datacules/agent-identity-token-exchange
 
-RFC 8693 OAuth 2.0 Token Exchange `CredentialStore` for [@datacules/agent-identity](https://github.com/hvrcharon1/agent-identity).
+RFC 8693 OAuth 2.0 Token Exchange `CredentialStore` for [@datacules/agent-identity](https://github.com/hvrcharon1/agent-identity).
 
 Exchanges a user's existing access or ID token for a narrowly-scoped downstream token at any compliant Authorization Server — without storing any long-lived credentials.
 
@@ -10,7 +14,7 @@ Exchanges a user's existing access or ID token for a narrowly-scoped downstream 
 
 In many enterprise deployments an AI agent must call downstream services (CRM, ERP, data warehouse) on behalf of a specific user, but the user's primary OAuth token is either too broad (wrong audience, excessive scopes) or was issued by a different AS than the one the downstream service trusts. The agent cannot use the user's token directly and cannot store per-user long-lived secrets at scale.
 
-**Token exchange** (RFC 8693) lets the agent present the user's existing token to a trusted AS and receive a new token scoped precisely to the downstream service — in one HTTP call, with no stored secrets.
+**Token exchange** (RFC 8693) lets the agent present the user's existing token to a trusted AS and receive a new token scoped precisely to the downstream service — in one HTTP call, with no stored secrets.
 
 ---
 
@@ -30,7 +34,7 @@ const store = new TokenExchangeStore({
   subjectTokenProvider: async (_ref) => subjectToken ?? null,
 });
 
-const router = createRouterFromStore(store, rules, logger);
+const router  = createRouterFromStore(store, rules, logger);
 const resolved = await router.resolveAsync(ctx);
 // resolved.ref IS the exchanged access_token — injected server-side,
 // never returned to the model or the client.
@@ -82,13 +86,13 @@ import type { RoutingRule } from '@datacules/agent-identity';
 
 export const rules: RoutingRule[] = [
   {
-    id:            'rule-crm-user-delegated',
-    description:   'Route CRM calls through token exchange',
-    credentialRef: 'crm-service-token',   // matches TokenExchangeConfig.ref
-    credentialKind:'user-delegated',
-    priority:      80,
-    matchProvider: 'openai',
-    matchAction:   ['read', 'write'],
+    id:             'rule-crm-user-delegated',
+    description:    'Route CRM calls through token exchange',
+    credentialRef:  'crm-service-token',   // matches TokenExchangeConfig.ref
+    credentialKind: 'user-delegated',
+    priority:       80,
+    matchProvider:  'openai',
+    matchAction:    ['read', 'write'],
   },
 ];
 ```
@@ -111,7 +115,7 @@ export async function POST(req: Request) {
     subjectTokenProvider: async (_ref) => subjectToken ?? null,
   });
 
-  const router  = createRouterFromStore(store, rules);
+  const router   = createRouterFromStore(store, rules);
   const resolved = await router.resolveAsync(body);
 
   if (!resolved) return Response.json({ error: 'Unauthorized' }, { status: 403 });
@@ -161,7 +165,7 @@ export async function POST(req: Request) {
 }
 ```
 
-### Okta (Token Exchange / act-as)
+### Okta
 
 ```typescript
 {
@@ -187,8 +191,6 @@ store.invalidateCache('crm-service-token');
 store.flushCache();
 ```
 
-For cross-request caching (e.g. in long-lived server processes), manage the store instance lifecycle in your DI container or request middleware and call `invalidateCache()` on downstream 401 responses.
-
 ---
 
 ## API reference
@@ -203,33 +205,7 @@ For cross-request caching (e.g. in long-lived server processes), manage the stor
 | `invalidateCache` | `(ref: string) => void` | Evict one cached token |
 | `flushCache` | `() => void` | Evict all cached tokens |
 
-### `TokenExchangeConfig`
-
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `ref` | `string` | ✓ | Slot identifier — matches `credentialRef` in RoutingRule |
-| `name` | `string` | ✓ | Human-readable label |
-| `kind` | `CredentialKind` | ✓ | `'fixed'` or `'user-delegated'` |
-| `scope` | `string` | ✓ | Scope description (used by `validateForMigration`) |
-| `status` | `CredentialStatus` | ✓ | `'active'`, `'pending'`, or `'revoked'` |
-| `tokenEndpoint` | `string` | ✓ | OAuth 2.0 token endpoint URL |
-| `clientId` | `string` | ✓ | OAuth 2.0 `client_id` |
-| `clientSecret` | `string` | — | OAuth 2.0 `client_secret` (omit for public clients) |
-| `requestedScopes` | `string[]` | ✓ | Scopes to request for the exchanged token |
-| `audience` | `string` | — | `audience` parameter (intended recipient service URL) |
-| `subjectTokenType` | `RfcTokenType` | — | Default: `access_token` |
-| `requestedTokenType` | `RfcTokenType` | — | Default: `access_token` |
-| `extraParams` | `Record<string, string>` | — | AS-specific extension parameters |
-| `provider` | `string` | — | Provider hint propagated to `Credential.provider` |
-| `tags` | `string[]` | — | Compliance tags (`['pii', 'financial']`) |
-
-### `RFC_TOKEN_TYPES`
-
-Pre-defined URN constants for `subjectTokenType` and `requestedTokenType`:
-`ACCESS_TOKEN`, `REFRESH_TOKEN`, `ID_TOKEN`, `SAML1`, `SAML2`, `JWT`.
-
 ---
 
-## License
-
-MIT — Datacules LLC
+Part of the [agent-identity monorepo](https://github.com/hvrcharon1/agent-identity) by [Datacules LLC](https://datacules.com).
+[Datacules Open Source License](../../../LICENSE).

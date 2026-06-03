@@ -1,6 +1,16 @@
+<p align="center">
+  <img src="../../../assets/logo.svg" alt="Agent Identity — by Datacules LLC" width="360"/>
+</p>
+
 # @datacules/agent-identity-mcp
 
 MCP server adapter for [`@datacules/agent-identity`](../../core). Exposes credential resolution as MCP tools so any MCP-capable client — **Claude Desktop, Claude Code, Cursor, Windsurf**, or a custom agent — can resolve credentials without touching the HTTP REST API.
+
+## Install
+
+```bash
+npm install @datacules/agent-identity-mcp
+```
 
 ## Tools exposed
 
@@ -45,8 +55,8 @@ const { start, stop } = createAgentIdentityMcpServer({
   httpAuthToken: process.env.MCP_AUTH_TOKEN, // optional
 });
 await start();
-// Server now accepts SSE at GET http://127.0.0.1:3002/sse
-// and tool calls at POST http://127.0.0.1:3002/messages?sessionId=<id>
+// GET  http://127.0.0.1:3002/sse          → SSE stream
+// POST http://127.0.0.1:3002/messages     → tool calls
 ```
 
 ### With a custom CredentialStore
@@ -54,7 +64,10 @@ await start();
 ```typescript
 import { VaultCredentialStore } from '@datacules/agent-identity-store-vault';
 
-const store = new VaultCredentialStore({ address: process.env.VAULT_ADDR!, token: process.env.VAULT_TOKEN! });
+const store = new VaultCredentialStore({
+  address: process.env.VAULT_ADDR!,
+  token:   process.env.VAULT_TOKEN!,
+});
 const { start } = createAgentIdentityMcpServer({ store, rules });
 await start();
 ```
@@ -86,7 +99,10 @@ echo '[{"id":"cred-1", ...}]' | base64
 ## Claude Code config
 
 ```bash
-claude mcp add agent-identity -e AGENT_IDENTITY_CREDENTIALS=<base64> -e AGENT_IDENTITY_RULES=<base64> -- npx @datacules/agent-identity-mcp
+claude mcp add agent-identity \\
+  -e AGENT_IDENTITY_CREDENTIALS=<base64> \\
+  -e AGENT_IDENTITY_RULES=<base64> \\
+  -- npx @datacules/agent-identity-mcp
 ```
 
 ## Environment variables (standalone CLI)
@@ -99,3 +115,7 @@ claude mcp add agent-identity -e AGENT_IDENTITY_CREDENTIALS=<base64> -e AGENT_ID
 | `MCP_HTTP_PORT` | `3002` | HTTP port (only when `MCP_TRANSPORT=http`) |
 | `MCP_HTTP_HOST` | `127.0.0.1` | Bind address |
 | `MCP_HTTP_AUTH_TOKEN` | — | Optional bearer token for HTTP auth |
+
+---
+
+Part of the [agent-identity monorepo](https://github.com/hvrcharon1/agent-identity) by [Datacules LLC](https://datacules.com).

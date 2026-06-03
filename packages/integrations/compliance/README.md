@@ -1,9 +1,13 @@
+<p align="center">
+  <img src="../../../assets/logo.svg" alt="Agent Identity — by Datacules LLC" width="360"/>
+</p>
+
 # `@datacules/agent-identity-compliance`
 
 Compliance report generation + tamper-evident audit log for [`@datacules/agent-identity`](../../core).
 
 Answers regulatory audit questions directly from your audit logs — no custom queries.
-Provides a SHA-256 hash chain logger and CLI verifier for SOC 2, GDPR, and HIPAA evidence.
+Provides a SHA-256 hash chain logger and CLI verifier for SOC 2, GDPR, and HIPAA evidence.
 
 ## Install
 
@@ -15,11 +19,11 @@ npm install @datacules/agent-identity-compliance
 
 | Feature | Description |
 |---------|-------------|
-| `ComplianceReportGenerator` | Generate SOC 2 / GDPR / HIPAA reports from audit logs |
+| `ComplianceReportGenerator` | Generate SOC 2 / GDPR / HIPAA reports from audit logs |
 | `HashChainAuditLogger` | Wraps any audit sink — appends SHA-256 chain fields to every entry |
 | `ChainVerifier` | Replays the chain and returns intact/broken status |
-| CLI `agent-identity audit verify` | Verify a JSONL audit log file from the command line |
-| CLI `agent-identity report` | Generate a compliance report from a JSONL audit log file |
+| `MemoryReportStore` | In-memory `ReportStore` for tests and demos |
+| CLI via `@datacules/agent-identity-cli` | `audit verify` and `report` commands for offline use |
 
 ---
 
@@ -35,18 +39,18 @@ const generator = new ComplianceReportGenerator({
   businessHoursEnd: 18,
 });
 
-// SOC 2 CC6 — Logical and Physical Access Controls
+// SOC 2 CC6 — Logical and Physical Access Controls
 const report = await generator.generate({
   type: 'soc2',
   from: '2026-01-01T00:00:00Z',
-  to: '2026-03-31T23:59:59Z',
+  to:   '2026-03-31T23:59:59Z',
 });
 
 // GDPR Article 30 — Records of Processing Activities (Markdown output)
 const gdprReport = await generator.generate({
   type: 'gdpr',
   from: '2026-01-01T00:00:00Z',
-  to: '2026-03-31T23:59:59Z',
+  to:   '2026-03-31T23:59:59Z',
   format: 'markdown',
 });
 
@@ -111,23 +115,27 @@ import { readFileSync } from 'node:fs';
 const jsonl = readFileSync('./audit.jsonl', 'utf8');
 const result = ChainVerifier.verifyJsonl(jsonl);
 
-console.log(result.intact);      // true / false
-console.log(result.entryCount);  // number of entries verified
-console.log(result.rootHash);    // SHA-256 of the last entry (publish to an anchor)
-console.log(result.brokenAt);    // entry index of first broken link (null if intact)
+console.log(result.intact);       // true / false
+console.log(result.entryCount);   // number of entries verified
+console.log(result.rootHash);     // SHA-256 of the last entry (publish to an anchor)
+console.log(result.brokenAt);     // entry index of first broken link (null if intact)
 console.log(result.brokenReason); // human-readable reason (null if intact)
 ```
 
 ---
 
-## CLI
+## CLI (via `@datacules/agent-identity-cli`)
 
-The package ships a zero-dependency CLI (`agent-identity`) for offline log verification and report generation.
+Install the CLI package for offline log verification and report generation:
+
+```bash
+npm install -g @datacules/agent-identity-cli
+```
 
 ### Verify an audit log
 
 ```bash
-agent-identity audit verify --file ./audit.jsonl
+agent-identity-cli audit verify --file ./audit.jsonl
 ```
 
 Output:
@@ -148,24 +156,24 @@ Reason           : Entry 1204: hash mismatch — entry data appears to have been
 Exit code 0 = intact, exit code 1 = broken or empty. Suitable for CI gates:
 
 ```bash
-agent-identity audit verify --file ./audit.jsonl || { echo "Audit log tampered!"; exit 1; }
+agent-identity-cli audit verify --file ./audit.jsonl || { echo "Audit log tampered!"; exit 1; }
 ```
 
 ### Generate a compliance report
 
 ```bash
-# SOC 2 CC6 — JSON output (default)
-agent-identity report soc2 --file ./audit.jsonl
+# SOC 2 CC6 — JSON output (default)
+agent-identity-cli report soc2 --file ./audit.jsonl
 
 # GDPR Article 30 — Markdown, filtered to Q1 2026
-agent-identity report gdpr \
-  --file ./audit.jsonl \
-  --from 2026-01-01 \
-  --to   2026-03-31 \
+agent-identity-cli report gdpr \\
+  --file ./audit.jsonl \\
+  --from 2026-01-01 \\
+  --to   2026-03-31 \\
   --format markdown
 
 # HIPAA §164.312 — save to file
-agent-identity report hipaa --file ./audit.jsonl > ./reports/hipaa-q2.json
+agent-identity-cli report hipaa --file ./audit.jsonl > ./reports/hipaa-q2.json
 ```
 
 ---
@@ -186,3 +194,7 @@ class PostgresReportStore implements ReportStore {
 
 const generator = new ComplianceReportGenerator({ store: new PostgresReportStore() });
 ```
+
+---
+
+Part of the [agent-identity monorepo](https://github.com/hvrcharon1/agent-identity) by [Datacules LLC](https://datacules.com).
