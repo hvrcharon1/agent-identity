@@ -143,7 +143,15 @@ describe('AgentAuthMdStore.findByRef() — cache', () => {
   });
 
   it('re-registers after invalidateCache()', async () => {
-    const fetchFn = standardFetch(AS_META_ID_JAG, { access_token: 'tok-abc', expires_in: 3600 });
+    const regBody = { access_token: 'tok-abc', expires_in: 3600 };
+    const fetchFn = mockFetchSequence(
+      { ok: true, body: PRM },
+      { ok: true, body: AS_META_ID_JAG },
+      { ok: true, body: regBody },
+      { ok: true, body: PRM },
+      { ok: true, body: AS_META_ID_JAG },
+      { ok: true, body: regBody },
+    );
     const idJagProvider: IdJagProvider = { mintForAudience: vi.fn().mockResolvedValue('id-jag-jwt') };
     const store = new AgentAuthMdStore({ configs: [makeConfig({ idJagProvider })], fetchFn });
 
@@ -156,7 +164,15 @@ describe('AgentAuthMdStore.findByRef() — cache', () => {
   });
 
   it('re-registers for all refs after flushCache()', async () => {
-    const fetchFn = standardFetch(AS_META_ID_JAG, { access_token: 'tok-flush', expires_in: 3600 });
+    const regBody = { access_token: 'tok-flush', expires_in: 3600 };
+    const fetchFn = mockFetchSequence(
+      { ok: true, body: PRM },
+      { ok: true, body: AS_META_ID_JAG },
+      { ok: true, body: regBody },
+      { ok: true, body: PRM },
+      { ok: true, body: AS_META_ID_JAG },
+      { ok: true, body: regBody },
+    );
     const idJagProvider: IdJagProvider = { mintForAudience: vi.fn().mockResolvedValue('j') };
     const store = new AgentAuthMdStore({ configs: [makeConfig({ idJagProvider })], fetchFn });
 
