@@ -17,7 +17,7 @@
   <a href="https://github.com/hvrcharon1/agent-identity/actions/workflows/ci.yml">
     <img src="https://img.shields.io/github/actions/workflow/status/hvrcharon1/agent-identity/ci.yml?branch=main&style=flat-square&label=CI&color=black" alt="CI"/>
   </a>
-  <img src="https://img.shields.io/badge/version-0.8.0-black?style=flat-square" alt="Version"/>
+  <img src="https://img.shields.io/badge/version-0.9.0-black?style=flat-square" alt="Version"/>
   <img src="https://img.shields.io/badge/packages-19%20(npm%20%2B%20PyPI)-black?style=flat-square" alt="Packages"/>
   <img src="https://img.shields.io/badge/providers-OpenAI%20%7C%20Anthropic%20%7C%20Gemini%20%7C%20Mistral%20%7C%20Local-black?style=flat-square" alt="Supported providers"/>
   <img src="https://img.shields.io/badge/MCP-server%20%2B%20client-black?style=flat-square" alt="MCP support"/>
@@ -730,7 +730,7 @@ Without an explicit answer to all three, you get one of these failure modes in p
 
 - An agent silently acts with more privilege than the user it represents (credential escalation)
 - A breach exposes raw API keys because the model layer received them directly
-- An audit trail that says “the agent did it” — with no traceable human principal behind the action
+- An audit trail that says "the agent did it" — with no traceable human principal behind the action
 - A multi-agent pipeline where intermediate hops are completely anonymous
 
 `agent-identity` makes those decisions explicit, configurable, and auditable — across any AI provider.
@@ -805,7 +805,7 @@ The result is a generation of agentic systems that are powerful but fragile on t
 
 ### The regulatory environment is catching up
 
-GDPR, SOC 2, ISO 27001, and emerging AI-specific frameworks (EU AI Act, NIST AI RMF) are beginning to ask the same questions about AI agents that they ask about human users: who acted, on whose behalf, with what authority, and is there a log? Organisations deploying agents in customer-facing, financial, or healthcare contexts will need to answer these questions in audits. A system where “the agent did it” is the only available answer will not pass.
+GDPR, SOC 2, ISO 27001, and emerging AI-specific frameworks (EU AI Act, NIST AI RMF) are beginning to ask the same questions about AI agents that they ask about human users: who acted, on whose behalf, with what authority, and is there a log? Organisations deploying agents in customer-facing, financial, or healthcare contexts will need to answer these questions in audits. A system where "the agent did it" is the only available answer will not pass.
 
 ### Multi-agent pipelines are becoming the default architecture
 
@@ -1075,11 +1075,11 @@ agent-identity/
 The publish workflow fires automatically on a version tag push:
 
 ```bash
-git tag v0.8.0
-git push origin v0.8.0
+git tag v0.9.0
+git push origin v0.9.0
 ```
 
-This stamps all 18 workspace `package.json` versions from the tag, builds core ESM + CJS, publishes all `@datacules/*` packages to npm with provenance, and publishes the Python wheel to PyPI. A GitHub Release with auto-generated notes is created once both publish jobs succeed.
+This stamps all 19 workspace `package.json` versions from the tag (18 npm packages + 1 Python SDK), builds core ESM + CJS, publishes all `@datacules/*` packages to npm with provenance, and publishes the Python wheel to PyPI. A GitHub Release with auto-generated notes is created once both publish jobs succeed.
 
 See `.github/workflows/publish.yml` and `CONTRIBUTING.md` for setup instructions.
 
