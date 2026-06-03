@@ -41,7 +41,6 @@ interface PendingClaim {
 
 const DEFAULT_EXPIRY_BUFFER_MS = 30_000;
 const DEFAULT_METHOD_PREFERENCE: AgentAuthMdMethod[] = ['id-jag', 'verified-email', 'anonymous'];
-const DEFAULT_TOKEN_TTL_MS = 3_600_000; // 1 hour fallback
 
 // ─── AgentAuthMdStore ─────────────────────────────────────────────────────────
 
@@ -49,7 +48,8 @@ export class AgentAuthMdStore implements CredentialStore {
   private readonly configMap = new Map<string, AgentAuthMdConfig>();
   private readonly cache     = new Map<string, CacheEntry>();
   private readonly pending   = new Map<string, PendingClaim>();
-  private readonly fetchFn:   typeof globalThis.fetch;
+  // Not readonly so tests can swap the fetch implementation via bracket notation
+  private fetchFn: typeof globalThis.fetch;
 
   constructor(options: AgentAuthMdStoreOptions) {
     for (const cfg of options.configs) {
@@ -310,10 +310,9 @@ export class AgentAuthMdStore implements CredentialStore {
       if (!token) return null;
 
       const credential = this.cacheAndReturn(cfg, token, data.expires_in, 'unclaimed');
-      if (!credential) return null;
 
       // Annotate with pre/post claim scopes
-      if (data.scopes)           credential.preClaimScopes  = data.scopes;
+      if (data.scopes)            credential.preClaimScopes  = data.scopes;
       if (data.post_claim_scopes) credential.postClaimScopes = data.post_claim_scopes;
 
       // Store claim info for later OTP ceremony
@@ -346,7 +345,7 @@ export class AgentAuthMdStore implements CredentialStore {
     expiresIn: number | undefined,
     status: 'active' | 'unclaimed'
   ): Credential {
-    const ttlMs  = (expiresIn ?? 3600) * 1000;
+    const ttlMs     = (expiresIn ?? 3600) * 1000;
     const expiresAt = new Date(Date.now() + ttlMs).toISOString();
     const credential = this.toCredential(cfg, token, expiresAt, status);
     this.cache.set(cfg.ref, { credential, expiresAt: Date.now() + ttlMs });
@@ -360,15 +359,15 @@ export class AgentAuthMdStore implements CredentialStore {
     status?: 'active' | 'unclaimed'
   ): Credential {
     return {
-      id:        `authmd:${cfg.ref}`,
-      kind:       cfg.kind,
-      name:       cfg.name,
-      scope:      cfg.scope,
-      status:     status ?? cfg.status,
-      provider:   cfg.provider,
+      id:       `authmd:${cfg.ref}`,
+      kind:      cfg.kind,
+      name:      cfg.name,
+      scope:     cfg.scope,
+      status:    status ?? cfg.status,
+      provider:  cfg.provider,
       ref,
       expiresAt,
-      tags:       cfg.tags,
+      tags:      cfg.tags,
     };
   }
 }

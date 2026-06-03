@@ -40,7 +40,14 @@ export interface FlowNode {
 // ─── Credentials ──────────────────────────────────────────────────────────────
 
 export type CredentialKind = 'fixed' | 'user-delegated';
-export type CredentialStatus = 'active' | 'pending' | 'revoked';
+
+/**
+ * Lifecycle status for a Credential.
+ * 'unclaimed' is added for auth.md anonymous-flow credentials that have not
+ * yet completed the OTP claim ceremony — they carry pre-claim scopes only
+ * and must not be resolved by the router until upgraded to 'active'.
+ */
+export type CredentialStatus = 'active' | 'pending' | 'unclaimed' | 'revoked';
 
 export interface Credential {
   id: string;
@@ -225,18 +232,22 @@ export interface CredentialStore {
   listByKind(kind: CredentialKind): Promise<Credential[]>;
   /**
    * Migration: reserve `ref` for exclusive use during a migration window.
-   * Returns false if the credential is already reserved by another migration
-   * or is expired — preventing concurrent migrations from sharing a write
-   * credential and corrupting the target.
-   *
-   * @param ttlSeconds How long to hold the reservation (match your migration SLA).
    */
   reserve?(ref: string, migrationId: string, ttlSeconds: number): Promise<boolean>;
   /**
    * Migration: release a previously reserved credential.
-   * Call in the finally block of a migration run to free the slot for the next job.
    */
   release?(ref: string, migrationId: string): Promise<void>;
+  /**
+   * Revoke all credentials matching the given identity triple.
+   * Called when a logout+jwt is received at revocation_uri from a trusted
+   * identity provider. Added for auth.md backchannel logout support.
+   */
+  revokeByIdentity?(
+    issuer: string,
+    subject: string,
+    audience: string
+  ): Promise<number>;
 }
 
 export interface AuditLogEntry {
@@ -255,22 +266,16 @@ export interface AuditLogEntry {
 
 /**
  * Extends AuditLogEntry with migration-specific fields.
- * Groups all per-row entries into a run via migrationId.
- * Compatible with AuditLogger.log() — no interface change needed there.
  */
 export interface MigrationAuditLogEntry extends AuditLogEntry {
   migrationId: string;
   phase: MigrationPhase;
-  /** Rows successfully read in this step */
   rowsRead?: number;
-  /** Rows successfully written in this step */
   rowsWritten?: number;
-  /** Rows that failed in this step */
   rowsFailed?: number;
   dryRun: boolean;
   sourceCredentialId: string;
   targetCredentialId: string;
-  /** Short human-readable summary of any errors in this step */
   errorSummary?: string;
 }
 
@@ -278,11 +283,6 @@ export interface AuditLogger {
   log(entry: AuditLogEntry): Promise<void>;
 }
 
-/**
- * Extended audit logger for migration runs.
- * `summarize` aggregates all entries for a single migrationId and returns
- * totals — useful for post-migration reports and dashboards.
- */
 export interface MigrationAuditLogger extends AuditLogger {
   summarize(migrationId: string): Promise<MigrationSummary>;
 }
@@ -301,10 +301,10 @@ export interface MigrationSummary {
 // ─── Decision Helper ─────────────────────────────────────────────────────────
 
 export interface DecisionAnswers {
-  variableAccess: boolean | null;       // Q1: do users have different access levels?
-  mixedResources: boolean | null;       // Q2: both shared and personal resources?
-  auditRequired: boolean | null;        // Q3: per-user audit trail needed?
-  longTermTokenStorage: boolean | null; // Q4: can you store per-user tokens long-term? (Finding #9)
+  variableAccess: boolean | null;
+  mixedResources: boolean | null;
+  auditRequired: boolean | null;
+  longTermTokenStorage: boolean | null;
 }
 
 export interface DecisionResult {
