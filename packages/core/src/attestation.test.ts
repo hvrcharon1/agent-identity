@@ -1,12 +1,14 @@
 /**
  * attestation.test.ts
  *
- * Tests for HmacAttestationSigner, buildAttestation, and verifyAttestation.
+ * Tests for HmacAttestationSigner, AsymmetricAttestationSigner,
+ * buildAttestation, and verifyAttestation.
  * All tests run purely in-process with no external dependencies.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import {
   HmacAttestationSigner,
+  AsymmetricAttestationSigner,
   buildAttestation,
   verifyAttestation,
 } from './attestation';
@@ -59,7 +61,6 @@ describe('HmacAttestationSigner', () => {
   it('verify() returns null for a tampered token', async () => {
     const token = await signer.sign({ sub: 'user-alice' });
     const [h, b, _sig] = token.split('.');
-    // Replace the signature with garbage
     const tampered = `${h}.${b}.invalidsig`;
     const result = await signer.verify(tampered);
     expect(result).toBeNull();
@@ -81,6 +82,140 @@ describe('HmacAttestationSigner', () => {
     const signer2 = new HmacAttestationSigner({ secret: 'different-secret-here!' });
     const token = await signer2.sign({ x: 1 });
     expect(await signer.verify(token)).toBeNull();
+  });
+});
+
+// ─── AsymmetricAttestationSigner ─────────────────────────────────────────────
+
+describe('AsymmetricAttestationSigner — RS256', () => {
+  let signer: AsymmetricAttestationSigner;
+
+  beforeEach(async () => {
+    const keyPair = await crypto.subtle.generateKey(
+      { name: 'RSASSA-PKCS1-v1_5', modulusLength: 2048, publicExponent: new Uint8Array([1, 0, 1]), hash: 'SHA-256' },
+      true,
+      ['sign', 'verify']
+    );
+    signer = await AsymmetricAttestationSigner.fromKeyPair(
+      keyPair.privateKey,
+      keyPair.publicKey,
+      'RS256'
+    );
+  });
+
+  it('sign() returns a three-part JWT string', async () => {
+    const token = await signer.sign({ sub: 'alice' });
+    expect(token.split('.')).toHaveLength(3);
+  });
+
+  it('verify() returns the payload for a valid signed token', async () => {
+    const token = await signer.sign({ sub: 'alice', role: 'admin' });
+    const payload = await signer.verify(token);
+    expect(payload).not.toBeNull();
+    expect(payload?.sub).toBe('alice');
+    expect(payload?.role).toBe('admin');
+  });
+
+  it('verify() returns null for a tampered signature', async () => {
+    const token = await signer.sign({ sub: 'alice' });
+    const [h, b] = token.split('.');
+    const result = await signer.verify(`${h}.${b}.invalidsignature`);
+    expect(result).toBeNull();
+  });
+
+  it('verify() returns null for an expired token', async () => {
+    const now = Math.floor(Date.now() / 1000);
+    const expired = await signer.sign({ sub: 'alice', iat: now - 600, exp: now - 1 });
+    // verify() itself does not check exp — verifyAttestation() does; but let's confirm
+    // the payload is returned (exp check is verifyAttestation's job)
+    const payload = await signer.verify(expired);
+    expect(payload).not.toBeNull(); // raw verify doesn't check exp
+    // Use verifyAttestation to confirm exp enforcement
+    expect(await verifyAttestation(expired, signer)).toBeNull();
+  });
+
+  it('verify() returns null for a malformed token', async () => {
+    expect(await signer.verify('bad')).toBeNull();
+    expect(await signer.verify('')).toBeNull();
+  });
+});
+
+describe('AsymmetricAttestationSigner — ES256', () => {
+  let signer: AsymmetricAttestationSigner;
+
+  beforeEach(async () => {
+    const keyPair = await crypto.subtle.generateKey(
+      { name: 'ECDSA', namedCurve: 'P-256' },
+      true,
+      ['sign', 'verify']
+    );
+    signer = await AsymmetricAttestationSigner.fromKeyPair(
+      keyPair.privateKey,
+      keyPair.publicKey,
+      'ES256'
+    );
+  });
+
+  it('round-trips sign → verify with ES256', async () => {
+    const token = await signer.sign({ sub: 'bob', scope: 'read' });
+    const payload = await signer.verify(token);
+    expect(payload).not.toBeNull();
+    expect(payload?.sub).toBe('bob');
+    expect(payload?.scope).toBe('read');
+  });
+
+  it('verify() returns null for tampered ES256 signature', async () => {
+    const token = await signer.sign({ sub: 'bob' });
+    const parts = token.split('.');
+    const result = await signer.verify(`${parts[0]}.${parts[1]}.AAAAAAAAAA`);
+    expect(result).toBeNull();
+  });
+});
+
+describe('AsymmetricAttestationSigner — fromPublicJwk (verify-only)', () => {
+  it('sign() throws when constructed without a private key', async () => {
+    const keyPair = await crypto.subtle.generateKey(
+      { name: 'ECDSA', namedCurve: 'P-256' },
+      true,
+      ['sign', 'verify']
+    );
+    const publicJwk = await crypto.subtle.exportKey('jwk', keyPair.publicKey);
+    const verifier = await AsymmetricAttestationSigner.fromPublicJwk(publicJwk, 'ES256');
+
+    await expect(verifier.sign({ sub: 'x' })).rejects.toThrow(
+      'AsymmetricAttestationSigner: no private key — verification-only instance'
+    );
+  });
+
+  it('verify() works for a token signed by the corresponding private key', async () => {
+    const keyPair = await crypto.subtle.generateKey(
+      { name: 'ECDSA', namedCurve: 'P-256' },
+      true,
+      ['sign', 'verify']
+    );
+    const fullSigner = await AsymmetricAttestationSigner.fromKeyPair(
+      keyPair.privateKey,
+      keyPair.publicKey,
+      'ES256'
+    );
+    const publicJwk = await crypto.subtle.exportKey('jwk', keyPair.publicKey);
+    const verifier = await AsymmetricAttestationSigner.fromPublicJwk(publicJwk, 'ES256');
+
+    const token = await fullSigner.sign({ iss: 'issuer', sub: 'charlie' });
+    const payload = await verifier.verify(token);
+    expect(payload).not.toBeNull();
+    expect(payload?.sub).toBe('charlie');
+  });
+
+  it('verify() returns null for a token from a different key pair', async () => {
+    const kp1 = await crypto.subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, true, ['sign', 'verify']);
+    const kp2 = await crypto.subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, true, ['sign', 'verify']);
+    const signer1 = await AsymmetricAttestationSigner.fromKeyPair(kp1.privateKey, kp1.publicKey, 'ES256');
+    const publicJwk2 = await crypto.subtle.exportKey('jwk', kp2.publicKey);
+    const verifier2 = await AsymmetricAttestationSigner.fromPublicJwk(publicJwk2, 'ES256');
+
+    const token = await signer1.sign({ sub: 'dave' });
+    expect(await verifier2.verify(token)).toBeNull();
   });
 });
 
@@ -155,7 +290,6 @@ describe('verifyAttestation', () => {
 
   it('returns null for an expired token', async () => {
     const now = Math.floor(Date.now() / 1000);
-    // Manually sign a payload already in the past
     const expiredPayload = { sub: 'u', iat: now - 600, exp: now - 300, credentialId: 'c', resolvedFor: 'u', action: 'read', resourceId: 'r', traceId: 't', iss: 'test' };
     const token = await signer.sign(expiredPayload);
     const result = await verifyAttestation(token, signer);

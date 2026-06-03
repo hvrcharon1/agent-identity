@@ -10,6 +10,7 @@
     "packages/stores/azure",
     "packages/stores/spiffe",
     "packages/stores/dynamic",
+    "packages/stores/authmd",
     "packages/integrations/express",
     "packages/integrations/fastify",
     "packages/integrations/langchain",

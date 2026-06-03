@@ -9,6 +9,8 @@
  * - resolveAsync(): full async resolution path for cloud stores
  * - resolvePairAsync(): async migration pair resolution (async counterpart
  *   of resolvePair(), enabling budget + attestation on migration workflows)
+ * - Unclaimed guard: credentials with status='unclaimed' are never routed
+ *   until the auth.md claim ceremony completes and status flips to 'active'
  */
 
 import type {
@@ -83,6 +85,25 @@ export class MemoryCredentialStore implements CredentialStore {
     const existing = this.reservations.get(ref);
     if (existing?.migrationId === migrationId) this.reservations.delete(ref);
   }
+
+  /**
+   * revokeByIdentity — MemoryCredentialStore no-op implementation.
+   *
+   * MemoryCredentialStore does not track the issuer/subject triple that
+   * corresponds to each credential (it only stores the credential object
+   * itself). It therefore cannot determine which credentials belong to
+   * a given identity triple and always returns 0.
+   *
+   * Implementers of custom stores should override this to mark matching
+   * credentials as status='revoked' based on their own metadata schema.
+   */
+  async revokeByIdentity(
+    _issuer: string,
+    _subject: string,
+    _audience: string
+  ): Promise<number> {
+    return 0;
+  }
 }
 
 export class CredentialRouter {
@@ -110,6 +131,8 @@ export class CredentialRouter {
     const cred = store.findByRefSync(ref);
     if (!cred) return null;
     if (cred.expiresAt && new Date(cred.expiresAt) < new Date()) return null;
+    // Unclaimed credentials (auth.md pre-claim) must not be resolved
+    if (cred.status === 'unclaimed') return null;
     if (rule.readOnly && !cred.scope.toLowerCase().includes('read')) return null;
 
     const resolved: ResolvedCredential = {
@@ -153,6 +176,8 @@ export class CredentialRouter {
     const cred = await store.findByRef(ref);
     if (!cred) return null;
     if (cred.expiresAt && new Date(cred.expiresAt) < new Date()) return null;
+    // Unclaimed credentials (auth.md pre-claim) must not be resolved
+    if (cred.status === 'unclaimed') return null;
     if (rule.readOnly && !cred.scope.toLowerCase().includes('read')) return null;
 
     // Budget check
@@ -199,7 +224,7 @@ export class CredentialRouter {
     return { source, target, migrationId: ctx.migrationId };
   }
 
-  // ─── Pair resolve for migration (async) ──────────────────────────────────
+  // ─── Pair resolve for migration (async) ────────────────────────────────
 
   /**
    * Async counterpart of resolvePair(). Resolves source and target credentials
@@ -249,7 +274,7 @@ export class CredentialRouter {
     return { source, target, migrationId: ctx.migrationId, expiresAt };
   }
 
-  // ─── Canary selection ─────────────────────────────────────────────────────
+  // ─── Canary selection ───────────────────────────────────────────────────
 
   private selectRef(rule: RoutingRule): string {
     if (rule.canaryRef && rule.canaryWeight && rule.canaryWeight > 0) {
@@ -259,7 +284,7 @@ export class CredentialRouter {
     return rule.credentialRef;
   }
 
-  // ─── Rule matching ────────────────────────────────────────────────────────
+  // ─── Rule matching ─────────────────────────────────────────────────────
 
   private ruleMatches(rule: RoutingRule, ctx: AgentRequestContext): boolean {
     if (rule.matchResourceKind && rule.matchResourceKind !== ctx.resourceKind) return false;
@@ -279,7 +304,7 @@ export class CredentialRouter {
     return true;
   }
 
-  // ─── Audit entry builder ─────────────────────────────────────────────────
+  // ─── Audit entry builder ───────────────────────────────────────────────
 
   private buildAuditEntry(
     ctx: AgentRequestContext,
@@ -305,7 +330,7 @@ export class CredentialRouter {
   }
 }
 
-// ─── Factory functions ────────────────────────────────────────────────────────
+// ─── Factory functions ───────────────────────────────────────────────────────────
 
 export function createRouter(
   credentials: Credential[],

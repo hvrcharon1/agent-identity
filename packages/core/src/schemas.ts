@@ -24,7 +24,11 @@ export const ResourceKindSchema = z.enum(['shared', 'personal']);
 
 export const CredentialKindSchema = z.enum(['fixed', 'user-delegated']);
 
-export const CredentialStatusSchema = z.enum(['active', 'pending', 'revoked']);
+/**
+ * 'unclaimed' added for auth.md anonymous-flow credentials that are
+ * awaiting claim ceremony completion before becoming fully active.
+ */
+export const CredentialStatusSchema = z.enum(['active', 'pending', 'unclaimed', 'revoked']);
 
 export const MigrationPhaseSchema = z.enum([
   'dry-run',
@@ -93,6 +97,12 @@ export const CredentialSchema = z.object({
   rotation: RotationPolicySchema.optional(),
   budget: BudgetPolicySchema.optional(),
   tags: z.array(z.string()).optional(),
+  // auth.md claim-ceremony fields
+  preClaimScopes: z.array(z.string()).optional(),
+  postClaimScopes: z.array(z.string()).optional(),
+  claimedAt: z.string().datetime().optional(),
+  // claimToken is intentionally omitted from the schema — it must never
+  // be serialised or validated at an API boundary; it is held in memory only.
 });
 
 // ─── Routing Rule ──────────────────────────────────────────────────────────
@@ -143,6 +153,23 @@ export const MigrationContextSchema = AgentRequestContextSchema.extend({
   totalBatches: z.number().int().positive().optional(),
 });
 
+// ─── Trusted Identity Providers (auth.md) ──────────────────────────────────
+
+export const TrustedIdentityProviderSchema = z.object({
+  issuerUrl: z.string().url(),
+  label: z.string().min(1),
+  jwksUri: z.string().url().optional(),
+  cimdUri: z.string().url().optional(),
+  requiredAmr: z.array(z.string()).optional(),
+  enabled: z.boolean().optional(),
+});
+
+export const TrustedProviderRegistrySchema = z.object({
+  providers: z.array(TrustedIdentityProviderSchema),
+  jwksCacheTtlMs: z.number().int().positive().optional(),
+  jwksCacheFloorMs: z.number().int().positive().optional(),
+});
+
 // ─── TypeScript types derived from schemas ──────────────────────────────────
 // (no duplication with types.ts — these are the validated input variants)
 
@@ -150,3 +177,5 @@ export type AgentRequestContextInput = z.infer<typeof AgentRequestContextSchema>
 export type MigrationContextInput    = z.infer<typeof MigrationContextSchema>;
 export type RoutingRuleInput         = z.infer<typeof RoutingRuleSchema>;
 export type CredentialInput          = z.infer<typeof CredentialSchema>;
+export type TrustedIdentityProviderInput = z.infer<typeof TrustedIdentityProviderSchema>;
+export type TrustedProviderRegistryInput = z.infer<typeof TrustedProviderRegistrySchema>;

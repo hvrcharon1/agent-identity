@@ -14,12 +14,13 @@
  * ```
  */
 
-// ─── Types (type-only re-export — required by isolatedModules) ───────────────
+// ─── Types (type-only re-export — required by isolatedModules) ───────────────────
 // types.ts has ONLY interfaces and type aliases — no runtime values.
 // 'export type *' is mandatory under isolatedModules: true (TS1205).
 export type * from './types';
 
 // ─── Runtime modules (classes, functions, const) ─────────────────────────────
+// Core router + built-in stores
 export * from './router';
 export * from './providers';
 export * from './credentials';
@@ -29,3 +30,8 @@ export * from './attestation';
 export * from './approval';
 export * from './budget';
 export * from './federation';
+
+// auth.md compatibility — identity providers, revocation, and claim lifecycle
+export * from './identity-providers';
+export * from './revocation';
+export * from './revocation-listener';

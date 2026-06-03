@@ -8,6 +8,40 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added
+
+- `AgentAuthMdStore` (`packages/stores/authmd`) — full auth.md registration
+  client implementing `CredentialStore`, supporting ID-JAG, verified-email,
+  and anonymous flows with OTP claim ceremony (`startClaimCeremony` /
+  `completeClaimCeremony`). Backed by RFC 9728 PRM discovery.
+- `CredentialStatus` extended with `'unclaimed'` tier for anonymous auth.md
+  credentials pre-claim ceremony. `CredentialStatusSchema` updated to match.
+- `Credential` extended with `preClaimScopes`, `postClaimScopes`, `claimedAt`,
+  `claimToken` (in-memory only, never serialised).
+- `CredentialStore.revokeByIdentity()` optional method for inbound revocation.
+- `RevocationHandler` — inbound `logout+jwt` processor with jti replay
+  protection and configurable TTL eviction. (`packages/core/src/revocation.ts`)
+- `RevocationListener` — framework-agnostic HTTP handler for `revocation_uri`
+  endpoints. (`packages/core/src/revocation-listener.ts`)
+- `TrustedIdentityProvider` / `TrustedProviderRegistry` types and Zod schemas
+  in core. (`packages/core/src/types.ts`, `packages/core/src/schemas.ts`)
+- `validateIdJagClaims()` — claim-layer validation for incoming ID-JAGs,
+  covering issuer trust, provider enable, expiry, audience, verified identity,
+  and AMR checks. (`packages/core/src/identity-providers.ts`)
+- `AsymmetricAttestationSigner` — RS256/ES256 JWT signer/verifier for ID-JAG
+  compatibility, built on `crypto.subtle` with no external dependencies.
+  `fromKeyPair()` for signing, `fromPublicJwk()` for verify-only instances.
+- New test suites: `attestation.test.ts` (AsymmetricAttestationSigner 8 cases),
+  `revocation.test.ts` (4 cases), `revocation-listener.test.ts` (6 cases),
+  `identity-providers.test.ts` (12 cases), `AgentAuthMdStore.test.ts` (22 cases).
+- `@datacules/agent-identity-store-authmd` added to npm workspace.
+
+### Fixed
+
+- `base64urlToBuffer()` in `attestation.ts` now returns `Uint8Array<ArrayBuffer>`
+  (was `Uint8Array<ArrayBufferLike>`), resolving a TypeScript 5.5+ compile error
+  where `crypto.subtle.verify()` rejected `ArrayBufferLike` as `BufferSource`.
+
 ---
 
 ## [0.9.0] — 2026-06-03
