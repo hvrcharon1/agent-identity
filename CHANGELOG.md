@@ -10,6 +10,37 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Added
 
+- `@datacules/agent-identity-store-libsql` (`packages/stores/libsql`) — LibSQL (SQLite / Turso)
+  persistence layer implementing all four agent-identity store interfaces via `@libsql/client`.
+  Zero native bindings, zero server, one `npm install`. Scales from embedded
+  (`file:./agent-identity.db`) to globally distributed (Turso remote URL) by changing a single
+  connection string — no code changes required.
+
+  Classes and interfaces:
+  - `LibSqlCredentialStore` — `CredentialStore` (`findByRef`, `listActive`, `listByKind`,
+    `reserve`, `release`, `revokeByIdentity`, `upsert`)
+  - `LibSqlApprovalStore` — `ApprovalStore` (`create`, `get`, `update`, `listPending`)
+  - `LibSqlBudgetStore` — `BudgetStore` (hourly sliding-window counters, daily spend,
+    `resetHourly`, `resetDaily`, `recordSpend`)
+  - `LibSqlAuditLogger` — `MigrationAuditLogger` (`log` with standard + migration paths,
+    `summarize` for per-migration compliance aggregation)
+  - `createLibSqlStores()` — one-call factory: opens connection, bootstraps schema, returns
+    all four stores
+  - `bootstrapSchema()` — DDL runner (6 tables, 8 indexes, all `IF NOT EXISTS`)
+  - `SCHEMA_DDL` — exported DDL array for custom bootstrapping
+
+  Schema tables: `ai_credentials`, `ai_reservations`, `ai_approval_requests`,
+  `ai_budget_hourly`, `ai_budget_daily`, `ai_audit_log`.
+
+  Test suite: 32 Vitest cases (`libsql.test.ts`), all using mock client injection —
+  no real SQLite connection required in CI. (PR #46)
+
+- `packages/stores/libsql` added to npm workspaces in root `package.json` (21st workspace entry).
+  `npm install` now installs `@libsql/client`; Turbo build and publish automation include the package.
+
+- `@datacules/agent-identity-store-libsql` source alias added to `vitest.config.ts`.
+  Cross-package imports resolve to `packages/stores/libsql/src/index.ts` without a prior build step.
+
 - `AgentAuthMdStore` (`packages/stores/authmd`) — full auth.md registration
   client implementing `CredentialStore`, supporting ID-JAG, verified-email,
   and anonymous flows with OTP claim ceremony (`startClaimCeremony` /

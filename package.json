@@ -11,6 +11,7 @@
     "packages/stores/spiffe",
     "packages/stores/dynamic",
     "packages/stores/authmd",
+    "packages/stores/libsql",
     "packages/integrations/express",
     "packages/integrations/fastify",
     "packages/integrations/langchain",
