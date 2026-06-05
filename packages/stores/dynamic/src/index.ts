@@ -102,7 +102,6 @@ export interface AwsRolesAnywhereProvisionerOptions {
 /**
  * Provisions temporary AWS credentials via IAM Roles Anywhere.
  * Requires `aws_signing_helper` or equivalent OIDC-based credential exchange.
- * This implementation calls the Roles Anywhere endpoint directly.
  */
 export class AwsRolesAnywhereProvisioner implements DynamicProvisioner {
   id = 'aws-roles-anywhere';
@@ -118,12 +117,102 @@ export class AwsRolesAnywhereProvisioner implements DynamicProvisioner {
       body: JSON.stringify({ durationSeconds, profileArn, roleArn, trustAnchorArn }),
     });
     if (!res.ok) throw new Error(`AWS Roles Anywhere provision failed: ${res.status}`);
-    const body = await res.json() as { credentialSet: [{ credentials: { accessKeyId: string; secretAccessKey: string; sessionToken: string; expiration: string } }] };
+    const body = await res.json() as {
+      credentialSet: [{ credentials: { accessKeyId: string; secretAccessKey: string; sessionToken: string; expiration: string } }]
+    };
     const creds = body.credentialSet[0].credentials;
     return {
       leaseId: `aws-session-${Date.now()}`,
       expiresAt: creds.expiration,
-      secret: JSON.stringify({ accessKeyId: creds.accessKeyId, secretAccessKey: creds.secretAccessKey, sessionToken: creds.sessionToken }),
+      secret: JSON.stringify({
+        accessKeyId: creds.accessKeyId,
+        secretAccessKey: creds.secretAccessKey,
+        sessionToken: creds.sessionToken,
+      }),
+    };
+  }
+}
+
+// ─── Azure Managed Identity provisioner ──────────────────────────────────────
+
+export interface AzureManagedIdentityProvisionerOptions {
+  /**
+   * The resource URI (audience) for the token.
+   * e.g. 'https://vault.azure.net' for Azure Key Vault,
+   *      'https://management.azure.com/' for ARM,
+   *      'https://storage.azure.com/' for Blob Storage.
+   */
+  resource: string;
+  /**
+   * Client ID for a user-assigned managed identity.
+   * Omit to use the system-assigned managed identity of the host VM/container.
+   */
+  clientId?: string;
+  /**
+   * IMDS API version (default: '2018-02-01').
+   * Use '2019-08-01' for Arc-enabled servers.
+   */
+  apiVersion?: string;
+}
+
+/**
+ * Provisions a short-lived Azure AD access token via the Azure Instance
+ * Metadata Service (IMDS). Works on Azure VMs, AKS pods with workload identity,
+ * App Service, Container Apps, and Azure Arc-enabled servers.
+ *
+ * The IMDS endpoint is a link-local address (169.254.169.254) only reachable
+ * from within an Azure-hosted workload — calls will fail outside Azure.
+ *
+ * @example
+ * ```typescript
+ * const store = new DynamicCredentialStore({
+ *   provisioner: new AzureManagedIdentityProvisioner({
+ *     resource: 'https://vault.azure.net',
+ *   }),
+ * });
+ * ```
+ */
+export class AzureManagedIdentityProvisioner implements DynamicProvisioner {
+  id = 'azure-managed-identity';
+
+  constructor(private readonly opts: AzureManagedIdentityProvisionerOptions) {}
+
+  async provision(_ref: string): Promise<ProvisionedSecret> {
+    const { resource, clientId, apiVersion = '2018-02-01' } = this.opts;
+
+    const imdsUrl = new URL(
+      'http://169.254.169.254/metadata/identity/oauth2/token'
+    );
+    imdsUrl.searchParams.set('api-version', apiVersion);
+    imdsUrl.searchParams.set('resource', resource);
+    if (clientId) imdsUrl.searchParams.set('client_id', clientId);
+
+    const res = await fetch(imdsUrl.toString(), {
+      headers: { Metadata: 'true' },
+    });
+    if (!res.ok) {
+      throw new Error(
+        `Azure IMDS token request failed: ${res.status} ${await res.text()}`
+      );
+    }
+
+    const body = await res.json() as {
+      access_token: string;
+      expires_in: string;
+      token_type: string;
+      resource: string;
+    };
+
+    const expiresAt = new Date(
+      Date.now() + parseInt(body.expires_in, 10) * 1000
+    ).toISOString();
+
+    const identityKind = clientId ? `user-assigned:${clientId}` : 'system-assigned';
+
+    return {
+      leaseId: `azure-mi-${identityKind}-${Date.now()}`,
+      expiresAt,
+      secret: body.access_token,
     };
   }
 }
