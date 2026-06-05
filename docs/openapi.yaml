@@ -1,12 +1,22 @@
 openapi: 3.1.0
 info:
   title: agent-identity credential resolution API
-  version: 0.8.0
+  version: 0.10.0
   description: |
     Language-agnostic REST contract for resolving agent credentials.
     Any application (Python, Go, Ruby, Java) can POST to /api/resolve or
     /api/migrate/resolve. The server resolves the credential from an encrypted
     store and returns only safe metadata — never the raw secret.
+
+    v0.10.0 updates:
+      - GET /api/health: new liveness probe endpoint (resolves ISS-001);
+        used by agent-identity-cli health, Docker HEALTHCHECK, and
+        Kubernetes liveness probes.
+
+    v0.9.0 notes:
+      - No new REST endpoints; v0.9.0 added @datacules/agent-identity-cli,
+        auth.md enhancements (G-A1–G-A6), AzureManagedIdentityProvisioner,
+        rotateAfterUses + grace period, and the LibSQL store adapter.
 
     v0.8.0 notes:
       - No new REST endpoints in v0.7.0 or v0.8.0; those releases were
@@ -14,7 +24,7 @@ info:
         SpiffeTab, ComplianceTab) and CI / test improvements.
       - Version bumped from 0.6.0 to match the package release stream.
 
-    v0.6.0 updates (last schema-impacting release):
+    v0.6.0 updates (last schema-impacting release before v0.10.0):
       - MigrateResolveResponse: added sourceCredentialId + targetCredentialId
         (both now required in the response, added in the PR #32 route rewrite)
       - ResolveResponse: credentialId and expiresAt already present since v0.3.0
@@ -33,6 +43,26 @@ servers:
     description: Docker sidecar
 
 paths:
+
+  # ── Health ──────────────────────────────────────────────────────────────────────────────
+
+  /api/health:
+    get:
+      operationId: getHealth
+      summary: Server liveness probe
+      description: |
+        Returns the current server status, package version, number of active
+        credentials, and number of loaded routing rules. Used by the CLI
+        `health` command, Docker HEALTHCHECK directives, and Kubernetes
+        liveness probes. Never exposes credential secrets or raw configuration.
+      tags: [Core]
+      responses:
+        '200':
+          description: Server is operational
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
 
   # ── Core resolution ─────────────────────────────────────────────────────────────────────
 
@@ -513,6 +543,30 @@ components:
           description: >
             Earliest expiry across both resolved credentials. The migration job
             should refresh before this timestamp to avoid mid-batch 401 errors.
+
+    HealthResponse:
+      type: object
+      required: [status, version, timestamp, credentialsLoaded, rulesLoaded]
+      properties:
+        status:
+          type: string
+          enum: [ok]
+          description: Always 'ok' when the server is responsive
+        version:
+          type: string
+          description: >
+            npm_package_version of the running server process.
+            Returns 'unknown' in local dev when the variable is not set.
+        timestamp:
+          type: string
+          format: date-time
+          description: ISO 8601 timestamp of this health response
+        credentialsLoaded:
+          type: integer
+          description: Number of active credentials currently held in the configured store
+        rulesLoaded:
+          type: integer
+          description: Number of routing rules currently loaded into the resolver
 
     # ── Attestation ─────────────────────────────────────────────────────────────────
 
