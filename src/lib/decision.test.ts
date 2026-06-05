@@ -45,7 +45,6 @@ describe('computeDecision', () => {
   // ── context-switched ────────────────────────────────────────────────────────
 
   it('context-switched resolves immediately from Q1+Q2 — no Q3/Q4 gate (Bug 1 regression guard)', () => {
-    // Q3 and Q4 are null — must NOT block result
     const result = computeDecision(answers({ variableAccess: true, mixedResources: true }));
     expect(result?.pattern).toBe('context-switched');
   });
