@@ -1,38 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import { computeDecision } from '@/lib/decision';
+import { computeDecision, DECISION_QUESTIONS } from '@/lib/decision';
 import type { DecisionAnswers } from '@/lib/types';
-
-// Finding #9: Added Q4 for token-exchange surface
-const QUESTIONS: { key: keyof DecisionAnswers; text: string; yes: string; no: string; showIf?: (a: DecisionAnswers) => boolean }[] = [
-  {
-    key:  'variableAccess',
-    text: 'Do different users need different levels of access to the same resource?',
-    yes:  'Yes - user A can see more than user B',
-    no:   'No - all users have identical access',
-  },
-  {
-    key:  'mixedResources',
-    text: 'Does the agent access both shared (all-user) and personal (per-user) resources?',
-    yes:  'Yes - both kinds in the same agent',
-    no:   'No - only one kind',
-  },
-  {
-    key:  'auditRequired',
-    text: 'How important is a per-user audit trail?',
-    yes:  'Critical - we need to know which user caused each action',
-    no:   'Not needed - agent-level logging is enough',
-  },
-  {
-    // Finding #9: Q4 only shown when variableAccess=true to surface token-exchange
-    key:  'longTermTokenStorage',
-    text: 'Can you store per-user tokens long-term (e.g. in an encrypted DB)?',
-    yes:  'Yes - we can persist user tokens securely',
-    no:   'No - tokens must be obtained at request time only',
-    showIf: (a) => a.variableAccess === true,
-  },
-];
 
 export function DecisionTab() {
   const [answers, setAnswers] = useState<DecisionAnswers>({
@@ -47,15 +17,23 @@ export function DecisionTab() {
   function pick(key: keyof DecisionAnswers, value: boolean) {
     setAnswers((prev) => {
       const next = { ...prev, [key]: value };
-      // Reset Q4 if variableAccess is flipped to false
-      if (key === 'variableAccess' && !value) {
+      if (key === 'variableAccess') {
+        next.mixedResources       = null;
+        next.auditRequired        = null;
+        next.longTermTokenStorage = null;
+      }
+      if (key === 'mixedResources') {
+        next.auditRequired        = null;
+        next.longTermTokenStorage = null;
+      }
+      if (key === 'auditRequired') {
         next.longTermTokenStorage = null;
       }
       return next;
     });
   }
 
-  const visibleQuestions = QUESTIONS.filter(
+  const visibleQuestions = DECISION_QUESTIONS.filter(
     (q) => !q.showIf || q.showIf(answers)
   );
 
