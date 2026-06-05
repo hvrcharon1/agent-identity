@@ -30,6 +30,28 @@ npm run type-check  # TypeScript (root + src/)
 npm run lint        # ESLint
 ```
 
+## Using the CLI
+
+The `@datacules/agent-identity-cli` package is included in the monorepo. After `npm install --legacy-peer-deps` the binary is available via `npx`:
+
+```bash
+npx agent-identity-cli --help
+
+# Check that a running dev server is alive
+npx agent-identity-cli health
+
+# Verify a JSONL audit log's SHA-256 hash chain
+npx agent-identity-cli audit verify --file ./audit.jsonl
+
+# Generate a SOC 2 compliance report
+npx agent-identity-cli report soc2 --file ./audit.jsonl
+
+# Test credential resolution against a running server
+npx agent-identity-cli resolve --provider anthropic --user user-abc
+```
+
+> **Note:** The binary is named `agent-identity-cli` (not `agent-identity`). If you encounter any documentation or scripts referencing the old binary name, please open a PR to correct it.
+
 ## Repository layout
 
 ```

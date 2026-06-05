@@ -16,13 +16,13 @@
 
 ## [ISS-001] 🔴 Missing `GET /api/health` route
 
-**Status**: Open
+**Status**: Resolved — `src/app/api/health/route.ts` created; `docs/openapi.yaml` updated to v0.10.0
 **Affects**: `@datacules/agent-identity-cli` — `agent-identity-cli health` command
 **Introduced**: PR #43 (v0.9.0)
 
 ### Description
 
-The CLI package ships a `health` command that performs `GET <base>/api/health` against a running agent-identity server and returns the response status. However, no corresponding Next.js route handler exists in `src/app/api/`. Any invocation of `agent-identity-cli health` will receive an HTTP `404 Not Found` from the Next.js app and the CLI will report the server as unreachable, even when it is fully operational.
+The CLI package ships a `health` command that performs `GET <base>/api/health` against a running agent-identity server and returns the response status. However, no corresponding Next.js route handler existed in `src/app/api/`. Any invocation of `agent-identity-cli health` would receive an HTTP `404 Not Found` from the Next.js app and the CLI would report the server as unreachable, even when it was fully operational.
 
 The MCP server's `health` tool (in `packages/integrations/mcp/src/tools.ts`) correctly returns a health object, but this is a different code path and is only reachable via the MCP protocol, not via HTTP.
 
@@ -30,9 +30,9 @@ The MCP server's `health` tool (in `packages/integrations/mcp/src/tools.ts`) cor
 
 The `runHealth()` function in `packages/cli/src/cli.ts` was written before the server-side route was created. The route was never added to `src/app/api/`.
 
-### Fix
+### Fix Applied
 
-Create `src/app/api/health/route.ts`:
+Created `src/app/api/health/route.ts`:
 
 ```typescript
 import { NextResponse } from 'next/server';
@@ -51,25 +51,25 @@ export async function GET() {
 }
 ```
 
-Also add the endpoint to `docs/openapi.yaml` under `GET /api/health`.
+Also added `GET /api/health` and `HealthResponse` schema to `docs/openapi.yaml` (bumped to v0.10.0).
 
 ---
 
 ## [ISS-002] 🟠 PR #48 is open and stale (superseded by PR #49)
 
-**Status**: Open
+**Status**: Resolved — PR #48 closed with reference to #49
 **Affects**: GitHub repository hygiene, contributor confusion
 **PR**: [#48](https://github.com/hvrcharon1/agent-identity/pull/48) — `feat/fix-decision-helper-app`
 
 ### Description
 
-PR #48 (`fix(decision): sync app-layer helper with core package — 5 bugs + test expansion`) was opened on 2026-06-05 and is still in **open** state. It was superseded by PR #49 (`fix(decision): sync app-layer helper with core — 5 bugs + test expansion`, branch `feat/fix-decision-helper-app-v2`) which was merged the same day. The work in PR #49 is a superset of PR #48.
+PR #48 (`fix(decision): sync app-layer helper with core package — 5 bugs + test expansion`) was opened on 2026-06-05 and was still in **open** state. It was superseded by PR #49 (`fix(decision): sync app-layer helper with core — 5 bugs + test expansion`, branch `feat/fix-decision-helper-app-v2`) which was merged the same day. The work in PR #49 is a superset of PR #48.
 
 Leaving PR #48 open creates confusion for contributors reviewing the PR queue and may be mistakenly rebased and re-submitted as a duplicate fix.
 
-### Fix
+### Fix Applied
 
-Close PR #48 with the comment: *"Superseded by #49 which contains the same fixes plus the corrected cascade logic. Closing to keep the PR queue clean."*
+Closed PR #48 with the comment: *“Superseded by #49 (`feat/fix-decision-helper-app-v2`), which carried the full implementation (3 files, +214/−129) and was merged. This branch only contained a 1-line comment removal. Closing.”*
 
 ---
 
@@ -95,10 +95,9 @@ As a result, three dashboard tabs (`ApprovalTab`, `BudgetTab`, `JitTab`) display
 ### Fix
 
 Implement Phase 3 per the `enhancements.md` v0.11.0 plan. Priority order:
-1. `GET /api/health` (also ISS-001)
-2. Server-side `LibSqlApprovalStore` wiring for approval routes
-3. Server-side `LibSqlBudgetStore` wiring for budget routes
-4. `CREDENTIAL_STORE_TYPE=dynamic` in `getServerStore()`
+1. Server-side `LibSqlApprovalStore` wiring for approval routes
+2. Server-side `LibSqlBudgetStore` wiring for budget routes
+3. `CREDENTIAL_STORE_TYPE=dynamic` in `getServerStore()`
 
 ---
 
@@ -130,7 +129,7 @@ This is incorrect. The `RevocationListener` must be explicitly mounted at the `r
 
 ### Fix
 
-The README.md has been updated in this commit to address the above gaps. The remaining work is to cut a formal v0.10.0 release tag that promotes the `[Unreleased]` CHANGELOG block, updates all workspace `package.json` version fields, and triggers the publish workflow.
+Update README.md to address the above gaps and cut a formal v0.10.0 release tag that promotes the `[Unreleased]` CHANGELOG block, updates all workspace `package.json` version fields, and triggers the publish workflow.
 
 ---
 
@@ -146,7 +145,7 @@ The Next.js app (`src/`) maintains its own copies of several logic files that mi
 Known mirrored files:
 
 | App-layer file | Core package mirror | Sync mechanism |
-|----------------|---------------------|-----------------|
+|----------------|---------------------|------------------|
 | `src/lib/decision.ts` | `packages/core/src/decision.ts` | Manual — PR #49 fixed divergence; `DECISION_QUESTIONS` now imported from app-layer |
 | `src/lib/router.ts` | `packages/core/src/router.ts` | Manual — `src/lib/router.ts` is a simplified subset |
 | `src/lib/types.ts` | `packages/core/src/types.ts` | Manual — known to intentionally lag (all new fields optional) |
@@ -192,32 +191,32 @@ Upgrade to Next.js 15+ which uses Rspack instead of webpack by default, eliminat
 
 ## [ISS-007] 🟡 `docs/openapi.yaml` is missing 5 endpoints and is stale at v0.6.0
 
-**Status**: Open
+**Status**: Resolved — `GET /api/health` added and spec bumped to v0.10.0; audit confirmed the other 4 endpoints cited were already present in the spec prior to this fix
 **Affects**: `docs/openapi.yaml`, API consumers using the spec
 
 ### Description
 
-The OpenAPI spec was last updated in PR #35 (v0.7.0) and is pinned at spec version `0.6.0`. The following endpoints exist in `src/app/api/` but are absent from the spec:
+The OpenAPI spec was last updated in PR #35 (v0.7.0) and was pinned at spec version `0.6.0`. On audit, the following endpoints were checked:
 
 | Endpoint | Route file | Status in spec |
 |----------|-----------|----------------|
-| `GET /api/health` | Does not exist yet — see ISS-001 | ❌ Missing |
-| `POST /api/approve/break-glass` | `src/app/api/approve/` | ❌ Missing |
-| `DELETE /api/anomaly` | `src/app/api/anomaly/` | ❌ Missing |
-| `GET /api/budget` | `src/app/api/budget/` | ❌ Missing |
-| `POST /api/budget/reset` | `src/app/api/budget/` | ❌ Missing |
+| `GET /api/health` | `src/app/api/health/route.ts` (created this session) | ✅ Added (v0.10.0) |
+| `POST /api/approve/break-glass` | `src/app/api/approve/` | ✅ Already present |
+| `DELETE /api/anomaly` | `src/app/api/anomaly/` | ✅ Already present |
+| `GET /api/budget` | `src/app/api/budget/` | ✅ Already present |
+| `POST /api/budget` (reset counter) | `src/app/api/budget/` | ✅ Already present |
 
-Additionally, `MigrateResolveResponse` in the spec should be verified against the actual response shape from `src/app/api/migrate/resolve/route.ts` (which was updated in PR #32 to include `sourceCredentialId` and `targetCredentialId`).
+Additionally, `MigrateResolveResponse` in the spec was verified to include `sourceCredentialId` and `targetCredentialId` (added in v0.6.0 alongside PR #32) — no drift found.
 
-### Fix
+### Fix Applied
 
-Update `docs/openapi.yaml` to v0.10.0 covering all missing endpoints. Long-term: adopt `zod-to-openapi` to auto-generate the spec from the existing Zod schemas in `packages/core/src/schemas.ts`, eliminating manual drift.
+Added `GET /api/health` path and `HealthResponse` schema to `docs/openapi.yaml`. Spec version bumped to `0.10.0` with v0.9.0 and v0.10.0 change notes. Long-term: adopt `zod-to-openapi` to auto-generate the spec from the existing Zod schemas in `packages/core/src/schemas.ts`, eliminating manual drift.
 
 ---
 
 ## [ISS-008] 🟡 `@datacules/agent-identity-cli` binary resolves `agent-identity` name collision on some npm versions
 
-**Status**: Mitigated (PR #43 renamed binary)
+**Status**: Mitigated (PR #43 renamed binary; CONTRIBUTING.md updated this session)
 **Affects**: Users who install both `@datacules/agent-identity-compliance` and `@datacules/agent-identity-cli` globally
 
 ### Description
@@ -228,7 +227,7 @@ PR #43 renamed the CLI binary to `agent-identity-cli` to avoid the collision. Ho
 
 ### Remaining risk
 
-Check that no CI scripts, CI smoke tests, or internal docs reference the old `agent-identity` binary name. The CONTRIBUTING.md should document the correct binary name `agent-identity-cli`.
+Check that no CI scripts, CI smoke tests, or internal docs reference the old `agent-identity` binary name. `CONTRIBUTING.md` now documents the correct binary name `agent-identity-cli` with usage examples.
 
 ---
 
@@ -246,6 +245,7 @@ The `packages/` test suite has 466 Vitest cases covering all published packages.
 - Correct `resolvedFor` / `credentialId` / `expiresAt` in the response body
 - Migration `resolvePair()` response shape
 - Approval and budget enforcement in the resolve path
+- Health route response shape and store wiring
 
 ### Fix
 
@@ -255,7 +255,7 @@ Add a `src/app/api/__tests__/` directory with Vitest tests using `next/server`'s
 
 ## [ISS-010] 🟢 `packages/python-sdk` mock patch path assumption is fragile
 
-**Status**: Partially resolved (session history notes this was fixed)
+**Status**: Resolved — `test_client.py` audited; all `@patch` decorators correctly target `urllib.request.urlopen`; no `agent_identity.<stdlib>` patterns found
 **Affects**: `packages/python-sdk/tests/`
 
 ### Description
@@ -270,11 +270,7 @@ At some point during CI debugging (documented in session history), the Python SD
 @patch("urllib.request.urlopen")
 ```
 
-The correct path was identified and applied. However, the test suite should be audited to confirm no other mock paths use the same `agent_identity.<stdlib>` pattern, which would cause tests to pass trivially (the patch applies to a name that is never actually called in the test scenario).
-
-### Fix
-
-Run `grep -r '@patch("agent_identity\.' packages/python-sdk/tests/` and verify all patch targets correctly reference the stdlib or third-party module path, not the `agent_identity` package re-export path.
+The correct path was identified and applied. The test suite was audited in full — all 15 `@patch` calls in `test_client.py` use `urllib.request.urlopen` (the correct stdlib path). No `agent_identity.<stdlib>` patterns exist in the test file.
 
 ---
 
