@@ -53,6 +53,157 @@ So we built something to solve it: **`agent-identity`** — open-source, provide
 
 ---
 
+## The Nine Foundational Pillars
+
+`agent-identity` is built on nine principles that define not just what the framework does, but what it will never compromise. These are the architectural decisions made before the first line of code was written — the frame that every feature, integration, and interface is built around.
+
+---
+
+### I · Identity Sovereignty
+
+> *The agent is not the principal. Every agentic action belongs to a traceable human identity.*
+
+An agent's identity is delegated, not inherent. When an agent modifies a file, sends an email, or calls a downstream API, those actions belong to a user, a service account, or a defined machine identity with a declared origin. `agent-identity` makes this delegation explicit and load-bearing at the routing layer: `resolvedFor` on every `ResolvedCredential` is the contractual answer to "who authorised this action." In multi-agent pipelines, each hop carries its own `IdentityChainEntry` — org, userId, agentId, issuedAt, Ed25519 signature — so the complete delegation path is always reconstructible, not just the first and last link.
+
+The principle: no agent action may be anonymous. Identity is the first contract, not an optional annotation.
+
+---
+
+### II · Zero Credential Exposure
+
+> *Raw secrets do not belong in context windows, agent state, or framework logs. They are delivered once, server-side, at the last responsible moment.*
+
+API keys, OAuth tokens, and database passwords that enter a context window can be logged, replayed, or leaked by the model layer itself. The router returns opaque `ref` strings throughout the system — actual secrets are fetched server-side by provider adapters at injection time, never before. Three credential delivery mechanisms extend this principle to different trust domains:
+
+- **SPIFFE/SPIRE** — X.509 SVIDs cryptographically attested by a SPIRE agent; no static secrets exist anywhere in the system
+- **JIT provisioning** — Vault, AWS IAM Roles Anywhere, or Azure Managed Identity mint short-lived credentials on demand, TTL-bounded and auto-revoked
+- **RFC 8693 token exchange** — user access tokens are exchanged for scoped downstream tokens at request time, cached briefly with a 30-second expiry buffer, never stored long-term
+
+The model layer never holds what it doesn't need to hold.
+
+---
+
+### III · Least Privilege by Construction
+
+> *Agents cannot escalate beyond the calling user's existing entitlements. This is enforced by the routing engine, not by convention.*
+
+User-delegated credentials are scoped to what the calling user already holds. The routing engine has no mechanism to elevate them. Least-privilege is structural, not a checklist item.
+
+Three enforcement points implement this principle:
+
+1. `readOnly: true` on a routing rule rejects write-scoped credentials at the router — before any call reaches the downstream system, before any data moves
+2. `validateForMigration()` on every provider adapter enforces scope-phase alignment: read-only credentials in extract/dry-run phases, write-scoped credentials in load/rollback phases — mismatches surface as routing errors, not database errors
+3. `CredentialStatus` lifecycle (`pending` → `unclaimed` → `active` → `revoked`) prevents credentials from resolving until they have completed their provisioning or claim ceremony — `unclaimed` credentials (auth.md pre-claim) are never routable
+
+Misconfiguration is caught at the layer closest to the decision, not at the layer closest to the consequence.
+
+---
+
+### IV · Full Reconstructibility
+
+> *Every action in every agent pipeline — including multi-hop, multi-agent chains — must be fully reconstructible from the audit log.*
+
+"The agent did it" is not an audit entry. Every resolution records `userId`, `action`, `resourceId`, `credentialId`, `resolvedFor`, `traceId`, `provider`, `model`, `credentialKind`, and optionally `spiffeId` and `identityChain`. This is not telemetry — it is the legal and operational record.
+
+Four mechanisms harden the audit trail beyond simple logging:
+
+1. **`HashChainAuditLogger`** links every entry with a SHA-256 hash of the previous entry, producing a tamper-evident chain that can be verified offline
+2. **`ComplianceReportGenerator`** distils audit log stores into SOC 2, GDPR, and HIPAA reports with structured sections: `agentAccessSummary`, `piiResourceAccess`, `offHoursAccess`, `credentialRotationHistory`, `anomalyEvents`
+3. **`MigrationAuditLogEntry`** extends the base entry with `migrationId`, `phase`, `rowsRead`, `rowsWritten`, `rowsFailed`, and `errorSummary` — migrations produce roll-up summaries, not just raw events
+4. **`audit verify` CLI command** checks chain integrity offline, before a SOC 2 package is submitted
+
+In a five-agent orchestration pipeline, every hop is in the log. Not summarised. Not sampled. Every hop.
+
+---
+
+### V · Provider Independence
+
+> *Governance infrastructure — credential routing, audit trails, approval gates, compliance reports — must survive a provider swap without modification.*
+
+No single AI provider will serve every use case. Cost, capability, latency, data-residency requirements, and compliance constraints mean production systems already use or plan to use multiple models. `agent-identity`'s `ProviderAdapter` interface is the isolation boundary between model choice and governance architecture.
+
+Routing rules, credential stores, approval gates, anomaly detection, compliance reports, and audit sinks are identical whether the model underneath is OpenAI GPT-4o, Anthropic Claude, Gemini, Mistral, or a self-hosted local model. Changing providers is a one-line adapter switch. The `ProviderAdapter` interface has two responsibilities: normalise credential injection (`injectCredential`) and enforce migration scope alignment (`validateForMigration`). Everything else is untouched.
+
+The governance layer you build today does not need to be rebuilt when the model landscape changes tomorrow.
+
+---
+
+### VI · Human Authority Preserved
+
+> *Automation extends human intent. It does not override it. The system is designed to keep humans in control at the points that matter most.*
+
+Three mechanisms implement this principle:
+
+**Approval gates** — `ApprovalPolicy` on any routing rule puts a human decision-maker in the resolution path before high-risk credentials can be used. Approvers are notified via webhook, email, or Slack. The resolution blocks until the required number of approvers respond. Break-glass overrides exist — they require justification, are audited with full context, and are reconstructible from the log.
+
+**Budget enforcement** — `BudgetPolicy` on any credential defines hard ceilings: maximum resolutions per hour, maximum concurrent sessions, maximum daily spend in USD, configurable soft-threshold warnings. The `BudgetEnforcer` checks these before any credential resolves. Agents cannot exhaust resources without the system emitting warnings and eventually blocking.
+
+**Anomaly detection** — `withAnomalyDetection()` wraps the audit pipeline with an EWMA behavioral baseline. Detected signals — new credential type, 3× call-rate spike, off-hours access, new resource kind — trigger configurable response policies: `warn`, `throttle`, or `block`. The system escalates without requiring human polling.
+
+The principle: automation should make agents faster, not ungovernable.
+
+---
+
+### VII · Phase Awareness for Stateful Operations
+
+> *Multi-step workflows require credential semantics that match each phase. A single token for everything is an architectural category error.*
+
+Data migration is the canonical case. A migration agent needs read-only source access during extract, no external credential during transform, write-only target access during load, read access to both during verify, and the same write credential as load during rollback. Mixing these is not just a security risk — it is a data integrity risk. Giving the agent one credential for the entire run is over-privileged; making ad-hoc decisions per call is unauditable.
+
+`agent-identity` treats phase as a first-class routing dimension:
+
+- **`MigrationContext`** — extends `AgentRequestContext` with `phase`, `sourceResourceId`, `targetResourceId`, `migrationId`, `dryRun`, `batchIndex`, `totalBatches`
+- **`matchPhase` routing rules** — phase-aware rule matching routes each step of a migration to the right credential by construction, not by convention
+- **`resolvePair()`** / **`resolvePairAsync()`** — resolve source and target credentials in one call, with the source always using action `read` and the target using action `read` when `dryRun: true`
+- **`reserve()`** / **`release()`** — lock a write credential to one `migrationId` for the duration of the batch; a second concurrent job receives `false` immediately and must abort before any data moves
+- **`validateForMigration()`** — enforced at the provider adapter layer; catches scope mismatches before the first write, not after
+
+The same phase-aware model applies to any stateful multi-step workflow — not just migration. If your operation has stages, your credentials should too.
+
+---
+
+### VIII · Composable by Interface
+
+> *Every capability is an interface contract with one or more concrete implementations. Nothing is load-bearing by vendor choice.*
+
+`agent-identity` is a collection of small, well-defined interfaces with multiple implementations:
+
+| Interface | Development default | Production options |
+|---|---|---|
+| `CredentialStore` | `MemoryCredentialStore` | AWS, Vault, Azure, SPIFFE, LibSQL, auth.md, MCP-backed |
+| `AuditLogger` | `ConsoleAuditLogger` | Datadog, Splunk, Webhook, Composite fan-out, HashChain |
+| `ProviderAdapter` | All five built-in | Implement `ProviderAdapter` to add any provider |
+| `AttestationSigner` | `HmacAttestationSigner` | `AsymmetricAttestationSigner` (RS256/ES256), custom |
+| `ApprovalManager` | `MemoryApprovalStore` | Extend with any webhook/email/Slack integration |
+| `BudgetEnforcer` | `MemoryBudgetStore` | `LibSqlBudgetStore`, custom |
+
+Any layer can be swapped without touching any other. Build a custom `CredentialStore` against your own secrets backend in under 50 lines — implement `findByRef`, `listActive`, `listByKind`, and optionally `reserve`/`release` for migration safety. The rest of the framework does not notice.
+
+This composability is what makes the framework production-grade across organisations of different scale, different cloud providers, and different compliance requirements — without a configuration explosion.
+
+---
+
+### IX · Standards-Anchored
+
+> *Every integration point aligns with an open standard where one exists. The framework is a compliant participant in ecosystems that are already forming, not a competing alternative to them.*
+
+`agent-identity` adopts existing standards at every layer rather than inventing proprietary protocols:
+
+| Capability | Standard |
+|---|---|
+| OAuth token delegation | RFC 8693 — OAuth 2.0 Token Exchange |
+| Workload identity | SPIFFE/SPIRE — Secure Production Identity Framework For Everyone |
+| Distributed tracing | OpenTelemetry — spans nest inside existing Datadog, Honeycomb, Jaeger, X-Ray traces |
+| AI agent identity registration | auth.md + ID-JAG draft spec — standardised agent registration and claim ceremony |
+| Identity revocation | OAuth 2.0 / OIDC `logout+jwt` — inbound revocation with jti replay protection |
+| Attestation signing | HMAC-SHA256, RS256, ES256 via Web Crypto API — no external crypto libraries |
+| Workload attestation | X.509 SVIDs (SPIFFE) — short-lived certificates, auto-renewed by SPIRE agent |
+| API schema validation | Zod + JSON Schema — runtime validation, OpenAPI spec generation, Python Pydantic interop |
+
+These standards predate `agent-identity` and will outlast any specific implementation. When the regulatory environment catches up to agentic AI — and it is catching up — the systems built on these standards will already speak the same language as auditors, compliance frameworks, and identity providers.
+
+---
+
 > **AI agents are executing real actions — merging code, modifying databases, sending emails, calling APIs on behalf of real people. The question of *who* the agent is acting as, and *with which credentials*, is no longer academic. It is a production-grade engineering concern.**
 
 A provider-agnostic framework for AI agents that act on behalf of users and services — with precise, auditable credential routing. Works with OpenAI, Anthropic, Gemini, Mistral, and local models out of the box.
