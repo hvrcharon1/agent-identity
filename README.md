@@ -220,7 +220,7 @@ A provider-agnostic framework for AI agents that act on behalf of users and serv
 | `@datacules/agent-identity-store-vault` | `npm install @datacules/agent-identity-store-vault` | HashiCorp Vault KV v2 credential store |
 | `@datacules/agent-identity-store-azure` | `npm install @datacules/agent-identity-store-azure` | Azure Key Vault + Table Storage credential store |
 | `@datacules/agent-identity-store-spiffe` | `npm install @datacules/agent-identity-store-spiffe` | SPIFFE/SPIRE workload identity via X.509 SVIDs — zero static credentials |
-| `@datacules/agent-identity-store-dynamic` | `npm install @datacules/agent-identity-store-dynamic` | JIT credential provisioning — Vault dynamic secrets, AWS IAM Roles Anywhere, Azure Managed Identity |
+| `@datacules/agent-identity-store-dynamic` | `npm install @datacules/agent-identity-store-dynamic` | JIT credential provisioning — Vault dynamic secrets, AWS IAM Roles Anywhere, Azure Managed Identity (system-assigned + user-assigned via `AzureManagedIdentityProvisioner`) |
 | `@datacules/agent-identity-store-authmd` | `npm install @datacules/agent-identity-store-authmd` | auth.md registration CredentialStore — ID-JAG, verified-email, and anonymous OTP claim ceremony; inbound `logout+jwt` revocation |
 | `@datacules/agent-identity-store-libsql` | `npm install @datacules/agent-identity-store-libsql` | LibSQL (SQLite / Turso) persistence — `CredentialStore`, `ApprovalStore`, `BudgetStore`, `AuditLogger`; embedded SQLite or globally distributed Turso via one connection string |
 | `@datacules/agent-identity-express` | `npm install @datacules/agent-identity-express` | Express middleware |
@@ -835,7 +835,13 @@ const store = new AgentAuthMdStore({
   ],
 });
 const router = createRouterFromStore(store, rules, logger);
-// Inbound logout+jwt revocation is handled automatically — no extra wiring required
+
+// Wire up inbound logout+jwt revocation at your revocation_uri endpoint
+import { RevocationHandler, RevocationListener } from '@datacules/agent-identity';
+const revocationHandler = new RevocationHandler({ store, jtiCacheTtl: 3600 });
+const revocationListener = new RevocationListener(revocationHandler);
+// Express example:
+// app.post('/auth/revoke', (req, res) => revocationListener.handle(req, res));
 ```
 
 All stores implement the same `CredentialStore` interface and are drop-in replacements for each other.
@@ -961,7 +967,7 @@ These two patterns, plus **hybrid / context-switched** (both in one workflow) an
 - 🔄 **RFC 8693 OAuth token exchange** — exchange user access tokens for scoped downstream tokens at any OAuth 2.0 AS; no long-term token storage required
 - 🔐 **JIT credential provisioning** — mint short-lived secrets on demand via Vault, AWS IAM Roles Anywhere, or Azure Managed Identity; zero static secrets at rest
 - 🪦 **SPIFFE/SPIRE workload identity** — X.509 SVIDs auto-renewed from SPIRE agent; cryptographic attestation, no stored secrets
-- ♻️ **Automated credential rotation** — `CredentialRotationScheduler` with configurable policies, grace-period dual-ref resolution, and full audit trail
+- ♻️ **Automated credential rotation** — `CredentialRotationScheduler` with configurable policies, `rotateAfterUses` usage-count threshold, zero-downtime grace-period dual-ref resolution, and full audit trail
 - 🛠️ **CLI** — `audit verify`, `report`, `health`, `resolve` — for offline chain verification and compliance report generation
 
 ---
@@ -1125,7 +1131,7 @@ Visual flow diagram, clickable phase timeline, configuration Q&A for common misc
 - **RFC 8693 token exchange** — no long-lived user tokens stored server-side; subject tokens are exchanged at request time and cached briefly; `invalidateCache()` / `flushCache()` for immediate revocation
 - **JIT provisioning** — credentials are minted on demand and auto-revoked at TTL; a full store compromise yields zero usable long-lived secrets
 - **SPIFFE/SPIRE** — workload identity cryptographically attested by SPIRE; SVIDs are short-lived X.509 certificates, no static secrets
-- **auth.md / ID-JAG** — agents register via cryptographically signed assertions from trusted providers; `unclaimed` credentials cannot be resolved until the OTP claim ceremony completes; inbound `logout+jwt` revokes matching credentials immediately with jti replay protection
+- **auth.md / ID-JAG** — agents register via cryptographically signed assertions from trusted providers; `validateIdJagClaims()` enforces issuer trust, expiry, audience, and AMR checks before resolution; `unclaimed` credentials cannot be resolved until the OTP claim ceremony completes; inbound `logout+jwt` revokes matching credentials via `RevocationHandler` (jti replay protection, configurable TTL eviction) mounted at the `revocation_uri` by `RevocationListener`
 
 ---
 
@@ -1212,11 +1218,14 @@ agent-identity/
 │   │       ├── providers.ts
 │   │       ├── decision.ts
 │   │       ├── schemas.ts
-│   │       ├── rotation.ts                # CredentialRotationScheduler
-│   │       ├── attestation.ts             # HmacAttestationSigner, buildAttestation, verifyAttestation
+│   │       ├── rotation.ts                # CredentialRotationScheduler, rotateAfterUses, grace period
+│   │       ├── attestation.ts             # HmacAttestationSigner, AsymmetricAttestationSigner, buildAttestation, verifyAttestation
 │   │       ├── approval.ts                # ApprovalManager, MemoryApprovalStore, notifiers
 │   │       ├── budget.ts                  # BudgetEnforcer, MemoryBudgetStore
 │   │       ├── federation.ts              # FederationVerifier, FederationIssuer, IdentityChain
+│   │       ├── revocation.ts              # RevocationHandler — inbound logout+jwt, jti replay protection
+│   │       ├── revocation-listener.ts     # RevocationListener — HTTP handler for revocation_uri
+│   │       ├── identity-providers.ts      # validateIdJagClaims() — ID-JAG trust domain validation
 │   │       └── react/
 │   │           └── useAgentIdentity.ts
 │   ├── audit/                             # @datacules/agent-identity-audit
