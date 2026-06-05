@@ -18,7 +18,7 @@
     <img src="https://img.shields.io/github/actions/workflow/status/hvrcharon1/agent-identity/ci.yml?branch=main&style=flat-square&label=CI&color=black" alt="CI"/>
   </a>
   <img src="https://img.shields.io/badge/version-0.9.0-black?style=flat-square" alt="Version"/>
-  <img src="https://img.shields.io/badge/packages-19%20(npm%20%2B%20PyPI)-black?style=flat-square" alt="Packages"/>
+  <img src="https://img.shields.io/badge/packages-21%20(npm%20%2B%20PyPI)-black?style=flat-square" alt="Packages"/>
   <img src="https://img.shields.io/badge/providers-OpenAI%20%7C%20Anthropic%20%7C%20Gemini%20%7C%20Mistral%20%7C%20Local-black?style=flat-square" alt="Supported providers"/>
   <img src="https://img.shields.io/badge/MCP-server%20%2B%20client-black?style=flat-square" alt="MCP support"/>
   <img src="https://img.shields.io/badge/stack-Next.js%20%2B%20TypeScript-black?style=flat-square" alt="Stack"/>
@@ -221,6 +221,8 @@ A provider-agnostic framework for AI agents that act on behalf of users and serv
 | `@datacules/agent-identity-store-azure` | `npm install @datacules/agent-identity-store-azure` | Azure Key Vault + Table Storage credential store |
 | `@datacules/agent-identity-store-spiffe` | `npm install @datacules/agent-identity-store-spiffe` | SPIFFE/SPIRE workload identity via X.509 SVIDs — zero static credentials |
 | `@datacules/agent-identity-store-dynamic` | `npm install @datacules/agent-identity-store-dynamic` | JIT credential provisioning — Vault dynamic secrets, AWS IAM Roles Anywhere, Azure Managed Identity |
+| `@datacules/agent-identity-store-authmd` | `npm install @datacules/agent-identity-store-authmd` | auth.md registration CredentialStore — ID-JAG, verified-email, and anonymous OTP claim ceremony; inbound `logout+jwt` revocation |
+| `@datacules/agent-identity-store-libsql` | `npm install @datacules/agent-identity-store-libsql` | LibSQL (SQLite / Turso) persistence — `CredentialStore`, `ApprovalStore`, `BudgetStore`, `AuditLogger`; embedded SQLite or globally distributed Turso via one connection string |
 | `@datacules/agent-identity-express` | `npm install @datacules/agent-identity-express` | Express middleware |
 | `@datacules/agent-identity-fastify` | `npm install @datacules/agent-identity-fastify` | Fastify plugin |
 | `@datacules/agent-identity-langchain` | `npm install @datacules/agent-identity-langchain` | LangChain tool + LangGraph node |
@@ -807,9 +809,36 @@ const store = new SpiffeCredentialStore({
   trustDomain: 'acme.com',
 });
 const router = createRouterFromStore(store, rules, logger);
+
+// LibSQL — embedded SQLite for local dev, globally distributed Turso for prod
+// One connection string change; zero code changes between environments
+import { createLibSqlStores } from '@datacules/agent-identity-store-libsql';
+
+// Embedded (zero server — local file)
+const { credentialStore } = await createLibSqlStores('file:./agent-identity.db');
+
+// Globally distributed (Turso — swap the URL, nothing else changes)
+const { credentialStore, approvalStore, budgetStore, auditLogger } = await createLibSqlStores(
+  'libsql://your-db.turso.io',
+  { authToken: process.env.TURSO_TOKEN! }
+);
+const router = createRouterFromStore(credentialStore, rules, auditLogger);
+
+// auth.md — standardised AI agent identity registration via ID-JAG, verified-email, or anonymous OTP
+// Agents register once; no static API keys stored anywhere
+import { AgentAuthMdStore } from '@datacules/agent-identity-store-authmd';
+const store = new AgentAuthMdStore({
+  registrationEndpoint: 'https://auth.your-service.com/agents',
+  trustedProviders: [
+    { issuerUrl: 'https://api.openai.com', label: 'OpenAI' },
+    { issuerUrl: 'https://claude.ai',      label: 'Anthropic' },
+  ],
+});
+const router = createRouterFromStore(store, rules, logger);
+// Inbound logout+jwt revocation is handled automatically — no extra wiring required
 ```
 
-All four stores implement the same `CredentialStore` interface and are drop-in replacements for each other.
+All stores implement the same `CredentialStore` interface and are drop-in replacements for each other.
 
 ---
 
@@ -1096,6 +1125,7 @@ Visual flow diagram, clickable phase timeline, configuration Q&A for common misc
 - **RFC 8693 token exchange** — no long-lived user tokens stored server-side; subject tokens are exchanged at request time and cached briefly; `invalidateCache()` / `flushCache()` for immediate revocation
 - **JIT provisioning** — credentials are minted on demand and auto-revoked at TTL; a full store compromise yields zero usable long-lived secrets
 - **SPIFFE/SPIRE** — workload identity cryptographically attested by SPIRE; SVIDs are short-lived X.509 certificates, no static secrets
+- **auth.md / ID-JAG** — agents register via cryptographically signed assertions from trusted providers; `unclaimed` credentials cannot be resolved until the OTP claim ceremony completes; inbound `logout+jwt` revokes matching credentials immediately with jti replay protection
 
 ---
 
@@ -1195,7 +1225,9 @@ agent-identity/
 │   │   ├── vault/                         # @datacules/agent-identity-store-vault
 │   │   ├── azure/                         # @datacules/agent-identity-store-azure
 │   │   ├── spiffe/                        # @datacules/agent-identity-store-spiffe
-│   │   └── dynamic/                       # @datacules/agent-identity-store-dynamic (JIT provisioning)
+│   │   ├── dynamic/                       # @datacules/agent-identity-store-dynamic (JIT provisioning)
+│   │   ├── authmd/                        # @datacules/agent-identity-store-authmd (auth.md / ID-JAG)
+│   │   └── libsql/                        # @datacules/agent-identity-store-libsql (SQLite / Turso)
 │   ├── integrations/
 │   │   ├── express/                       # @datacules/agent-identity-express
 │   │   ├── fastify/                       # @datacules/agent-identity-fastify
@@ -1230,7 +1262,7 @@ git tag v0.9.0
 git push origin v0.9.0
 ```
 
-This stamps all 19 workspace `package.json` versions from the tag (18 npm packages + 1 Python SDK), builds core ESM + CJS, publishes all `@datacules/*` packages to npm with provenance, and publishes the Python wheel to PyPI. A GitHub Release with auto-generated notes is created once both publish jobs succeed.
+This stamps all 21 workspace `package.json` versions from the tag (20 npm packages + 1 Python SDK), builds core ESM + CJS, publishes all `@datacules/*` packages to npm with provenance, and publishes the Python wheel to PyPI. A GitHub Release with auto-generated notes is created once both publish jobs succeed.
 
 See `.github/workflows/publish.yml` and `CONTRIBUTING.md` for setup instructions.
 
