@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { MemoryApprovalStore } from '@/lib/approval';
-
-const store = new MemoryApprovalStore();
+import { getServerApprovalStore } from '@/lib/server/credentialStore';
 
 const ApproveBodySchema = z.object({
   requestId:     z.string().min(1),
@@ -22,6 +20,8 @@ export async function POST(req: NextRequest) {
   }
 
   const { requestId, action, resolvedBy, justification } = parsed.data;
+
+  const store = await getServerApprovalStore();
 
   const existing = await store.get(requestId);
   if (!existing) return NextResponse.json({ error: 'Approval request not found' }, { status: 404 });

@@ -97,6 +97,63 @@ export class LibSqlBudgetStore implements BudgetStore {
     });
   }
 
+  /**
+   * Returns hourly bucket rows for a credential since a given epoch-ms
+   * timestamp. Used by GET /api/budget/:credentialId/history for charting.
+   *
+   * @param credentialId  - The credential to query
+   * @param sinceMs       - Epoch milliseconds lower bound (inclusive)
+   * @returns Array of { windowStart: number (epoch ms), count: number }
+   *          sorted oldest-first
+   */
+  async listHourlyBuckets(
+    credentialId: string,
+    sinceMs: number
+  ): Promise<{ windowStart: number; count: number }[]> {
+    const rs = await this.client.execute({
+      sql: `SELECT window_start, count
+            FROM ai_budget_hourly
+            WHERE credential_id = ? AND window_start >= ?
+            ORDER BY window_start ASC`,
+      args: [credentialId, sinceMs],
+    });
+    return rs.rows.map((row) => {
+      const r = row as Record<string, unknown>;
+      return { windowStart: toNum(r['window_start']), count: toNum(r['count']) };
+    });
+  }
+
+  /**
+   * Returns daily spend rows for a credential for the last N days (UTC).
+   * Used by GET /api/budget/:credentialId/history for charting.
+   *
+   * @param credentialId  - The credential to query
+   * @param days          - How many calendar days back to look (1–90)
+   * @returns Array of { date: string (YYYY-MM-DD), spendUsd: number }
+   *          sorted oldest-first
+   */
+  async listDailySpend(
+    credentialId: string,
+    days: number
+  ): Promise<{ date: string; spendUsd: number }[]> {
+    // Compute the cutoff date in UTC
+    const cutoff = new Date();
+    cutoff.setUTCDate(cutoff.getUTCDate() - Math.max(1, days) + 1);
+    const cutoffDate = cutoff.toISOString().slice(0, 10);
+
+    const rs = await this.client.execute({
+      sql: `SELECT date, spend_usd
+            FROM ai_budget_daily
+            WHERE credential_id = ? AND date >= ?
+            ORDER BY date ASC`,
+      args: [credentialId, cutoffDate],
+    });
+    return rs.rows.map((row) => {
+      const r = row as Record<string, unknown>;
+      return { date: String(r['date'] ?? ''), spendUsd: toNum(r['spend_usd']) };
+    });
+  }
+
   /** Delete all hourly bucket rows for this credential. */
   async resetHourly(credentialId: string): Promise<void> {
     await this.client.execute({

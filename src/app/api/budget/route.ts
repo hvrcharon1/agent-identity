@@ -1,37 +1,45 @@
+/**
+ * GET  /api/budget       — returns per-credential hourly count, concurrent sessions, and daily spend
+ * POST /api/budget/reset — reset hourly or daily counter for a credential
+ *
+ * Uses getServerBudgetStore() so results persist across restarts when
+ * LIBSQL_URL is configured. Uses getServerStore() to derive the credential
+ * list, replacing the hard-coded DEMO_CREDENTIALS from the previous version.
+ */
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { MemoryBudgetStore } from '@/lib/budget';
-import type { Credential } from '@/lib/types';
-
-const budgetStore = new MemoryBudgetStore();
-
-const DEMO_CREDENTIALS: Credential[] = [
-  {
-    id: 'cred-openai-prod', kind: 'fixed', name: 'OpenAI production',
-    scope: 'read write', status: 'active', ref: 'openai-prod-slot',
-  },
-  {
-    id: 'cred-anthropic-prod', kind: 'fixed', name: 'Anthropic production',
-    scope: 'read write', status: 'active', ref: 'anthropic-prod-slot',
-  },
-];
+import { getServerBudgetStore, getServerStore } from '@/lib/server/credentialStore';
 
 export async function GET() {
+  const [budgetStore, credStore] = await Promise.all([
+    getServerBudgetStore(),
+    getServerStore(),
+  ]);
+
+  const credentials = await credStore.listActive();
+
   const results = await Promise.all(
-    DEMO_CREDENTIALS.map(async (cred) => {
-      const hourlyCount = await budgetStore.getHourlyCount(cred.id);
-      const sessions    = await budgetStore.getConcurrentSessions(cred.id);
-      const dailySpend  = await budgetStore.getDailySpend(cred.id);
-      return { credentialId: cred.id, name: cred.name, usage: { hourlyCount, sessions, dailySpend } };
+    credentials.map(async (cred) => {
+      const [hourlyCount, sessions, dailySpend] = await Promise.all([
+        budgetStore.getHourlyCount(cred.id),
+        budgetStore.getConcurrentSessions(cred.id),
+        budgetStore.getDailySpend(cred.id),
+      ]);
+      return {
+        credentialId: cred.id,
+        name:         cred.name,
+        usage: { hourlyCount, sessions, dailySpend },
+      };
     })
   );
+
   return NextResponse.json({ credentials: results });
 }
 
 export async function POST(req: NextRequest) {
   const ResetSchema = z.object({
     credentialId: z.string().min(1),
-    counter: z.enum(['hourly', 'daily']),
+    counter:      z.enum(['hourly', 'daily']),
   });
 
   let body: unknown;
@@ -44,8 +52,10 @@ export async function POST(req: NextRequest) {
   }
 
   const { credentialId, counter } = parsed.data;
+  const budgetStore = await getServerBudgetStore();
+
   if (counter === 'hourly') { await budgetStore.resetHourly(credentialId); }
-  else { await budgetStore.resetDaily(credentialId); }
+  else                      { await budgetStore.resetDaily(credentialId);  }
 
   return NextResponse.json({ ok: true, credentialId, counter, resetAt: new Date().toISOString() });
 }
