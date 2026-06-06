@@ -47,6 +47,8 @@ export default defineConfig({
       '@datacules/agent-identity-store-authmd': path.resolve(__dirname, './packages/stores/authmd/src/index.ts'),
       // LibSQL store — resolved to source
       '@datacules/agent-identity-store-libsql': path.resolve(__dirname, './packages/stores/libsql/src/index.ts'),
+      // Dynamic / JIT provisioner store — resolved to source
+      '@datacules/agent-identity-store-dynamic': path.resolve(__dirname, './packages/stores/dynamic/src/index.ts'),
       // Token exchange integration — resolved to source
       '@datacules/agent-identity-token-exchange': path.resolve(__dirname, './packages/integrations/token-exchange/src/index.ts'),
     },

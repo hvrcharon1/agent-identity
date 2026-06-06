@@ -24,6 +24,8 @@
       "@datacules/agent-identity-store-aws": ["./packages/stores/aws/src/index.ts"],
       "@datacules/agent-identity-store-azure": ["./packages/stores/azure/src/index.ts"],
       "@datacules/agent-identity-store-authmd": ["./packages/stores/authmd/src/index.ts"],
+      "@datacules/agent-identity-store-libsql": ["./packages/stores/libsql/src/index.ts"],
+      "@datacules/agent-identity-store-dynamic": ["./packages/stores/dynamic/src/index.ts"],
       "@datacules/agent-identity-token-exchange": ["./packages/integrations/token-exchange/src/index.ts"]
     }
   },
