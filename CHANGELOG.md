@@ -8,6 +8,59 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added
+
+- `AgentAuthMdStore` — `service_auth` registration flow and `selectMethod()` upstream-compat
+  shim tracking workos/auth.md PR #15. (`packages/stores/authmd`)
+
+  **Background:** auth.md PR #15 (open 2026-06-06) promotes the email-based registration
+  path out of `identity_assertion` into a new top-level `service_auth` type with a
+  CIBA-style `login_hint` body. The old wire shape
+  (`{ type: 'identity_assertion', assertion_type: 'verified_email', assertion: email }`)
+  is replaced by `{ type: 'service_auth', login_hint: email }`. Discovery also changes:
+  `identity_assertion.assertion_types_supported` drops `'verified_email'` (ID-JAG only
+  now); `identity_types_supported` gains `'service_auth'` as a new top-level entry.
+
+  **Changes:**
+
+  `AgentAuthMdMethod` gains `'service-auth'` member. `AgentAuthBlock` gains a
+  `service_auth?: { credential_types_supported }` block. `AgentAuthMdConfig.methodPreference`
+  JSDoc updated to note the new default order.
+
+  `DEFAULT_METHOD_PREFERENCE` updated to `['id-jag', 'service-auth', 'verified-email',
+  'anonymous']` — `service-auth` is inserted ahead of `'verified-email'` so post-PR#15
+  services are automatically preferred without any config change.
+
+  `selectMethod()` rewritten with a `switch` over every known `identity_types_supported`
+  value. Handles three discovery shapes:
+  - Simplified shorthands (`'service_auth'`, `'id-jag'`, `'verified_email'`,
+    `'anonymous'` appearing directly in `identity_types_supported`) — used by test mocks
+    and simple server implementations.
+  - Real spec structure: `'identity_assertion'` in `identity_types_supported` with nested
+    `assertion_types_supported` (`id-jag`, `verified_email`) — pre-PR#15 spec-compliant
+    services. Sub-types are expanded into the supported set.
+  - Post-PR#15: `'service_auth'` in `identity_types_supported` → mapped to `'service-auth'`.
+
+  New `registerServiceAuth()` private method sends
+  `{ type: 'service_auth', login_hint: userEmail, requested_credential_type: 'api_key' }`
+  and stores the pending claim identically to `registerVerifiedEmail()`. The existing
+  `registerVerifiedEmail()` is retained for legacy services and annotated as legacy.
+
+  `startClaimCeremony()` error message updated to include `'service-auth'` in the list
+  of methods that produce pending claims.
+
+  New test coverage — 9 additional Vitest cases (`AgentAuthMdStore.test.ts`):
+  - `service-auth flow` (5 cases): null return pending claim, correct POST body
+    (`type: service_auth`, `login_hint`, no `assertion_type`/`assertion`), pending claim
+    stored for `startClaimCeremony()`, null when `userEmail` missing, null on non-2xx.
+  - `selectMethod() migration compat` (5 cases): prefers `service_auth` over
+    `verified_email` in default preference, falls back to `verified-email` on legacy
+    services, recognises `id-jag` nested inside `identity_assertion.assertion_types_supported`,
+    recognises `verified_email` nested inside `identity_assertion.assertion_types_supported`,
+    explicit `methodPreference` override respected.
+
+  **Total test coverage: 475 cases across 22 packages** (+9 from v0.10.0).
+
 ---
 
 ## [0.10.0] — 2026-06-07
