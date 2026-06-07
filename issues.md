@@ -6,7 +6,7 @@
 ## Severity Key
 
 | Icon | Level | Meaning |
-|------|-------|---------|
+|------|-------|--------|
 | 🔴 | Critical | Blocking, data-integrity risk, or silent incorrect behaviour at runtime |
 | 🟠 | High | Significant functionality gap or user-facing failure with no workaround |
 | 🟡 | Medium | Unexpected behaviour with a workaround, or a pattern that will cause future bugs |
@@ -69,35 +69,30 @@ Leaving PR #48 open creates confusion for contributors reviewing the PR queue an
 
 ### Fix Applied
 
-Closed PR #48 with the comment: *“Superseded by #49 (`feat/fix-decision-helper-app-v2`), which carried the full implementation (3 files, +214/−129) and was merged. This branch only contained a 1-line comment removal. Closing.”*
+Closed PR #48 with the comment: *"Superseded by #49 (`feat/fix-decision-helper-app-v2`), which carried the full implementation (3 files, +214/−129) and was merged. This branch only contained a 1-line comment removal. Closing."*
 
 ---
 
-## [ISS-003] 🟠 Phase 3 branch (`feat/phase3-jit-approvals`) has no commits
+## [ISS-003] 🟠 Phase 3 branch (`feat/phase3-jit-approvals`) had no commits
 
-**Status**: Open
-**Affects**: Planned Phase 3 feature completeness (see `enhancements.md`)
+**Status**: Resolved — PR #50 (`feat/v011-server-wiring`, merged 2026-06-06) implemented all
+five v0.11.0 planned items. `getServerApprovalStore()`, `getServerBudgetStore()`, and
+`CREDENTIAL_STORE_TYPE=dynamic` are fully wired in `src/lib/server/credentialStore.ts`;
+`GET /api/approve/:requestId` and `GET /api/budget/:credentialId/history` routes are live;
+`LibSqlApprovalStore` and `LibSqlBudgetStore` serve all three dashboard tabs when `LIBSQL_URL`
+is set.
+**Affects**: ~~Planned Phase 3 feature completeness~~ (resolved)
 
 ### Description
 
-The branch `feat/phase3-jit-approvals` was created as the target for Phase 3 implementation (JIT provisioning via `DynamicCredentialStore`, server-side `ApprovalTab` and `BudgetTab` API routes, and the missing `GET /api/health` route). The branch was created but no commits have been pushed to it.
+The branch `feat/phase3-jit-approvals` was created as the target for Phase 3 implementation (JIT provisioning via `DynamicCredentialStore`, server-side `ApprovalTab` and `BudgetTab` API routes, and the missing `GET /api/health` route). The branch was created but no commits had been pushed to it.
 
-As a result, three dashboard tabs (`ApprovalTab`, `BudgetTab`, `JitTab`) display interactive UI that is not connected to persistent server-side state — all approval and budget data resets on server restart and is not shared across multiple server instances.
+As a result, three dashboard tabs (`ApprovalTab`, `BudgetTab`, `JitTab`) displayed interactive UI that was not connected to persistent server-side state — all approval and budget data reset on server restart and was not shared across multiple server instances.
 
-### Affected components
+### Fix Applied
 
-- `src/components/ApprovalTab.tsx` — approval queue is in-memory only
-- `src/components/BudgetTab.tsx` — budget counters are in-memory only
-- `src/components/JitTab.tsx` — provisioner simulator is mock-only (no real DynamicCredentialStore server wiring)
-- `src/app/api/approve/` — uses `MemoryApprovalStore` (not `LibSqlApprovalStore`)
-- `src/app/api/budget/` — uses in-memory counters (not `LibSqlBudgetStore`)
-
-### Fix
-
-Implement Phase 3 per the `enhancements.md` v0.11.0 plan. Priority order:
-1. Server-side `LibSqlApprovalStore` wiring for approval routes
-2. Server-side `LibSqlBudgetStore` wiring for budget routes
-3. `CREDENTIAL_STORE_TYPE=dynamic` in `getServerStore()`
+PR #50 (`feat/v011-server-wiring`) delivered the complete Phase 3 implementation to `main`
+via a clean branch. See CHANGELOG [0.10.0] for the full list of changes.
 
 ---
 
@@ -129,7 +124,8 @@ This is incorrect. The `RevocationListener` must be explicitly mounted at the `r
 
 ### Fix
 
-Update README.md to address the above gaps and cut a formal v0.10.0 release tag that promotes the `[Unreleased]` CHANGELOG block, updates all workspace `package.json` version fields, and triggers the publish workflow.
+Update README.md to address the above gaps. The version badge and releasing example tag are
+updated as part of the v0.10.0 release PR. Feature documentation gaps are tracked separately.
 
 ---
 
@@ -292,4 +288,4 @@ Additionally, the `engines.node` field in `package.json` specifies `>=20` but ha
 
 ---
 
-*Last updated: 2026-06-06. To report a new issue, open a GitHub issue with the label `bug` and reference this document.*
+*Last updated: 2026-06-07. To report a new issue, open a GitHub issue with the label `bug` and reference this document.*

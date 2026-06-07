@@ -1,6 +1,6 @@
 {
   "name": "@datacules/agent-identity-cli",
-  "version": "0.1.0",
+  "version": "0.10.0",
   "description": "CLI for @datacules/agent-identity — audit chain verification, compliance reports, credential resolution testing",
   "private": false,
   "bin": {
