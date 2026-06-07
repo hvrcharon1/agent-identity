@@ -8,6 +8,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+---
+
+## [0.10.0] — 2026-06-07
+
 ### Added
 
 - `@datacules/agent-identity-store-libsql` (`packages/stores/libsql`) — LibSQL (SQLite / Turso)
@@ -65,13 +69,110 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - New test suites: `attestation.test.ts` (AsymmetricAttestationSigner 8 cases),
   `revocation.test.ts` (4 cases), `revocation-listener.test.ts` (6 cases),
   `identity-providers.test.ts` (12 cases), `AgentAuthMdStore.test.ts` (22 cases).
-- `@datacules/agent-identity-store-authmd` added to npm workspace.
+- `@datacules/agent-identity-store-authmd` added to npm workspace. (PR #45)
+
+- `CredentialRotationScheduler` enhancements — `rotateAfterUses` + grace period (PR #47)
+
+  `isRotationDue()` is now `async` and accepts an optional `getUsageCount(credentialId)`
+  callback (third constructor parameter). When supplied, rotation is triggered if either
+  the elapsed time exceeds `rotateAfterDays` **or** the call count reaches `rotateAfterUses`
+  — whichever comes first.
+
+  Grace period support: after a rotation completes the old credential ref is retained in a
+  `graceWindows` Map for `gracePeriodSeconds`. During that window `inGracePeriod(ref)` returns
+  `true` and `getGraceRef(credentialId)` returns the old ref so routers can serve both refs
+  during the handover window without interruption.
+
+  New surface: `RotationSchedulerOptions` interface (all fields optional; fully backwards-
+  compatible with the existing positional-array constructor) and static `fromOptions()` factory.
+
+- `AzureManagedIdentityProvisioner` — Azure Managed Identity JIT provisioner for
+  `@datacules/agent-identity-store-dynamic` (PR #47)
+
+  Implements `DynamicProvisioner` alongside `VaultDynamicProvisioner` and
+  `AwsRolesAnywhereProvisioner`. Supports system-assigned identities (resource URI only)
+  and user-assigned identities via `clientId` or `resourceId`. Tokens are fetched from the
+  Azure IMDS endpoint (`http://169.254.169.254/metadata/identity/oauth2/token`) and TTL is
+  derived from `expires_in` in the token response. Configurable via `AZURE_MI_CLIENT_ID` and
+  `AZURE_MI_RESOURCE` env vars when wired through `getServerStore()`.
+
+- Server-side store wiring — Phase 3 (PR #50)
+
+  `src/lib/server/credentialStore.ts` extended with three new factories and two new
+  `CREDENTIAL_STORE_TYPE` options:
+
+  **`getServerApprovalStore()`** — returns `LibSqlApprovalStore` when `LIBSQL_URL` is set,
+  sharing the existing `_libSqlCache` client singleton, otherwise falls back to
+  `MemoryApprovalStore`. Approval queues now persist across restarts and scale across
+  replicas when a Turso remote URL is configured.
+
+  **`getServerBudgetStore()`** — returns `LibSqlBudgetStore` when `LIBSQL_URL` is set
+  (same singleton), otherwise falls back to `MemoryBudgetStore`.
+
+  **`CREDENTIAL_STORE_TYPE=libsql`** — routes `getServerStore()` to `LibSqlCredentialStore`
+  via the `_libSqlCache` singleton; requires `LIBSQL_URL` env var.
+
+  **`CREDENTIAL_STORE_TYPE=dynamic`** — routes `getServerStore()` to `DynamicCredentialStore`
+  with provisioner selected by `DYNAMIC_PROVISIONER=vault|aws|azure` and the corresponding
+  env vars (`VAULT_DYNAMIC_MOUNT`, `VAULT_DYNAMIC_ROLE`, `AWS_ROLES_ANYWHERE_*`,
+  `AZURE_MI_CLIENT_ID`, `AZURE_MI_RESOURCE`).
+
+- `GET /api/approve/:requestId` — new Next.js route for polling a single approval request
+  (`src/app/api/approve/[requestId]/route.ts`). Returns `200 { request }` or `404` from
+  `getServerApprovalStore()`. Replaces optimistic client-side state in `ApprovalTab.tsx`
+  for reliable cross-reload status tracking. (PR #50)
+
+- `GET /api/budget/:credentialId/history` — new Next.js route for time-series budget data
+  (`src/app/api/budget/[credentialId]/history/route.ts`). Returns per-credential hourly
+  call counts and daily USD spend. Query params: `hours` (1–168, default 24), `days`
+  (1–90, default 7). Degrades gracefully to empty arrays when `MemoryBudgetStore` is
+  active. (PR #50)
+
+- `LibSqlBudgetStore.listHourlyBuckets(credentialId, sinceMs)` and
+  `LibSqlBudgetStore.listDailySpend(credentialId, days)` — extended methods beyond the
+  `BudgetStore` interface, duck-typed by the history route for charting. Access via type
+  narrowing; these are not part of the `BudgetStore` contract. (PR #50)
+
+- `GET /api/health` — new Next.js route (`src/app/api/health/route.ts`) returning
+  `{ status, version, timestamp, credentialsLoaded, rulesLoaded }`. Resolves the `404`
+  that `agent-identity-cli health` received from a running server before this release.
+  (PR #50, ISS-001)
+
+- `docs/openapi.yaml` bumped to v0.10.0 — `GET /api/health` path and `HealthResponse`
+  schema added; v0.9.0 and v0.10.0 change notes appended. (ISS-007)
+
+- Server factory test suite expanded 10 → 20 cases (PR #50). New coverage:
+  `CREDENTIAL_STORE_TYPE=libsql` (with and without `LIBSQL_URL`),
+  `CREDENTIAL_STORE_TYPE=dynamic` with vault / aws / azure provisioners (mocked),
+  unknown `DYNAMIC_PROVISIONER` fallback, `getServerApprovalStore()` Memory and LibSQL
+  paths, `getServerBudgetStore()` Memory and LibSQL paths.
+
+- **Total test coverage: 466 cases across 22 packages** (was 366 in v0.9.0)
 
 ### Fixed
 
 - `base64urlToBuffer()` in `attestation.ts` now returns `Uint8Array<ArrayBuffer>`
   (was `Uint8Array<ArrayBufferLike>`), resolving a TypeScript 5.5+ compile error
-  where `crypto.subtle.verify()` rejected `ArrayBufferLike` as `BufferSource`.
+  where `crypto.subtle.verify()` rejected `ArrayBufferLike` as `BufferSource`. (PR #45)
+
+- `computeDecision()` — five bugs fixed in `packages/core/src/decision.ts` and
+  `src/lib/decision.ts` (PR #49)
+
+  1. **Context-switched path gated on Q4** — Q4 null-guard moved inside
+     `variableAccess && !mixedResources`; context-switched result now resolves from Q1+Q2 alone.
+  2. **Q3 (`auditRequired`) shown on variable-access paths where it has no effect** —
+     `Q3.showIf` set to `variableAccess === false`; `auditRequired` null-guard moved inside
+     the fixed-access branch.
+  3. **`!variableAccess && mixedResources && auditRequired=true` produced same label as
+     `auditRequired=false`** — distinct label and explanation added for the audit case.
+  4. **Q4 `showIf` too broad** — tightened from `variableAccess === true` to
+     `variableAccess === true && mixedResources === false`.
+  5. **`pick()` cascade incomplete** — Q1 change now resets Q2/Q3/Q4; Q2 change resets Q3/Q4;
+     Q3 change resets Q4.
+
+  `DECISION_QUESTIONS` is now exported from `src/lib/decision` and imported by
+  `DecisionTab.tsx`, making the question registry independently testable. App-layer
+  test suite expanded 8 → 14 cases. (PR #49)
 
 ---
 

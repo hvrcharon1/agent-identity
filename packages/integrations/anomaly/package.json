@@ -1,6 +1,6 @@
 {
   "name": "@datacules/agent-identity-anomaly",
-  "version": "0.1.0",
+  "version": "0.10.0",
   "private": false,
   "description": "Anomaly detection and behavioral baseline for @datacules/agent-identity — statistical detection of unusual credential usage patterns",
   "author": "Datacules LLC",
@@ -31,6 +31,6 @@
     "typescript": "^5"
   },
   "peerDependencies": {
-    "@datacules/agent-identity": "^0.8.0"
+    "@datacules/agent-identity": "^0.10.0"
   }
 }

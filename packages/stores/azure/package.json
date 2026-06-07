@@ -1,6 +1,6 @@
 {
   "name": "@datacules/agent-identity-store-azure",
-  "version": "0.1.0",
+  "version": "0.10.0",
   "private": false,
   "description": "Azure Key Vault + Table Storage credential store for @datacules/agent-identity",
   "main": "./dist/cjs/index.js",
@@ -23,7 +23,7 @@
     "@azure/identity": "^4.3.0"
   },
   "peerDependencies": {
-    "@datacules/agent-identity": "^0.8.0"
+    "@datacules/agent-identity": "^0.10.0"
   },
   "devDependencies": {
     "@datacules/agent-identity": "*",
