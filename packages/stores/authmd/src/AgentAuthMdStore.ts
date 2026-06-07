@@ -6,10 +6,26 @@
  *   1. Checks the local token cache (returns early if fresh).
  *   2. Discovers the service's agent_auth block via RFC 9728 PRM discovery.
  *   3. Selects the best registration method from the caller's preference list.
- *   4. Runs the appropriate registration flow (ID-JAG, verified-email, anonymous).
+ *   4. Runs the appropriate registration flow (ID-JAG, service-auth, verified-email, anonymous).
  *   5. Caches the resulting credential and returns it.
  *
  * Returns null (never throws) on any non-2xx HTTP response or network error.
+ *
+ * Upstream compat
+ * ---------------
+ * workos/auth.md PR #15 introduces service_auth as a new top-level type,
+ * replacing identity_assertion + verified_email. selectMethod() handles both
+ * shapes transparently:
+ *
+ *   Post-PR#15 service → identity_types_supported includes 'service_auth'
+ *                         → resolved to AgentAuthMdMethod 'service-auth'
+ *                         → registerServiceAuth() sends { type: 'service_auth', login_hint }
+ *
+ *   Pre-PR#15 service  → identity_types_supported may include 'verified_email'
+ *                         (direct) or 'identity_assertion' (real spec structure)
+ *                         → resolved to AgentAuthMdMethod 'verified-email'
+ *                         → registerVerifiedEmail() sends { type: 'identity_assertion',
+ *                           assertion_type: 'verified_email', assertion }
  *
  * Pattern mirrors TokenExchangeStore — same cache → refresh → return shape.
  */
@@ -40,7 +56,20 @@ interface PendingClaim {
 // ─── Constants ─────────────────────────────────────────────────────────────
 
 const DEFAULT_EXPIRY_BUFFER_MS = 30_000;
-const DEFAULT_METHOD_PREFERENCE: AgentAuthMdMethod[] = ['id-jag', 'verified-email', 'anonymous'];
+
+/**
+ * Default method preference order.
+ * 'service-auth' is placed ahead of 'verified-email' so post-PR#15 services
+ * automatically use the new shape without any config change.
+ * Legacy services that only advertise 'verified_email' still fall through to
+ * the 'verified-email' slot.
+ */
+const DEFAULT_METHOD_PREFERENCE: AgentAuthMdMethod[] = [
+  'id-jag',
+  'service-auth',
+  'verified-email',
+  'anonymous',
+];
 
 // ─── AgentAuthMdStore ─────────────────────────────────────────────────────────
 
@@ -86,9 +115,10 @@ export class AgentAuthMdStore implements CredentialStore {
 
     // ─ Registration dispatch ──────────────────────────────────────────────
     switch (method) {
-      case 'id-jag':         return this.registerIdJag(cfg, agentAuthBlock);
+      case 'id-jag':       return this.registerIdJag(cfg, agentAuthBlock);
+      case 'service-auth': return this.registerServiceAuth(cfg, agentAuthBlock);
       case 'verified-email': return this.registerVerifiedEmail(cfg, agentAuthBlock);
-      case 'anonymous':      return this.registerAnonymous(cfg, agentAuthBlock);
+      case 'anonymous':    return this.registerAnonymous(cfg, agentAuthBlock);
     }
   }
 
@@ -115,15 +145,16 @@ export class AgentAuthMdStore implements CredentialStore {
   // ─── Claim ceremony ────────────────────────────────────────────────────────
 
   /**
-   * Begins the OTP claim ceremony for a pending verified-email or anonymous
-   * registration. Returns the claim_token. Throws if no pending claim exists.
+   * Begins the OTP claim ceremony for a pending service-auth, verified-email,
+   * or anonymous registration. Returns the claim_token. Throws if no pending
+   * claim exists.
    */
   async startClaimCeremony(ref: string, email?: string): Promise<string> {
     const claim = this.pending.get(ref);
     if (!claim) {
       throw new Error(
         `AgentAuthMdStore: no pending claim for ref '${ref}'. ` +
-        `Call findByRef() with a 'verified-email' or 'anonymous' config first.`
+        `Call findByRef() with a 'service-auth', 'verified-email', or 'anonymous' config first.`
       );
     }
 
@@ -201,19 +232,77 @@ export class AgentAuthMdStore implements CredentialStore {
 
   // ─── Private helpers ───────────────────────────────────────────────────────
 
+  /**
+   * Maps the service's agent_auth block to a concrete AgentAuthMdMethod.
+   *
+   * Handles three discovery response shapes:
+   *
+   *  1. Simplified shorthands (direct values in identity_types_supported):
+   *       'id-jag', 'urn:...id-jag', 'verified_email', 'verified-email',
+   *       'service_auth', 'service-auth', 'anonymous'
+   *     Used by test mocks and simplified server implementations.
+   *
+   *  2. Real spec structure (pre-PR#15):
+   *       identity_types_supported: ['identity_assertion', 'anonymous']
+   *       identity_assertion.assertion_types_supported: ['urn:...id-jag', 'verified_email']
+   *     Nested types are expanded into the supported set.
+   *
+   *  3. Post-PR#15 structure:
+   *       identity_types_supported: ['identity_assertion', 'service_auth', 'anonymous']
+   *       identity_assertion.assertion_types_supported: ['urn:...id-jag']  ← no verified_email
+   *     'service_auth' maps to 'service-auth'.
+   */
   private selectMethod(
     block: AgentAuthBlock,
     preference?: AgentAuthMdMethod[]
   ): AgentAuthMdMethod | null {
     const pref = preference ?? DEFAULT_METHOD_PREFERENCE;
-
-    // Build the supported set from identity_types_supported + presence of anonymous
     const supported = new Set<AgentAuthMdMethod>();
+
     for (const t of block.identity_types_supported) {
-      if (t === 'id-jag' || t === 'urn:ietf:params:oauth:token-type:id-jag') supported.add('id-jag');
-      else if (t === 'verified_email' || t === 'verified-email')              supported.add('verified-email');
-      else if (t === 'anonymous')                                              supported.add('anonymous');
+      switch (t) {
+        // Direct shorthands — simplified servers and test mocks
+        case 'id-jag':
+        case 'urn:ietf:params:oauth:token-type:id-jag':
+          supported.add('id-jag');
+          break;
+
+        case 'verified_email':
+        case 'verified-email':
+          supported.add('verified-email');
+          break;
+
+        case 'anonymous':
+          supported.add('anonymous');
+          break;
+
+        // auth.md PR #15 — new top-level type
+        case 'service_auth':
+        case 'service-auth':
+          supported.add('service-auth');
+          break;
+
+        // Real spec structure — 'identity_assertion' nests assertion sub-types
+        case 'identity_assertion': {
+          const ia = block.identity_assertion;
+          if (ia?.assertion_types_supported) {
+            for (const at of ia.assertion_types_supported) {
+              if (
+                at === 'urn:ietf:params:oauth:token-type:id-jag' ||
+                at === 'id-jag'
+              ) {
+                supported.add('id-jag');
+              } else if (at === 'verified_email' || at === 'verified-email') {
+                supported.add('verified-email');
+              }
+            }
+          }
+          break;
+        }
+      }
     }
+
+    // Fallback: presence of anonymous block also implies anonymous support
     if (block.anonymous) supported.add('anonymous');
 
     for (const m of pref) {
@@ -254,6 +343,55 @@ export class AgentAuthMdStore implements CredentialStore {
     }
   }
 
+  /**
+   * auth.md PR #15 — service_auth registration.
+   *
+   * Sends { type: 'service_auth', login_hint: email } to the register_uri.
+   * The server emails the user an OTP; the agent collects it and calls
+   * startClaimCeremony() + completeClaimCeremony() to bind the credential.
+   * Returns null (pending claim) until the ceremony completes.
+   */
+  private async registerServiceAuth(
+    cfg: AgentAuthMdConfig,
+    block: AgentAuthBlock
+  ): Promise<Credential | null> {
+    if (!cfg.userEmail) return null;
+
+    try {
+      const resp = await this.fetchFn(block.register_uri, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'service_auth',
+          login_hint: cfg.userEmail,
+          requested_credential_type: 'api_key',
+        }),
+      });
+      if (!resp.ok) return null;
+
+      const data = await resp.json() as RegistrationResponse;
+
+      // Store claim info for the OTP ceremony
+      if (data.claim_token && block.claim_uri) {
+        this.pending.set(cfg.ref, {
+          claimUri: block.claim_uri,
+          claimToken: data.claim_token,
+        });
+      }
+
+      // Spec: service_auth returns null until claim ceremony completes
+      return null;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Legacy verified-email registration (pre-PR#15 services).
+   * Sends { type: 'identity_assertion', assertion_type: 'verified_email', assertion: email }.
+   * For services that have migrated to PR#15, selectMethod() will prefer 'service-auth'
+   * and this method will not be called.
+   */
   private async registerVerifiedEmail(
     cfg: AgentAuthMdConfig,
     block: AgentAuthBlock

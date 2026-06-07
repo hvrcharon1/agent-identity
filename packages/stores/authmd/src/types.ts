@@ -7,12 +7,26 @@
  *   - AgentAuthMdConfig (per-slot configuration)
  *   - IdJagProvider (caller-supplied ID-JAG minter)
  *   - AgentAuthMdStoreOptions (constructor arg)
+ *
+ * Upstream tracking
+ * -----------------
+ * workos/auth.md PR #15 (open as of 2026-06-06) promotes the verified-email
+ * registration path out of identity_assertion into a new top-level
+ * service_auth type with a CIBA-style login_hint body:
+ *
+ *   Before:  { type: 'identity_assertion', assertion_type: 'verified_email', assertion: email }
+ *   After:   { type: 'service_auth', login_hint: email }
+ *
+ * AgentAuthMdMethod gains 'service-auth' to represent the new path.
+ * AgentAuthBlock gains a service_auth block.
+ * selectMethod() in AgentAuthMdStore handles both shapes for the migration window.
  */
 
 /** One registration method supported by a target service. */
 export type AgentAuthMdMethod =
   | 'id-jag'         // ID-JAG JWT assertion — requires idJagProvider
-  | 'verified-email' // email + OTP claim ceremony
+  | 'service-auth'   // service_auth + login_hint (auth.md PR #15)
+  | 'verified-email' // legacy: identity_assertion + verified_email
   | 'anonymous';     // no user identity; optional claim later
 
 /** Protected Resource Metadata (RFC 9728 §3) */
@@ -33,8 +47,13 @@ export interface AgentAuthBlock {
   revocation_uri?: string;
   identity_types_supported: string[];
   anonymous?: { credential_types_supported: string[] };
+  /** Present on pre-PR#15 services. id-jag and verified_email are nested here. */
   identity_assertion?: {
     assertion_types_supported: string[];
+    credential_types_supported: string[];
+  };
+  /** Present on post-PR#15 services (workos/auth.md PR #15). */
+  service_auth?: {
     credential_types_supported: string[];
   };
   events_supported?: string[];
@@ -67,7 +86,7 @@ export interface AgentAuthMdConfig {
   /**
    * Registration method preference order. The store tries each in order and
    * uses the first one the service's agent_auth block supports.
-   * Default: ['id-jag', 'verified-email', 'anonymous']
+   * Default: ['id-jag', 'service-auth', 'verified-email', 'anonymous']
    */
   methodPreference?: AgentAuthMdMethod[];
 
@@ -78,7 +97,8 @@ export interface AgentAuthMdConfig {
   idJagProvider?: IdJagProvider;
 
   /**
-   * Required when method='verified-email'. The email address to assert.
+   * Required when method='service-auth' or method='verified-email'.
+   * The email address to pass as login_hint (service-auth) or assertion (verified-email).
    */
   userEmail?: string;
 
@@ -102,7 +122,7 @@ export interface AgentAuthMdStoreOptions {
   fetchFn?: typeof globalThis.fetch;
 }
 
-/** Internal registration response shape (minimal union of id-jag + anonymous paths). */
+/** Internal registration response shape (minimal union of all registration paths). */
 export interface RegistrationResponse {
   access_token?: string;
   credential_token?: string;
