@@ -176,13 +176,9 @@ A Python-level integration analogous to the LangChain package, enabling CrewAI a
 
 Integration adapters for the Microsoft AutoGen multi-agent framework and Hugging Face smolagents, following the same pattern as the LangChain `createAgentIdentityNode()` for LangGraph.
 
-### 🟡 PostgreSQL Credential Store — `@datacules/agent-identity-store-pg`
+### 🟡 Redis Budget Store — `@datacules/agent-identity-store-redis`
 
-A `CredentialStore` implementation backed by PostgreSQL (via `pg` or `drizzle-orm`), providing a relational alternative to LibSQL/Turso for organisations already running Postgres. Should implement the same interface as `LibSqlCredentialStore` including `reserve()`/`release()` using `SELECT … FOR UPDATE SKIP LOCKED`.
-
-### 🟡 Redis Session / Budget Store — `@datacules/agent-identity-store-redis`
-
-A `BudgetStore` and optional `AuditLogger` backed by Redis, using sliding-window counters via `ZADD`/`ZRANGEBYSCORE`. Ideal for high-throughput deployments where the per-hour resolution rate makes SQLite or Postgres a bottleneck.
+A `BudgetStore` and optional `AuditLogger` backed by Redis, using sliding-window counters via `ZADD`/`ZRANGEBYSCORE`. The use case is genuinely distinct from LibSQL: AI provider call rate limiting is high-frequency and latency-sensitive in a way that makes an in-process Redis client the right tool. Ideal for deployments where per-hour token budget enforcement needs to be consistent across many agent replicas without a round-trip to a relational store.
 
 ### 🔵 OpenAPI Spec — Keep in sync with route changes
 
@@ -194,10 +190,6 @@ A `BudgetStore` and optional `AuditLogger` backed by Redis, using sliding-window
 - `GET /api/health` (missing — also ISS-001)
 
 Consider adopting `zod-to-openapi` or `@anatine/zod-openapi` to generate the spec automatically from the existing Zod schemas, eliminating manual drift.
-
-### 🔵 WebAuthn / Passkey Agent Registration
-
-Extend the auth.md registration flow to accept WebAuthn assertions as an alternative to OTP claim ceremonies for anonymous agents. Would allow agent frameworks running in browser-based environments to register without an email round-trip.
 
 ### 🔵 Kubernetes Operator — `agent-identity-operator`
 
@@ -256,4 +248,4 @@ An `AttestationSigner` implementation based on ZK-SNARKs, allowing an agent to p
 
 ---
 
-*Last updated: 2026-06-06. To propose an enhancement, open a GitHub issue with the label `enhancement` and reference this document.*
+*Last updated: 2026-06-08. To propose an enhancement, open a GitHub issue with the label `enhancement` and reference this document.*
