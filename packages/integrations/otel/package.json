@@ -19,13 +19,12 @@
     "type-check": "tsc --noEmit",
     "lint": "eslint src --ext .ts"
   },
-  "dependencies": {
-    "@datacules/agent-identity": "^0.11.0"
-  },
   "peerDependencies": {
+    "@datacules/agent-identity": "^0.11.0",
     "@opentelemetry/api": ">=1.0.0"
   },
   "peerDependenciesMeta": {
+    "@datacules/agent-identity": { "optional": false },
     "@opentelemetry/api": { "optional": false }
   },
   "devDependencies": {

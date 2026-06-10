@@ -57,8 +57,44 @@ jobs:
               node -e "
                 const fs = require('fs');
                 const p = JSON.parse(fs.readFileSync('$pkg_json', 'utf8'));
-                if (!p.private) { p.version = '$VERSION'; fs.writeFileSync('$pkg_json', JSON.stringify(p, null, 2) + '\n'); }
+                if (!p.private) {
+                  p.version = '$VERSION';
+                  for (const section of ['dependencies', 'peerDependencies']) {
+                    if (p[section] && p[section]['@datacules/agent-identity'] !== undefined) {
+                      p[section]['@datacules/agent-identity'] = '^$VERSION';
+                    }
+                  }
+                  fs.writeFileSync('$pkg_json', JSON.stringify(p, null, 2) + '\n');
+                }
               "
+            fi
+          done
+
+      - name: Copy LICENSE into each package directory
+        run: |
+          for pkg_dir in \
+            packages/core \
+            packages/audit \
+            packages/stores/aws \
+            packages/stores/vault \
+            packages/stores/azure \
+            packages/stores/dynamic \
+            packages/stores/spiffe \
+            packages/stores/authmd \
+            packages/stores/libsql \
+            packages/integrations/express \
+            packages/integrations/fastify \
+            packages/integrations/langchain \
+            packages/integrations/nestjs \
+            packages/integrations/mcp \
+            packages/integrations/mcp-client \
+            packages/integrations/otel \
+            packages/integrations/anomaly \
+            packages/integrations/compliance \
+            packages/integrations/token-exchange \
+            packages/cli; do
+            if [ -d "$pkg_dir" ]; then
+              cp LICENSE "$pkg_dir/LICENSE"
             fi
           done
 
