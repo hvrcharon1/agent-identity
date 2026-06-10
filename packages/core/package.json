@@ -4,7 +4,7 @@
   "private": false,
   "description": "Provider-agnostic credential routing and identity management for AI agents",
   "author": "Datacules LLC",
-  "license": "MIT",
+  "license": "SEE LICENSE IN LICENSE",
   "repository": {
     "type": "git",
     "url": "https://github.com/hvrcharon1/agent-identity.git",

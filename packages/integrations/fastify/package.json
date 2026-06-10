@@ -3,7 +3,7 @@
   "version": "0.11.0",
   "private": false,
   "description": "Fastify plugin for @datacules/agent-identity",
-  "license": "MIT",
+  "license": "SEE LICENSE IN LICENSE",
   "main": "./dist/cjs/index.js",
   "module": "./dist/esm/index.js",
   "types": "./dist/types/index.d.ts",

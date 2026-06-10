@@ -7,7 +7,7 @@ name = "datacules-agent-identity"
 version = "0.11.0"
 description = "Python SDK for the agent-identity credential routing sidecar — by Datacules LLC"
 authors = [{name = "Datacules LLC", email = "hello@datacules.com"}]
-license = {text = "MIT"}
+license = {file = "LICENSE"}
 readme = "README.md"
 requires-python = ">=3.8"
 # Zero runtime dependencies — pure Python stdlib

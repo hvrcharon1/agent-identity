@@ -3,7 +3,7 @@
   "version": "0.11.0",
   "description": "SPIFFE/SPIRE workload identity credential store for @datacules/agent-identity",
   "private": false,
-  "license": "MIT",
+  "license": "SEE LICENSE IN LICENSE",
   "type": "module",
   "exports": {
     ".": {

@@ -3,7 +3,7 @@
   "version": "0.11.0",
   "private": false,
   "description": "Pre-built audit logger sinks for @datacules/agent-identity (Console, Webhook, Datadog, Splunk)",
-  "license": "MIT",
+  "license": "SEE LICENSE IN LICENSE",
   "main": "./dist/cjs/index.js",
   "module": "./dist/esm/index.js",
   "types": "./dist/types/index.d.ts",
