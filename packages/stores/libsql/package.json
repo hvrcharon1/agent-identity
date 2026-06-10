@@ -1,8 +1,10 @@
 {
   "name": "@datacules/agent-identity-store-libsql",
-  "version": "0.10.0",
+  "version": "0.11.0",
   "private": false,
   "description": "LibSQL (SQLite / Turso) credential store for @datacules/agent-identity — zero server, one npm install, scales to distributed",
+  "author": "Datacules LLC <hello@datacules.com>",
+  "license": "MIT",
   "main": "./dist/cjs/index.js",
   "module": "./dist/esm/index.js",
   "types": "./dist/types/index.d.ts",
@@ -13,6 +15,7 @@
       "types": "./dist/types/index.d.ts"
     }
   },
+  "files": ["dist", "README.md"],
   "scripts": {
     "build": "tsc -p tsconfig.build.json && tsc -p tsconfig.cjs.json",
     "type-check": "tsc --noEmit"
@@ -21,13 +24,11 @@
     "@libsql/client": "^0.14.0"
   },
   "peerDependencies": {
-    "@datacules/agent-identity": "^0.10.0"
+    "@datacules/agent-identity": "^0.11.0"
   },
   "devDependencies": {
     "@datacules/agent-identity": "*",
     "typescript": "^5"
   },
-  "keywords": ["agent-identity", "sqlite", "libsql", "turso", "credential-store", "ai-agents"],
-  "author": "Datacules LLC <hello@datacules.com>",
-  "license": "SEE LICENSE IN LICENSE"
+  "keywords": ["agent-identity", "sqlite", "libsql", "turso", "credential-store", "ai-agents"]
 }

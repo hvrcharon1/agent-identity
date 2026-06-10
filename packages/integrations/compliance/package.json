@@ -1,6 +1,6 @@
 {
   "name": "@datacules/agent-identity-compliance",
-  "version": "0.10.0",
+  "version": "0.11.0",
   "private": false,
   "description": "Compliance report generator + tamper-evident audit log for @datacules/agent-identity — SOC 2, GDPR, HIPAA reports, SHA-256 chain verification CLI",
   "author": "Datacules LLC",
@@ -34,6 +34,6 @@
     "typescript": "^5"
   },
   "peerDependencies": {
-    "@datacules/agent-identity": "^0.10.0"
+    "@datacules/agent-identity": "^0.11.0"
   }
 }

@@ -1,6 +1,6 @@
 {
   "name": "@datacules/agent-identity-otel",
-  "version": "0.10.0",
+  "version": "0.11.0",
   "private": false,
   "description": "Zero-config OpenTelemetry tracing wrapper for @datacules/agent-identity",
   "author": "Datacules LLC",
@@ -20,7 +20,7 @@
     "lint": "eslint src --ext .ts"
   },
   "dependencies": {
-    "@datacules/agent-identity": "^0.10.0"
+    "@datacules/agent-identity": "^0.11.0"
   },
   "peerDependencies": {
     "@opentelemetry/api": ">=1.0.0"

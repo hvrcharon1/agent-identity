@@ -1,6 +1,6 @@
 {
   "name": "@datacules/agent-identity-store-dynamic",
-  "version": "0.10.0",
+  "version": "0.11.0",
   "private": false,
   "description": "Just-in-time credential provisioning store for @datacules/agent-identity — mints short-lived secrets on demand via Vault dynamic secrets or AWS IAM Roles Anywhere",
   "author": "Datacules LLC",
@@ -31,6 +31,6 @@
     "typescript": "^5"
   },
   "peerDependencies": {
-    "@datacules/agent-identity": "^0.10.0"
+    "@datacules/agent-identity": "^0.11.0"
   }
 }
