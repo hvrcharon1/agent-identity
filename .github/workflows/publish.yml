@@ -7,7 +7,7 @@ on:
       - "v[0-9]+.[0-9]+.[0-9]+"
 
 jobs:
-  # ─── Publish all @datacules/* npm packages ──────────────────────────────────
+  # ─── Publish all @datacules/* npm packages ────────────────────────────────────────────
   publish-npm:
     name: Publish npm packages
     runs-on: ubuntu-latest
@@ -40,6 +40,8 @@ jobs:
             packages/stores/azure/package.json \
             packages/stores/dynamic/package.json \
             packages/stores/spiffe/package.json \
+            packages/stores/authmd/package.json \
+            packages/stores/libsql/package.json \
             packages/integrations/express/package.json \
             packages/integrations/fastify/package.json \
             packages/integrations/langchain/package.json \
@@ -48,7 +50,9 @@ jobs:
             packages/integrations/mcp-client/package.json \
             packages/integrations/otel/package.json \
             packages/integrations/anomaly/package.json \
-            packages/integrations/compliance/package.json; do
+            packages/integrations/compliance/package.json \
+            packages/integrations/token-exchange/package.json \
+            packages/cli/package.json; do
             if [ -f "$pkg_json" ]; then
               node -e "
                 const fs = require('fs');
@@ -58,11 +62,32 @@ jobs:
             fi
           done
 
-      - name: Build @datacules/agent-identity (core) — ESM
-        run: cd packages/core && npx tsc -p tsconfig.build.json
+      # Build core first — all other packages depend on its type declarations
+      - name: Build @datacules/agent-identity (core)
+        run: npm run build --workspace=packages/core
 
-      - name: Build @datacules/agent-identity (core) — CJS
-        run: cd packages/core && npx tsc -p tsconfig.cjs.json
+      # Build all remaining publishable npm packages in dependency-safe order
+      - name: Build remaining npm packages
+        run: |
+          npm run build --workspace=packages/audit
+          npm run build --workspace=packages/stores/aws
+          npm run build --workspace=packages/stores/vault
+          npm run build --workspace=packages/stores/azure
+          npm run build --workspace=packages/stores/dynamic
+          npm run build --workspace=packages/stores/spiffe
+          npm run build --workspace=packages/stores/authmd
+          npm run build --workspace=packages/stores/libsql
+          npm run build --workspace=packages/integrations/express
+          npm run build --workspace=packages/integrations/fastify
+          npm run build --workspace=packages/integrations/langchain
+          npm run build --workspace=packages/integrations/nestjs
+          npm run build --workspace=packages/integrations/mcp
+          npm run build --workspace=packages/integrations/mcp-client
+          npm run build --workspace=packages/integrations/otel
+          npm run build --workspace=packages/integrations/anomaly
+          npm run build --workspace=packages/integrations/compliance
+          npm run build --workspace=packages/integrations/token-exchange
+          npm run build --workspace=packages/cli
 
       # Idempotent publish: run npm publish and treat E409/already-exists as success.
       - name: Publish @datacules/agent-identity
@@ -99,7 +124,7 @@ jobs:
         run: |
           set +e
           OUT=$(npm publish --access public 2>&1)
-          STATUS=$?
+          STATUS=$?  
           echo "$OUT"
           if echo "$OUT" | grep -qiE '(cannot publish over|E409|already exists|previously published)'; then
             echo "SKIP: version already published — treating as success"
@@ -167,6 +192,36 @@ jobs:
           fi
           exit $STATUS
         working-directory: packages/stores/spiffe
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Publish @datacules/agent-identity-store-authmd
+        run: |
+          set +e
+          OUT=$(npm publish --access public 2>&1)
+          STATUS=$?
+          echo "$OUT"
+          if echo "$OUT" | grep -qiE '(cannot publish over|E409|already exists|previously published)'; then
+            echo "SKIP: version already published — treating as success"
+            exit 0
+          fi
+          exit $STATUS
+        working-directory: packages/stores/authmd
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Publish @datacules/agent-identity-store-libsql
+        run: |
+          set +e
+          OUT=$(npm publish --access public 2>&1)
+          STATUS=$?
+          echo "$OUT"
+          if echo "$OUT" | grep -qiE '(cannot publish over|E409|already exists|previously published)'; then
+            echo "SKIP: version already published — treating as success"
+            exit 0
+          fi
+          exit $STATUS
+        working-directory: packages/stores/libsql
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
@@ -305,7 +360,37 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
-  # ─── Publish Python SDK to PyPI ─────────────────────────────────────────────
+      - name: Publish @datacules/agent-identity-token-exchange
+        run: |
+          set +e
+          OUT=$(npm publish --access public 2>&1)
+          STATUS=$?
+          echo "$OUT"
+          if echo "$OUT" | grep -qiE '(cannot publish over|E409|already exists|previously published)'; then
+            echo "SKIP: version already published — treating as success"
+            exit 0
+          fi
+          exit $STATUS
+        working-directory: packages/integrations/token-exchange
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Publish @datacules/agent-identity-cli
+        run: |
+          set +e
+          OUT=$(npm publish --access public 2>&1)
+          STATUS=$?
+          echo "$OUT"
+          if echo "$OUT" | grep -qiE '(cannot publish over|E409|already exists|previously published)'; then
+            echo "SKIP: version already published — treating as success"
+            exit 0
+          fi
+          exit $STATUS
+        working-directory: packages/cli
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+  # ─── Publish Python SDK to PyPI ──────────────────────────────────────────────────
   publish-python:
     name: Publish Python SDK to PyPI
     runs-on: ubuntu-latest
@@ -347,7 +432,7 @@ jobs:
           TWINE_USERNAME: __token__
           TWINE_PASSWORD: ${{ secrets.PYPI_TOKEN }}
 
-  # ─── Create GitHub Release with auto-generated notes ────────────────────────
+  # ─── Create GitHub Release with auto-generated notes ──────────────────────────────────────
   github-release:
     name: Create GitHub Release
     runs-on: ubuntu-latest

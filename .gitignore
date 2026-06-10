@@ -13,6 +13,10 @@
 # production
 /build
 
+# Built package artifacts — built by CI at publish time, never committed.
+# Applies to all workspace packages (packages/*/dist, packages/*/*/dist).
+dist/
+
 # misc
 .DS_Store
 *.pem
@@ -32,3 +36,11 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Python SDK build artifacts (packages/python-sdk)
+*.egg-info/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
