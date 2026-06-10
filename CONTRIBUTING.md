@@ -24,7 +24,7 @@ The app runs at `http://localhost:3000`.
 ## Running tests
 
 ```bash
-npm test            # single run (all 19 workspace packages)
+npm test            # single run (all 20 npm packages)
 npm run test:watch  # watch mode
 npm run type-check  # TypeScript (root + src/)
 npm run lint        # ESLint
@@ -59,7 +59,7 @@ agent-identity/
 ├── packages/
 │   ├── core/                  # @datacules/agent-identity (router, types, Zod schemas, React hook)
 │   ├── audit/                 # @datacules/agent-identity-audit (hash-chain logger, sinks)
-│   ├── stores/                # cloud credential stores (aws, vault, azure, spiffe, dynamic)
+│   ├── stores/                # cloud credential stores (aws, vault, azure, spiffe, dynamic, authmd, libsql)
 │   ├── integrations/          # framework adapters (express, fastify, nestjs, langchain, mcp,
 │   │                          #   mcp-client, otel, anomaly, compliance, token-exchange)
 │   ├── cli/                   # @datacules/agent-identity-cli (audit verify, report, health)
