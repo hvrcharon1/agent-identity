@@ -59,71 +59,6 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
     recognises `verified_email` nested inside `identity_assertion.assertion_types_supported`,
     explicit `methodPreference` override respected.
 
-  **Total test coverage: 475 cases across 22 packages** (+9 from v0.10.0).
-
----
-
-## [0.10.0] — 2026-06-07
-
-### Added
-
-- `@datacules/agent-identity-store-libsql` (`packages/stores/libsql`) — LibSQL (SQLite / Turso)
-  persistence layer implementing all four agent-identity store interfaces via `@libsql/client`.
-  Zero native bindings, zero server, one `npm install`. Scales from embedded
-  (`file:./agent-identity.db`) to globally distributed (Turso remote URL) by changing a single
-  connection string — no code changes required.
-
-  Classes and interfaces:
-  - `LibSqlCredentialStore` — `CredentialStore` (`findByRef`, `listActive`, `listByKind`,
-    `reserve`, `release`, `revokeByIdentity`, `upsert`)
-  - `LibSqlApprovalStore` — `ApprovalStore` (`create`, `get`, `update`, `listPending`)
-  - `LibSqlBudgetStore` — `BudgetStore` (hourly sliding-window counters, daily spend,
-    `resetHourly`, `resetDaily`, `recordSpend`)
-  - `LibSqlAuditLogger` — `MigrationAuditLogger` (`log` with standard + migration paths,
-    `summarize` for per-migration compliance aggregation)
-  - `createLibSqlStores()` — one-call factory: opens connection, bootstraps schema, returns
-    all four stores
-  - `bootstrapSchema()` — DDL runner (6 tables, 8 indexes, all `IF NOT EXISTS`)
-  - `SCHEMA_DDL` — exported DDL array for custom bootstrapping
-
-  Schema tables: `ai_credentials`, `ai_reservations`, `ai_approval_requests`,
-  `ai_budget_hourly`, `ai_budget_daily`, `ai_audit_log`.
-
-  Test suite: 32 Vitest cases (`libsql.test.ts`), all using mock client injection —
-  no real SQLite connection required in CI. (PR #46)
-
-- `packages/stores/libsql` added to npm workspaces in root `package.json` (21st workspace entry).
-  `npm install` now installs `@libsql/client`; Turbo build and publish automation include the package.
-
-- `@datacules/agent-identity-store-libsql` source alias added to `vitest.config.ts`.
-  Cross-package imports resolve to `packages/stores/libsql/src/index.ts` without a prior build step.
-
-- `AgentAuthMdStore` (`packages/stores/authmd`) — full auth.md registration
-  client implementing `CredentialStore`, supporting ID-JAG, verified-email,
-  and anonymous flows with OTP claim ceremony (`startClaimCeremony` /
-  `completeClaimCeremony`). Backed by RFC 9728 PRM discovery.
-- `CredentialStatus` extended with `'unclaimed'` tier for anonymous auth.md
-  credentials pre-claim ceremony. `CredentialStatusSchema` updated to match.
-- `Credential` extended with `preClaimScopes`, `postClaimScopes`, `claimedAt`,
-  `claimToken` (in-memory only, never serialised).
-- `CredentialStore.revokeByIdentity()` optional method for inbound revocation.
-- `RevocationHandler` — inbound `logout+jwt` processor with jti replay
-  protection and configurable TTL eviction. (`packages/core/src/revocation.ts`)
-- `RevocationListener` — framework-agnostic HTTP handler for `revocation_uri`
-  endpoints. (`packages/core/src/revocation-listener.ts`)
-- `TrustedIdentityProvider` / `TrustedProviderRegistry` types and Zod schemas
-  in core. (`packages/core/src/types.ts`, `packages/core/src/schemas.ts`)
-- `validateIdJagClaims()` — claim-layer validation for incoming ID-JAGs,
-  covering issuer trust, provider enable, expiry, audience, verified identity,
-  and AMR checks. (`packages/core/src/identity-providers.ts`)
-- `AsymmetricAttestationSigner` — RS256/ES256 JWT signer/verifier for ID-JAG
-  compatibility, built on `crypto.subtle` with no external dependencies.
-  `fromKeyPair()` for signing, `fromPublicJwk()` for verify-only instances.
-- New test suites: `attestation.test.ts` (AsymmetricAttestationSigner 8 cases),
-  `revocation.test.ts` (4 cases), `revocation-listener.test.ts` (6 cases),
-  `identity-providers.test.ts` (12 cases), `AgentAuthMdStore.test.ts` (22 cases).
-- `@datacules/agent-identity-store-authmd` added to npm workspace. (PR #45)
-
 - `CredentialRotationScheduler` enhancements — `rotateAfterUses` + grace period (PR #47)
 
   `isRotationDue()` is now `async` and accepts an optional `getUsageCount(credentialId)`
@@ -200,13 +135,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   unknown `DYNAMIC_PROVISIONER` fallback, `getServerApprovalStore()` Memory and LibSQL
   paths, `getServerBudgetStore()` Memory and LibSQL paths.
 
-- **Total test coverage: 466 cases across 22 packages** (was 366 in v0.9.0)
-
 ### Fixed
-
-- `base64urlToBuffer()` in `attestation.ts` now returns `Uint8Array<ArrayBuffer>`
-  (was `Uint8Array<ArrayBufferLike>`), resolving a TypeScript 5.5+ compile error
-  where `crypto.subtle.verify()` rejected `ArrayBufferLike` as `BufferSource`. (PR #45)
 
 - `computeDecision()` — five bugs fixed in `packages/core/src/decision.ts` and
   `src/lib/decision.ts` (PR #49)
@@ -227,13 +156,54 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   `DecisionTab.tsx`, making the question registry independently testable. App-layer
   test suite expanded 8 → 14 cases. (PR #49)
 
+**Total test coverage: 475 cases across 22 packages** (+9 from v0.11.0).
+
 ---
 
-## [0.9.0] — 2026-06-03
+## [0.11.0] — 2026-06-04
 
 ### Added
 
-**`packages/cli` — `@datacules/agent-identity-cli` (19th workspace package)** (PR #43)
+- `@datacules/agent-identity-store-libsql` (`packages/stores/libsql`) — LibSQL (SQLite / Turso)
+  persistence layer implementing all four agent-identity store interfaces via `@libsql/client`.
+  Zero native bindings, zero server, one `npm install`. Scales from embedded
+  (`file:./agent-identity.db`) to globally distributed (Turso remote URL) by changing a single
+  connection string — no code changes required.
+
+  Classes and interfaces:
+  - `LibSqlCredentialStore` — `CredentialStore` (`findByRef`, `listActive`, `listByKind`,
+    `reserve`, `release`, `revokeByIdentity`, `upsert`)
+  - `LibSqlApprovalStore` — `ApprovalStore` (`create`, `get`, `update`, `listPending`)
+  - `LibSqlBudgetStore` — `BudgetStore` (hourly sliding-window counters, daily spend,
+    `resetHourly`, `resetDaily`, `recordSpend`)
+  - `LibSqlAuditLogger` — `MigrationAuditLogger` (`log` with standard + migration paths,
+    `summarize` for per-migration compliance aggregation)
+  - `createLibSqlStores()` — one-call factory: opens connection, bootstraps schema, returns
+    all four stores
+  - `bootstrapSchema()` — DDL runner (6 tables, 8 indexes, all `IF NOT EXISTS`)
+  - `SCHEMA_DDL` — exported DDL array for custom bootstrapping
+
+  Schema tables: `ai_credentials`, `ai_reservations`, `ai_approval_requests`,
+  `ai_budget_hourly`, `ai_budget_daily`, `ai_audit_log`.
+
+  Test suite: 32 Vitest cases (`libsql.test.ts`), all using mock client injection —
+  no real SQLite connection required in CI. (PR #46)
+
+- `packages/stores/libsql` added to npm workspaces in root `package.json` (21st workspace entry).
+  `npm install` now installs `@libsql/client`; Turbo build and publish automation include the package.
+
+- `@datacules/agent-identity-store-libsql` source alias added to `vitest.config.ts`.
+  Cross-package imports resolve to `packages/stores/libsql/src/index.ts` without a prior build step.
+
+**Total test coverage: 450 cases across 20 packages** (+32 from v0.10.0).
+
+---
+
+## [0.10.0] — 2026-06-03
+
+### Added
+
+**`packages/cli` — `@datacules/agent-identity-cli` (20th workspace package)** (PR #43)
 
 A fully-testable TypeScript CLI package that backs the `agent-identity` commands
 shown in the ComplianceTab dashboard UI. All I/O is injected via function closures
@@ -280,7 +250,46 @@ Vitest resolves workspace imports to source (no build step in the test job).
 Without these aliases the resolver fell back to the workspace symlink which
 points to `dist/cjs/index.js` — a file that does not exist in CI.
 
-**Total test coverage: 366 cases across 19 packages** (was 352 in v0.8.0).
+- `AgentAuthMdStore` (`packages/stores/authmd`) — full auth.md registration
+  client implementing `CredentialStore`, supporting ID-JAG, verified-email,
+  and anonymous flows with OTP claim ceremony (`startClaimCeremony` /
+  `completeClaimCeremony`). Backed by RFC 9728 PRM discovery.
+- `CredentialStatus` extended with `'unclaimed'` tier for anonymous auth.md
+  credentials pre-claim ceremony. `CredentialStatusSchema` updated to match.
+- `Credential` extended with `preClaimScopes`, `postClaimScopes`, `claimedAt`,
+  `claimToken` (in-memory only, never serialised).
+- `CredentialStore.revokeByIdentity()` optional method for inbound revocation.
+- `RevocationHandler` — inbound `logout+jwt` processor with jti replay
+  protection and configurable TTL eviction. (`packages/core/src/revocation.ts`)
+- `RevocationListener` — framework-agnostic HTTP handler for `revocation_uri`
+  endpoints. (`packages/core/src/revocation-listener.ts`)
+- `TrustedIdentityProvider` / `TrustedProviderRegistry` types and Zod schemas
+  in core. (`packages/core/src/types.ts`, `packages/core/src/schemas.ts`)
+- `validateIdJagClaims()` — claim-layer validation for incoming ID-JAGs,
+  covering issuer trust, provider enable, expiry, audience, verified identity,
+  and AMR checks. (`packages/core/src/identity-providers.ts`)
+- `AsymmetricAttestationSigner` — RS256/ES256 JWT signer/verifier for ID-JAG
+  compatibility, built on `crypto.subtle` with no external dependencies.
+  `fromKeyPair()` for signing, `fromPublicJwk()` for verify-only instances.
+- New test suites: `attestation.test.ts` (AsymmetricAttestationSigner 8 cases),
+  `revocation.test.ts` (4 cases), `revocation-listener.test.ts` (6 cases),
+  `identity-providers.test.ts` (12 cases), `AgentAuthMdStore.test.ts` (22 cases).
+- `@datacules/agent-identity-store-authmd` added to npm workspace. (PR #45)
+
+### Fixed
+
+- `base64urlToBuffer()` in `attestation.ts` now returns `Uint8Array<ArrayBuffer>`
+  (was `Uint8Array<ArrayBufferLike>`), resolving a TypeScript 5.5+ compile error
+  where `crypto.subtle.verify()` rejected `ArrayBufferLike` as `BufferSource`. (PR #45)
+
+- README — version badge corrected from 0.7.0 to 0.8.0; quick-start install command
+  corrected to `npm install --legacy-peer-deps` to match workspace peer-dep ranges. (PR #42)
+
+**Total test coverage: 418 cases across 19 packages** (+66 from v0.9.0).
+
+---
+
+## [0.9.0] — 2026-06-02
 
 ### Fixed
 
@@ -299,17 +308,14 @@ file, and the Next.js file watcher briefly holds a lock on the existing file
 on Windows. In-memory cache avoids the rename entirely. Production builds
 (`next build`) set `dev:false` and are unaffected.
 
-**`package.json` — `clean`, `dev:clean`, `clean:modules` scripts** (PR #41–#42)
+**`package.json` — `clean`, `dev:clean`, `clean:modules` scripts** (PR #41)
 
 Three new npm scripts:
 - `clean` — deletes the `.next` directory with a cross-platform `fs.rmSync` one-liner.
 - `dev:clean` — runs `clean` then `next dev`; shortcut for the Windows cache-clear workflow.
 - `clean:modules` — deletes `node_modules` for a full fresh install.
 
-**README — version badge 0.7.0 → 0.8.0 and `--legacy-peer-deps` install flag** (PR #42)
-
-Version badge in README corrected from 0.7.0 to 0.8.0. Quick-start install command
-corrected to `npm install --legacy-peer-deps` to match the workspace peer-dep ranges.
+**Total test coverage: 352 cases across 17 packages** (no change from v0.8.0).
 
 ---
 
