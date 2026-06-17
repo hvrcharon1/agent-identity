@@ -2,7 +2,7 @@
   "name": "@datacules/agent-identity-compliance",
   "version": "0.11.0",
   "private": false,
-  "description": "Compliance report generator + tamper-evident audit log for @datacules/agent-identity \u2014 SOC 2, GDPR, HIPAA reports, SHA-256 chain verification CLI",
+  "description": "Compliance report generator + tamper-evident audit log for @datacules/agent-identity — SOC 2, GDPR, HIPAA reports, SHA-256 chain verification CLI",
   "author": "Datacules LLC",
   "license": "SEE LICENSE IN LICENSE",
   "repository": {
@@ -23,9 +23,14 @@
       "types": "./dist/types/index.d.ts"
     }
   },
-  "files": ["dist", "bin", "README.md"],
+  "files": [
+    "dist",
+    "bin",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
-    "build": "tsc -p tsconfig.build.json",
+    "build": "tsc -p tsconfig.build.json && tsc -p tsconfig.cjs.json",
     "type-check": "tsc --noEmit",
     "lint": "eslint src --ext .ts"
   },
@@ -35,5 +40,16 @@
   },
   "peerDependencies": {
     "@datacules/agent-identity": "^0.11.0"
-  }
+  },
+  "keywords": [
+    "agent-identity",
+    "compliance",
+    "soc2",
+    "gdpr",
+    "hipaa",
+    "audit",
+    "hash-chain",
+    "ai-agents",
+    "datacules"
+  ]
 }

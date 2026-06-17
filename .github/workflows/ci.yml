@@ -48,6 +48,32 @@ jobs:
           npx tsc -p tsconfig.cjs.json 2>&1
           echo "CJS build exit: $?"
 
+      - name: Build all workspace packages
+        run: |
+          for pkg in \
+            packages/audit \
+            packages/stores/aws \
+            packages/stores/vault \
+            packages/stores/azure \
+            packages/stores/authmd \
+            packages/stores/libsql \
+            packages/stores/dynamic \
+            packages/stores/spiffe \
+            packages/integrations/express \
+            packages/integrations/fastify \
+            packages/integrations/langchain \
+            packages/integrations/nestjs \
+            packages/integrations/otel \
+            packages/integrations/anomaly \
+            packages/integrations/compliance \
+            packages/integrations/mcp \
+            packages/integrations/mcp-client \
+            packages/integrations/token-exchange \
+            packages/cli; do
+            echo "=== Building $pkg ==="
+            npm run build --workspace="$pkg"
+          done
+
       - name: Upload packages/core/dist
         uses: actions/upload-artifact@v4
         with:

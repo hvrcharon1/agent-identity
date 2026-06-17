@@ -3,7 +3,22 @@
   "version": "0.11.0",
   "private": false,
   "description": "NestJS module, guard, and decorator for @datacules/agent-identity",
+  "author": "Datacules LLC",
   "license": "SEE LICENSE IN LICENSE",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/hvrcharon1/agent-identity.git",
+    "directory": "packages/integrations/nestjs"
+  },
+  "keywords": [
+    "agent-identity",
+    "nestjs",
+    "guard",
+    "decorator",
+    "credential-routing",
+    "ai-agents",
+    "datacules"
+  ],
   "main": "./dist/cjs/index.js",
   "module": "./dist/esm/index.js",
   "types": "./dist/types/index.d.ts",
@@ -31,5 +46,9 @@
     "reflect-metadata": "^0.2.0",
     "typescript": "^5"
   },
-  "files": ["dist", "src"]
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ]
 }

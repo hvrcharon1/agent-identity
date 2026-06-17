@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: agent-identity credential resolution API
-  version: 0.10.0
+  version: 0.11.0
   description: |
     Language-agnostic REST contract for resolving agent credentials.
     Any application (Python, Go, Ruby, Java) can POST to /api/resolve or
@@ -34,7 +34,8 @@ info:
     name: Datacules LLC
     url: https://github.com/hvrcharon1/agent-identity
   license:
-    name: MIT
+    name: Datacules Open Source License
+    url: https://github.com/hvrcharon1/agent-identity/blob/main/LICENSE
 
 servers:
   - url: http://localhost:3000

@@ -2,7 +2,7 @@
   "name": "@datacules/agent-identity-store-dynamic",
   "version": "0.11.0",
   "private": false,
-  "description": "Just-in-time credential provisioning store for @datacules/agent-identity \u2014 mints short-lived secrets on demand via Vault dynamic secrets or AWS IAM Roles Anywhere",
+  "description": "Just-in-time credential provisioning store for @datacules/agent-identity — mints short-lived secrets on demand via Vault dynamic secrets or AWS IAM Roles Anywhere",
   "author": "Datacules LLC",
   "license": "SEE LICENSE IN LICENSE",
   "repository": {
@@ -20,9 +20,13 @@
       "types": "./dist/types/index.d.ts"
     }
   },
-  "files": ["dist", "README.md"],
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
-    "build": "tsc -p tsconfig.build.json",
+    "build": "tsc -p tsconfig.build.json && tsc -p tsconfig.cjs.json",
     "type-check": "tsc --noEmit",
     "lint": "eslint src --ext .ts"
   },
@@ -32,5 +36,16 @@
   },
   "peerDependencies": {
     "@datacules/agent-identity": "^0.11.0"
-  }
+  },
+  "keywords": [
+    "agent-identity",
+    "jit",
+    "dynamic-credentials",
+    "vault",
+    "aws",
+    "azure",
+    "managed-identity",
+    "ai-agents",
+    "datacules"
+  ]
 }

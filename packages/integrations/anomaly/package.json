@@ -2,7 +2,7 @@
   "name": "@datacules/agent-identity-anomaly",
   "version": "0.11.0",
   "private": false,
-  "description": "Anomaly detection and behavioral baseline for @datacules/agent-identity \u2014 statistical detection of unusual credential usage patterns",
+  "description": "Anomaly detection and behavioral baseline for @datacules/agent-identity — statistical detection of unusual credential usage patterns",
   "author": "Datacules LLC",
   "license": "SEE LICENSE IN LICENSE",
   "repository": {
@@ -20,9 +20,13 @@
       "types": "./dist/types/index.d.ts"
     }
   },
-  "files": ["dist", "README.md"],
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
-    "build": "tsc -p tsconfig.build.json",
+    "build": "tsc -p tsconfig.build.json && tsc -p tsconfig.cjs.json",
     "type-check": "tsc --noEmit",
     "lint": "eslint src --ext .ts"
   },
@@ -32,5 +36,14 @@
   },
   "peerDependencies": {
     "@datacules/agent-identity": "^0.11.0"
-  }
+  },
+  "keywords": [
+    "agent-identity",
+    "anomaly-detection",
+    "ewma",
+    "behavioral-baseline",
+    "security",
+    "ai-agents",
+    "datacules"
+  ]
 }

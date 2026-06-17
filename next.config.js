@@ -1,6 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  output: 'standalone',
 
   // ─── @libsql/client — keep out of the webpack server bundle ────────────────
   // @libsql/client ships native Node.js bindings that webpack cannot bundle.

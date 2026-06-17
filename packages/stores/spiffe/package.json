@@ -3,6 +3,7 @@
   "version": "0.11.0",
   "description": "SPIFFE/SPIRE workload identity credential store for @datacules/agent-identity",
   "private": false,
+  "author": "Datacules LLC",
   "license": "SEE LICENSE IN LICENSE",
   "type": "module",
   "exports": {
@@ -15,7 +16,11 @@
   "main": "./dist/cjs/index.js",
   "module": "./dist/esm/index.js",
   "types": "./dist/types/index.d.ts",
-  "files": ["dist", "README.md"],
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "build": "tsc -p tsconfig.build.json && tsc -p tsconfig.cjs.json",
     "type-check": "tsc --noEmit"
@@ -25,7 +30,9 @@
     "@spiffe/spiffe-workload-api": "^1.0.0"
   },
   "peerDependenciesMeta": {
-    "@spiffe/spiffe-workload-api": { "optional": true }
+    "@spiffe/spiffe-workload-api": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "@datacules/agent-identity": "*",
@@ -33,6 +40,17 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/hvrcharon1/agent-identity"
-  }
+    "url": "https://github.com/hvrcharon1/agent-identity.git",
+    "directory": "packages/stores/spiffe"
+  },
+  "keywords": [
+    "agent-identity",
+    "spiffe",
+    "spire",
+    "workload-identity",
+    "x509",
+    "zero-trust",
+    "ai-agents",
+    "datacules"
+  ]
 }

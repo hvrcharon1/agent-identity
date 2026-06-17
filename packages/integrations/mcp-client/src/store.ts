@@ -160,7 +160,7 @@ export class McpCredentialStore implements CredentialStore {
       const headers: Record<string, string> = {};
       if (opts.authToken) headers['Authorization'] = `Bearer ${opts.authToken}`;
 
-      const transport = new SSEClientTransport(sseUrl, { headers });
+      const transport = new SSEClientTransport(sseUrl, { requestInit: { headers } });
       await this.client.connect(transport);
     } else {
       const transport = new StdioClientTransport({

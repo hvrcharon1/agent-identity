@@ -2,17 +2,35 @@
   "name": "@datacules/agent-identity-mcp",
   "version": "0.11.0",
   "private": false,
-  "description": "MCP server adapter for @datacules/agent-identity \u2014 expose credential resolution as MCP tools",
+  "description": "MCP server adapter for @datacules/agent-identity — expose credential resolution as MCP tools",
+  "author": "Datacules LLC",
   "license": "SEE LICENSE IN LICENSE",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/hvrcharon1/agent-identity.git",
+    "directory": "packages/integrations/mcp"
+  },
   "main": "./dist/cjs/index.js",
   "module": "./dist/esm/index.js",
   "types": "./dist/types/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/esm/index.js",
+      "require": "./dist/cjs/index.js",
+      "types": "./dist/types/index.d.ts"
+    }
+  },
   "bin": {
     "agent-identity-mcp": "./bin/server.js"
   },
-  "files": ["dist", "bin"],
+  "files": [
+    "dist",
+    "bin",
+    "LICENSE",
+    "README.md"
+  ],
   "scripts": {
-    "build": "tsc -p tsconfig.build.json",
+    "build": "tsc -p tsconfig.build.json && tsc -p tsconfig.cjs.json",
     "type-check": "tsc --noEmit",
     "start": "node bin/server.js",
     "start:http": "MCP_TRANSPORT=http node bin/server.js"
@@ -28,6 +46,14 @@
     "@datacules/agent-identity": "*",
     "typescript": "^5"
   },
-  "engines": { "node": ">=20" },
-  "keywords": ["mcp", "model-context-protocol", "agent-identity", "credential", "datacules"]
+  "engines": {
+    "node": ">=20"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "agent-identity",
+    "credential",
+    "datacules"
+  ]
 }
