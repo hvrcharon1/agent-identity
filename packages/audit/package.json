@@ -46,6 +46,6 @@
   "devDependencies": {
     "@datacules/agent-identity": "*",
     "typescript": "^5",
-    "vitest": "^1.6.0"
+    "vitest": "^4.1.9"
   }
 }
