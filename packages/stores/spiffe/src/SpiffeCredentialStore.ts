@@ -129,7 +129,7 @@ export class SpiffeCredentialStore implements CredentialStore {
     return {
       ...meta,
       ref: svid.ref,
-      expiresAt: svid.expiresAt,
+      expiresAt: svid.expiresAt.toISOString(),
     };
   }
 

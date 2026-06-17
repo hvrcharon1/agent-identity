@@ -136,7 +136,7 @@ export class McpToolCaller {
       const sseUrl = new URL('/sse', opts.serverUrl);
       const headers: Record<string, string> = {};
       if (opts.authToken) headers['Authorization'] = `Bearer ${opts.authToken}`;
-      await this.client.connect(new SSEClientTransport(sseUrl, { headers }));
+      await this.client.connect(new SSEClientTransport(sseUrl, { requestInit: { headers } }));
     } else {
       await this.client.connect(
         new StdioClientTransport({

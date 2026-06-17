@@ -3,13 +3,38 @@
   "version": "0.11.0",
   "private": false,
   "description": "Fastify plugin for @datacules/agent-identity",
+  "author": "Datacules LLC",
   "license": "SEE LICENSE IN LICENSE",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/hvrcharon1/agent-identity.git",
+    "directory": "packages/integrations/fastify"
+  },
+  "keywords": [
+    "agent-identity",
+    "fastify",
+    "plugin",
+    "credential-routing",
+    "ai-agents",
+    "datacules"
+  ],
   "main": "./dist/cjs/index.js",
   "module": "./dist/esm/index.js",
   "types": "./dist/types/index.d.ts",
-  "files": ["dist"],
+  "exports": {
+    ".": {
+      "import": "./dist/esm/index.js",
+      "require": "./dist/cjs/index.js",
+      "types": "./dist/types/index.d.ts"
+    }
+  },
+  "files": [
+    "dist",
+    "LICENSE",
+    "README.md"
+  ],
   "scripts": {
-    "build": "tsc -p tsconfig.build.json",
+    "build": "tsc -p tsconfig.build.json && tsc -p tsconfig.cjs.json",
     "type-check": "tsc --noEmit"
   },
   "peerDependencies": {

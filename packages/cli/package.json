@@ -1,9 +1,26 @@
 {
   "name": "@datacules/agent-identity-cli",
   "version": "0.11.0",
-  "description": "CLI for @datacules/agent-identity \u2014 audit chain verification, compliance reports, credential resolution testing",
+  "description": "CLI for @datacules/agent-identity — audit chain verification, compliance reports, credential resolution testing",
   "private": false,
+  "author": "Datacules LLC",
   "license": "SEE LICENSE IN LICENSE",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/hvrcharon1/agent-identity.git",
+    "directory": "packages/cli"
+  },
+  "keywords": [
+    "agent-identity",
+    "cli",
+    "audit",
+    "compliance",
+    "soc2",
+    "gdpr",
+    "hipaa",
+    "ai-agents",
+    "datacules"
+  ],
   "bin": {
     "agent-identity-cli": "./bin/agent-identity.js"
   },
@@ -16,7 +33,12 @@
   "main": "./dist/index.js",
   "module": "./dist/index.mjs",
   "types": "./dist/index.d.ts",
-  "files": ["dist", "bin"],
+  "files": [
+    "dist",
+    "bin",
+    "LICENSE",
+    "README.md"
+  ],
   "scripts": {
     "build": "tsup src/index.ts --format cjs,esm --dts --clean --treeshake",
     "dev": "tsup src/index.ts --format cjs,esm --watch"
