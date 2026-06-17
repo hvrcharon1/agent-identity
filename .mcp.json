@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "agent-identity": {
+      "command": "npx",
+      "args": ["@datacules/agent-identity-mcp"],
+      "env": {
+        "AGENT_IDENTITY_CREDENTIALS": "${AGENT_IDENTITY_CREDENTIALS}",
+        "AGENT_IDENTITY_RULES": "${AGENT_IDENTITY_RULES}"
+      }
+    }
+  }
+}

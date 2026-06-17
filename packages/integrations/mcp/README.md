@@ -72,7 +72,23 @@ const { start } = createAgentIdentityMcpServer({ store, rules });
 await start();
 ```
 
-## Claude Desktop config
+## App Connector Configs
+
+agent-identity works as an MCP server in **Claude Desktop, Claude Code, Cursor, Codex**, and any other MCP-capable client. All use the same stdio transport — only the config file format differs.
+
+### Encoding credentials and rules
+
+All configs require base64-encoded JSON arrays:
+
+```bash
+# Encode your credentials
+echo '[{"id":"cred-1","kind":"fixed","name":"OpenAI Prod","scope":"All projects","status":"active","ref":"vault:openai-prod"}]' | base64
+
+# Encode your rules
+echo '[{"id":"rule-1","credentialRef":"vault:openai-prod","priority":100,"matchProvider":"openai"}]' | base64
+```
+
+### Claude Desktop
 
 Add to `~/.claude/claude_desktop_config.json`:
 
@@ -81,28 +97,101 @@ Add to `~/.claude/claude_desktop_config.json`:
   "mcpServers": {
     "agent-identity": {
       "command": "npx",
-      "args": ["@datacules/agent-identity-mcp"],
+      "args": ["-y", "@datacules/agent-identity-mcp"],
       "env": {
-        "AGENT_IDENTITY_CREDENTIALS": "<base64-encoded JSON array of Credential objects>",
-        "AGENT_IDENTITY_RULES": "<base64-encoded JSON array of RoutingRule objects>"
+        "AGENT_IDENTITY_CREDENTIALS": "<base64-encoded credentials>",
+        "AGENT_IDENTITY_RULES": "<base64-encoded rules>"
       }
     }
   }
 }
 ```
 
-To encode your data:
+### Claude Code
+
+**Option A — CLI command (user-scoped):**
+
 ```bash
-echo '[{"id":"cred-1", ...}]' | base64
+claude mcp add agent-identity \
+  -e AGENT_IDENTITY_CREDENTIALS="<base64>" \
+  -e AGENT_IDENTITY_RULES="<base64>" \
+  -- npx @datacules/agent-identity-mcp
 ```
 
-## Claude Code config
+**Option B — Project-scoped (committed to repo):**
 
-```bash
-claude mcp add agent-identity \\
-  -e AGENT_IDENTITY_CREDENTIALS=<base64> \\
-  -e AGENT_IDENTITY_RULES=<base64> \\
-  -- npx @datacules/agent-identity-mcp
+Create `.mcp.json` in the project root:
+
+```json
+{
+  "mcpServers": {
+    "agent-identity": {
+      "command": "npx",
+      "args": ["-y", "@datacules/agent-identity-mcp"],
+      "env": {
+        "AGENT_IDENTITY_CREDENTIALS": "${AGENT_IDENTITY_CREDENTIALS}",
+        "AGENT_IDENTITY_RULES": "${AGENT_IDENTITY_RULES}"
+      }
+    }
+  }
+}
+```
+
+Set the env vars in your shell or `.env` — Claude Code expands `${VAR}` references at runtime.
+
+### Cursor
+
+Add to `.cursor/mcp.json` (project-scoped) or `~/.cursor/mcp.json` (global):
+
+```json
+{
+  "mcpServers": {
+    "agent-identity": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "@datacules/agent-identity-mcp"],
+      "env": {
+        "AGENT_IDENTITY_CREDENTIALS": "<base64-encoded credentials>",
+        "AGENT_IDENTITY_RULES": "<base64-encoded rules>"
+      }
+    }
+  }
+}
+```
+
+### Codex (OpenAI)
+
+Add to `.codex/config.toml` (project-scoped) or `~/.codex/config.toml` (global):
+
+```toml
+[mcp_servers.agent-identity]
+command = "npx"
+args = ["-y", "@datacules/agent-identity-mcp"]
+startup_timeout_sec = 30
+
+[mcp_servers.agent-identity.env]
+AGENT_IDENTITY_CREDENTIALS = "<base64-encoded credentials>"
+AGENT_IDENTITY_RULES = "<base64-encoded rules>"
+```
+
+### Windsurf
+
+Windsurf uses the same JSON format as Cursor. Add to your Windsurf MCP settings:
+
+```json
+{
+  "mcpServers": {
+    "agent-identity": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "@datacules/agent-identity-mcp"],
+      "env": {
+        "AGENT_IDENTITY_CREDENTIALS": "<base64-encoded credentials>",
+        "AGENT_IDENTITY_RULES": "<base64-encoded rules>"
+      }
+    }
+  }
+}
 ```
 
 ## Environment variables (standalone CLI)

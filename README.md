@@ -599,7 +599,7 @@ For LangGraph, use `createAgentIdentityNode()` as a drop-in `StateGraph` node th
 
 ### MCP server — inbound (`@datacules/agent-identity-mcp`)
 
-Exposes agent-identity credential resolution as a **Model Context Protocol (MCP) server**. Any MCP-capable client — Claude Desktop, Claude Code, Cursor, Windsurf, or a custom agent — can call agent-identity tools directly over MCP without touching the HTTP REST API.
+Exposes agent-identity credential resolution as a **Model Context Protocol (MCP) server**. Any MCP-capable client — **Claude Desktop, Claude Code, Cursor, Codex, Windsurf**, or a custom agent — can call agent-identity tools directly over MCP without touching the HTTP REST API.
 
 ```bash
 npm install @datacules/agent-identity-mcp
@@ -615,14 +615,14 @@ npm install @datacules/agent-identity-mcp
 | `list_rules` | List routing rules ordered by priority |
 | `health` | Liveness check + loaded credential/rule counts |
 
-#### Claude Desktop config
+#### Claude Desktop
 
 ```json
 {
   "mcpServers": {
     "agent-identity": {
       "command": "npx",
-      "args": ["@datacules/agent-identity-mcp"],
+      "args": ["-y", "@datacules/agent-identity-mcp"],
       "env": {
         "AGENT_IDENTITY_CREDENTIALS": "<base64-encoded credentials JSON>",
         "AGENT_IDENTITY_RULES": "<base64-encoded rules JSON>"
@@ -641,12 +641,48 @@ claude mcp add agent-identity \
   -- npx @datacules/agent-identity-mcp
 ```
 
+Or use the project-scoped `.mcp.json` (already included in this repo).
+
+#### Cursor
+
+Add to `.cursor/mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "agent-identity": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "@datacules/agent-identity-mcp"],
+      "env": {
+        "AGENT_IDENTITY_CREDENTIALS": "<base64-encoded credentials JSON>",
+        "AGENT_IDENTITY_RULES": "<base64-encoded rules JSON>"
+      }
+    }
+  }
+}
+```
+
+#### Codex (OpenAI)
+
+Add to `.codex/config.toml`:
+
+```toml
+[mcp_servers.agent-identity]
+command = "npx"
+args = ["-y", "@datacules/agent-identity-mcp"]
+
+[mcp_servers.agent-identity.env]
+AGENT_IDENTITY_CREDENTIALS = "<base64-encoded credentials>"
+AGENT_IDENTITY_RULES = "<base64-encoded rules>"
+```
+
 #### Programmatic (library mode)
 
 ```typescript
 import { createAgentIdentityMcpServer } from '@datacules/agent-identity-mcp';
 
-// stdio transport (Claude Desktop / Claude Code)
+// stdio transport (Claude Desktop / Claude Code / Cursor / Codex)
 const { start } = createAgentIdentityMcpServer({ credentials, rules });
 await start();
 
@@ -1003,7 +1039,7 @@ No single AI provider will dominate every use case. Cost, capability, latency, d
 
 ### The MCP ecosystem is growing fast
 
-Model Context Protocol is becoming the standard integration layer for AI tools and agents. `agent-identity` participates in both directions: as an MCP server, it exposes credential resolution as callable tools to any MCP-capable client; as an MCP client, it can pull credentials from any MCP-compatible credential store. This means agent-identity integrates naturally into Claude Desktop, Claude Code, Cursor, Windsurf, and any custom MCP orchestration layer — without requiring a REST API call.
+Model Context Protocol is becoming the standard integration layer for AI tools and agents. `agent-identity` participates in both directions: as an MCP server, it exposes credential resolution as callable tools to any MCP-capable client; as an MCP client, it can pull credentials from any MCP-compatible credential store. This means agent-identity integrates naturally into Claude Desktop, Claude Code, Cursor, Codex, Windsurf, and any custom MCP orchestration layer — without requiring a REST API call.
 
 ---
 
