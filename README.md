@@ -17,7 +17,7 @@
   <a href="https://github.com/hvrcharon1/agent-identity/actions/workflows/ci.yml">
     <img src="https://img.shields.io/github/actions/workflow/status/hvrcharon1/agent-identity/ci.yml?branch=main&style=flat-square&label=CI&color=black" alt="CI"/>
   </a>
-  <img src="https://img.shields.io/badge/version-0.12.0-black?style=flat-square" alt="Version"/>
+  <img src="https://img.shields.io/badge/version-0.13.0-black?style=flat-square" alt="Version"/>
   <img src="https://img.shields.io/badge/packages-22%20(npm%20%2B%20PyPI)-black?style=flat-square" alt="Packages"/>
   <img src="https://img.shields.io/badge/providers-OpenAI%20%7C%20Anthropic%20%7C%20Gemini%20%7C%20Mistral%20%7C%20Local-black?style=flat-square" alt="Supported providers"/>
   <img src="https://img.shields.io/badge/MCP-server%20%2B%20client-black?style=flat-square" alt="MCP support"/>
@@ -194,8 +194,8 @@ This composability is what makes the framework production-grade across organisat
 | OAuth token delegation | RFC 8693 — OAuth 2.0 Token Exchange |
 | Workload identity | SPIFFE/SPIRE — Secure Production Identity Framework For Everyone |
 | Distributed tracing | OpenTelemetry — spans nest inside existing Datadog, Honeycomb, Jaeger, X-Ray traces |
-| AI agent identity registration | auth.md + ID-JAG draft spec — standardised agent registration and claim ceremony |
-| Identity revocation | OAuth 2.0 / OIDC `logout+jwt` — inbound revocation with jti replay protection |
+| AI agent identity registration | auth.md v0.6.0 + ID-JAG draft spec — RFC 9728 discovery, jwt-bearer exchange, RFC 8628-shaped claim ceremony |
+| Identity revocation | RFC 8935 Security Event Token (`secevent+jwt`) — inbound revocation with jti replay protection; legacy `logout+jwt` compat |
 | Attestation signing | HMAC-SHA256, RS256, ES256 via Web Crypto API — no external crypto libraries |
 | Workload attestation | X.509 SVIDs (SPIFFE) — short-lived certificates, auto-renewed by SPIRE agent |
 | API schema validation | Zod + JSON Schema — runtime validation, OpenAPI spec generation, Python Pydantic interop |
@@ -221,7 +221,7 @@ A provider-agnostic framework for AI agents that act on behalf of users and serv
 | `@datacules/agent-identity-store-azure` | `npm install @datacules/agent-identity-store-azure` | Azure Key Vault + Table Storage credential store |
 | `@datacules/agent-identity-store-spiffe` | `npm install @datacules/agent-identity-store-spiffe` | SPIFFE/SPIRE workload identity via X.509 SVIDs — zero static credentials |
 | `@datacules/agent-identity-store-dynamic` | `npm install @datacules/agent-identity-store-dynamic` | JIT credential provisioning — Vault dynamic secrets, AWS IAM Roles Anywhere, Azure Managed Identity (system-assigned + user-assigned via `AzureManagedIdentityProvisioner`) |
-| `@datacules/agent-identity-store-authmd` | `npm install @datacules/agent-identity-store-authmd` | auth.md registration CredentialStore — ID-JAG, verified-email, and anonymous OTP claim ceremony; inbound `logout+jwt` revocation |
+| `@datacules/agent-identity-store-authmd` | `npm install @datacules/agent-identity-store-authmd` | auth.md registration CredentialStore (v0.6.0) — ID-JAG + jwt-bearer token exchange, service-auth (login_hint), anonymous; RFC 8628-shaped claim ceremony polling; inbound `secevent+jwt` (RFC 8935) revocation |
 | `@datacules/agent-identity-store-libsql` | `npm install @datacules/agent-identity-store-libsql` | LibSQL (SQLite / Turso) persistence — `CredentialStore`, `ApprovalStore`, `BudgetStore`, `AuditLogger`; embedded SQLite or globally distributed Turso via one connection string |
 | `@datacules/agent-identity-store-redis` | `npm install @datacules/agent-identity-store-redis` | Redis `BudgetStore` — sliding-window hourly counters, concurrent session tracking, and daily spend aggregation using sorted sets |
 | `@datacules/agent-identity-express` | `npm install @datacules/agent-identity-express` | Express middleware |
@@ -861,17 +861,24 @@ const { credentialStore, approvalStore, budgetStore, auditLogger } = await creat
 );
 const router = createRouterFromStore(credentialStore, rules, auditLogger);
 
-// auth.md — standardised AI agent identity registration via ID-JAG, verified-email, or anonymous OTP
-// Agents register once; no static API keys stored anywhere
+// auth.md v0.6.0 — AI agent identity via ID-JAG + jwt-bearer token exchange, service-auth, or anonymous
+// Agents register once via RFC 9728 discovery; no static API keys stored anywhere
 import { AgentAuthMdStore } from '@datacules/agent-identity-store-authmd';
 const store = new AgentAuthMdStore({
-  registrationEndpoint: 'https://auth.your-service.com/agents',
-  trustedProviders: [
-    { issuerUrl: 'https://api.openai.com', label: 'OpenAI' },
-    { issuerUrl: 'https://claude.ai',      label: 'Anthropic' },
-  ],
+  configs: [{
+    ref: 'my-service',
+    kind: 'user-delegated',
+    name: 'My Service',
+    scope: 'read write',
+    status: 'active',
+    resourceServerUrl: 'https://api.your-service.com',
+    methodPreference: ['id-jag', 'service-auth', 'anonymous'],
+    idJagProvider: myIdJagMinter,       // supplies audience-bound ID-JAG JWTs
+    userEmail: 'agent@example.com',     // login_hint for service-auth fallback
+  }],
 });
 const router = createRouterFromStore(store, rules, logger);
+// After findByRef(): if a claim ceremony is pending, poll with store.pollClaimCeremony(ref)
 
 // Redis — sliding-window budget enforcement with sorted sets
 // Sub-millisecond rate limiting for high-throughput credential resolution
@@ -883,12 +890,15 @@ const budgetStore = new RedisBudgetStore({
 });
 // Use with BudgetEnforcer or pass directly to createRouterFromStore options
 
-// Wire up inbound logout+jwt revocation at your revocation_uri endpoint
+// Wire up inbound secevent+jwt (RFC 8935) revocation at your events_endpoint
 import { RevocationHandler, RevocationListener } from '@datacules/agent-identity';
-const revocationHandler = new RevocationHandler({ store, jtiCacheTtl: 3600 });
-const revocationListener = new RevocationListener(revocationHandler);
+const handler = new RevocationHandler(store);
+const listener = new RevocationListener({ handler, verifier: mySecEventVerifier });
 // Express example:
-// app.post('/auth/revoke', (req, res) => revocationListener.handle(req, res));
+// app.post('/agent/auth/events', async (req, res) => {
+//   const result = await listener.handleRequest(req.body, req.headers);
+//   res.status(result.httpStatus).send(result.body ?? '');
+// });
 ```
 
 All stores implement the same `CredentialStore` interface and are drop-in replacements for each other.
@@ -1178,7 +1188,7 @@ Visual flow diagram, clickable phase timeline, configuration Q&A for common misc
 - **RFC 8693 token exchange** — no long-lived user tokens stored server-side; subject tokens are exchanged at request time and cached briefly; `invalidateCache()` / `flushCache()` for immediate revocation
 - **JIT provisioning** — credentials are minted on demand and auto-revoked at TTL; a full store compromise yields zero usable long-lived secrets
 - **SPIFFE/SPIRE** — workload identity cryptographically attested by SPIRE; SVIDs are short-lived X.509 certificates, no static secrets
-- **auth.md / ID-JAG** — agents register via cryptographically signed assertions from trusted providers; `validateIdJagClaims()` enforces issuer trust, expiry, audience, and AMR checks before resolution; `unclaimed` credentials cannot be resolved until the OTP claim ceremony completes; inbound `logout+jwt` revokes matching credentials via `RevocationHandler` (jti replay protection, configurable TTL eviction) mounted at the `revocation_uri` by `RevocationListener`
+- **auth.md v0.6.0 / ID-JAG** — agents register via cryptographically signed assertions from trusted providers; `validateIdJagClaims()` enforces issuer trust, expiry, audience, and AMR checks; registration returns an `identity_assertion` exchanged at `/oauth2/token` via RFC 7523 jwt-bearer grant; claim ceremony uses RFC 8628-shaped `user_code` + `verification_uri` polling; inbound `secevent+jwt` (RFC 8935) revokes matching credentials via `RevocationHandler` (jti replay protection, configurable TTL) at `events_endpoint`; 401 `interaction_required` / `login_required` step-up handled gracefully
 
 ---
 
@@ -1270,8 +1280,8 @@ agent-identity/
 │   │       ├── approval.ts                # ApprovalManager, MemoryApprovalStore, notifiers
 │   │       ├── budget.ts                  # BudgetEnforcer, MemoryBudgetStore
 │   │       ├── federation.ts              # FederationVerifier, FederationIssuer, IdentityChain
-│   │       ├── revocation.ts              # RevocationHandler — inbound logout+jwt, jti replay protection
-│   │       ├── revocation-listener.ts     # RevocationListener — HTTP handler for revocation_uri
+│   │       ├── revocation.ts              # RevocationHandler — inbound SET/logout+jwt, jti replay protection
+│   │       ├── revocation-listener.ts     # RevocationListener — HTTP handler for events_endpoint (secevent+jwt / logout+jwt)
 │   │       ├── identity-providers.ts      # validateIdJagClaims() — ID-JAG trust domain validation
 │   │       └── react/
 │   │           └── useAgentIdentity.ts
@@ -1317,8 +1327,8 @@ agent-identity/
 The publish workflow fires automatically on a version tag push:
 
 ```bash
-git tag v0.12.0
-git push origin v0.12.0
+git tag v0.13.0
+git push origin v0.13.0
 ```
 
 This stamps all 22 workspace `package.json` versions from the tag (21 npm packages + 1 Python SDK), builds core ESM + CJS, publishes all `@datacules/*` packages to npm with provenance, and publishes the Python wheel to PyPI. A GitHub Release with auto-generated notes is created once both publish jobs succeed.

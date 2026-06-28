@@ -10,6 +10,13 @@
  */
 import type { ProtectedResourceMetadata, AuthServerMetadata, AgentAuthBlock } from './types';
 
+/** Discovery result containing both the agent_auth block and the full AS metadata. */
+export interface DiscoveryResult {
+  agentAuth: AgentAuthBlock;
+  tokenEndpoint?: string;
+  revocationEndpoint?: string;
+}
+
 /**
  * Discover the agent_auth block for a resource server.
  *
@@ -19,14 +26,14 @@ import type { ProtectedResourceMetadata, AuthServerMetadata, AgentAuthBlock } fr
  *   2. For each AS in prm.authorization_servers:
  *      GET {asBaseUrl}/.well-known/oauth-authorization-server
  *      and check for an agent_auth block.
- *   3. Return the first agent_auth block found, or null if none found.
+ *   3. Return the first agent_auth block found with AS metadata, or null.
  *
  * Returns null (never throws) on any fetch or parse failure.
  */
 export async function discoverService(
   resourceServerUrl: string,
   fetchFn: typeof globalThis.fetch
-): Promise<AgentAuthBlock | null> {
+): Promise<DiscoveryResult | null> {
   try {
     const prmUrl = buildUrl(resourceServerUrl, '/.well-known/oauth-protected-resource');
     const prmResp = await fetchFn(prmUrl);
@@ -37,7 +44,13 @@ export async function discoverService(
 
     for (const asBaseUrl of prm.authorization_servers) {
       const asMeta = await fetchASMetadata(asBaseUrl, fetchFn);
-      if (asMeta?.agent_auth) return asMeta.agent_auth;
+      if (asMeta?.agent_auth) {
+        return {
+          agentAuth: asMeta.agent_auth,
+          tokenEndpoint: asMeta.token_endpoint,
+          revocationEndpoint: asMeta.revocation_endpoint,
+        };
+      }
     }
     return null;
   } catch {

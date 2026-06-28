@@ -7,7 +7,7 @@
  */
 import { z } from 'zod';
 
-export const AgentAuthMdMethodSchema = z.enum(['id-jag', 'verified-email', 'anonymous']);
+export const AgentAuthMdMethodSchema = z.enum(['id-jag', 'service-auth', 'verified-email', 'anonymous']);
 
 export const AgentAuthMdConfigSchema = z.object({
   ref: z.string().min(1),

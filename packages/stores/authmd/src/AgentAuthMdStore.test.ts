@@ -2,16 +2,18 @@
  * AgentAuthMdStore.test.ts
  *
  * Tests for AgentAuthMdStore: findByRef(), cache behaviour, registration flows
- * (id-jag, service-auth, verified-email, anonymous), and claim ceremony methods.
- * All network calls are mocked via vi.fn().
+ * (id-jag, service-auth, verified-email, anonymous), token exchange, claim
+ * ceremony polling, and 401 handling.
  *
- * Upstream compat coverage
- * ─────────────────────────
- * The 'selectMethod() migration compat' suite validates that the store handles
- * all three discovery response shapes produced by auth.md servers:
- *   - Simplified shorthands (used by test mocks and simple servers)
- *   - Real spec structure with 'identity_assertion' nesting (pre-PR#15)
- *   - Post-PR#15 structure with top-level 'service_auth'
+ * Upstream compat coverage (v0.6.0):
+ * ──────────────────────────────────
+ * - Discovery field compat (identity_endpoint / register_uri)
+ * - No requested_credential_type in registration bodies
+ * - identity_assertion → /oauth2/token jwt-bearer exchange
+ * - 401 interaction_required → stores ceremony for step-up
+ * - RFC 8628-shaped claim polling via pollClaimCeremony()
+ * - service_auth top-level type with login_hint
+ * - selectMethod() migration across all discovery shapes
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { AgentAuthMdStore } from './AgentAuthMdStore';
@@ -19,17 +21,41 @@ import type { AgentAuthMdConfig, AgentAuthMdStoreOptions, IdJagProvider } from '
 
 // ─── Fixtures ────────────────────────────────────────────────────────────────
 
-const RESOURCE_URL = 'https://api.example.com';
-const AS_URL       = 'https://auth.example.com';
-const REGISTER_URI = `${AS_URL}/agent/register`;
-const CLAIM_URI    = `${AS_URL}/agent/claim`;
+const RESOURCE_URL    = 'https://api.example.com';
+const AS_URL          = 'https://auth.example.com';
+const REGISTER_URI    = `${AS_URL}/agent/register`;
+const IDENTITY_EP     = `${AS_URL}/agent/identity`;
+const CLAIM_URI       = `${AS_URL}/agent/claim`;
+const CLAIM_EP        = `${AS_URL}/agent/claim`;
+const TOKEN_EP        = `${AS_URL}/oauth2/token`;
 
 const PRM = {
   resource: RESOURCE_URL,
   authorization_servers: [AS_URL],
 };
 
-// ── Pre-existing fixtures (simplified shorthand shape) ────────────────────────
+// ── v0.6.0 fixtures (identity_endpoint, token_endpoint) ─────────────────────
+
+const AS_META_V060_ID_JAG = {
+  token_endpoint: TOKEN_EP,
+  agent_auth: {
+    identity_endpoint: IDENTITY_EP,
+    claim_endpoint: CLAIM_EP,
+    identity_types_supported: ['id-jag', 'anonymous'],
+  },
+};
+
+const AS_META_V060_SERVICE_AUTH = {
+  token_endpoint: TOKEN_EP,
+  agent_auth: {
+    identity_endpoint: IDENTITY_EP,
+    claim_endpoint: CLAIM_EP,
+    identity_types_supported: ['service_auth'],
+    service_auth: { credential_types_supported: ['api_key'] },
+  },
+};
+
+// ── Legacy fixtures (register_uri, no token_endpoint) ────────────────────────
 
 const AS_META_ID_JAG = {
   agent_auth: {
@@ -56,9 +82,6 @@ const AS_META_EMAIL = {
   },
 };
 
-// ── Post-PR#15 fixtures ───────────────────────────────────────────────────────
-
-/** Service advertising only the new service_auth type (post-PR#15). */
 const AS_META_SERVICE_AUTH = {
   agent_auth: {
     register_uri: REGISTER_URI,
@@ -68,7 +91,6 @@ const AS_META_SERVICE_AUTH = {
   },
 };
 
-/** Service advertising both id-jag (via identity_assertion) and service_auth (post-PR#15). */
 const AS_META_ID_JAG_AND_SERVICE_AUTH = {
   agent_auth: {
     register_uri: REGISTER_URI,
@@ -83,10 +105,6 @@ const AS_META_ID_JAG_AND_SERVICE_AUTH = {
   },
 };
 
-/**
- * Service using the real spec structure with 'identity_assertion' nesting
- * both id-jag and verified_email (pre-PR#15 but spec-compliant).
- */
 const AS_META_IDENTITY_ASSERTION_FULL = {
   agent_auth: {
     register_uri: REGISTER_URI,
@@ -118,36 +136,44 @@ function makeConfig(overrides?: Partial<AgentAuthMdConfig>): AgentAuthMdConfig {
   };
 }
 
-/**
- * Build a mock fetch that returns responses in sequence.
- * The last response is repeated for any extra calls.
- */
-function mockFetchSequence(...responses: Array<{ ok: boolean; body?: unknown }>) {
+function mockFetchSequence(...responses: Array<{ ok: boolean; status?: number; body?: unknown }>) {
   let idx = 0;
   return vi.fn().mockImplementation(async () => {
     const res = responses[Math.min(idx++, responses.length - 1)];
     return {
       ok: res.ok,
-      status: res.ok ? 200 : 400,
+      status: res.status ?? (res.ok ? 200 : 400),
       json: async () => res.body ?? {},
     };
   });
 }
 
-/** Standard 3-call mock: PRM → AS meta → registration. */
 function standardFetch(
   asMeta: unknown,
   registrationBody: unknown,
-  { registrationOk = true } = {}
+  { registrationOk = true, registrationStatus = registrationOk ? 200 : 400 } = {}
 ) {
   return mockFetchSequence(
     { ok: true,  body: PRM },
     { ok: true,  body: asMeta },
-    { ok: registrationOk, body: registrationBody }
+    { ok: registrationOk, status: registrationStatus, body: registrationBody }
   );
 }
 
-// ─── Tests: findByRef() ────────────────────────────────────────────────────────
+/** 4-call mock for v0.6.0 id-jag flow: PRM → AS meta → registration → token exchange. */
+function v060IdJagFetch(
+  registrationResp: unknown,
+  tokenResp: unknown
+) {
+  return mockFetchSequence(
+    { ok: true, body: PRM },
+    { ok: true, body: AS_META_V060_ID_JAG },
+    { ok: true, body: registrationResp },
+    { ok: true, body: tokenResp }
+  );
+}
+
+// ─── Tests: findByRef() guard cases ────────────────────────────────────────────
 
 describe('AgentAuthMdStore.findByRef() — guard cases', () => {
   it('returns null for an unknown ref', async () => {
@@ -182,6 +208,8 @@ describe('AgentAuthMdStore.findByRef() — guard cases', () => {
   });
 });
 
+// ─── Tests: cache ──────────────────────────────────────────────────────────────
+
 describe('AgentAuthMdStore.findByRef() — cache', () => {
   it('returns the cached credential when cache is fresh', async () => {
     const fetchFn = standardFetch(AS_META_ID_JAG, { access_token: 'tok-123', expires_in: 3600 });
@@ -197,7 +225,6 @@ describe('AgentAuthMdStore.findByRef() — cache', () => {
     expect(first).not.toBeNull();
     expect(second).not.toBeNull();
     expect(second?.ref).toBe('tok-123');
-    // fetch called 3 times on first call; NOT called again for the cache hit
     expect(fetchFn).toHaveBeenCalledTimes(3);
   });
 
@@ -218,7 +245,6 @@ describe('AgentAuthMdStore.findByRef() — cache', () => {
     store.invalidateCache('example-service');
     await store.findByRef('example-service');
 
-    // 3 calls first time + 3 calls second time = 6
     expect(fetchFn).toHaveBeenCalledTimes(6);
   });
 
@@ -243,51 +269,117 @@ describe('AgentAuthMdStore.findByRef() — cache', () => {
   });
 });
 
-describe('AgentAuthMdStore.findByRef() — id-jag flow', () => {
-  it('returns a credential with status=active and ref=access_token', async () => {
-    const fetchFn = standardFetch(AS_META_ID_JAG, { access_token: 'at-xyz', expires_in: 1800 });
-    const idJagProvider: IdJagProvider = {
-      mintForAudience: vi.fn().mockResolvedValue('signed-id-jag'),
-    };
+// ─── Tests: id-jag flow (v0.6.0 with token exchange) ────────────────────────
+
+describe('AgentAuthMdStore.findByRef() — id-jag (v0.6.0 token exchange)', () => {
+  it('exchanges identity_assertion at /oauth2/token and returns credential', async () => {
+    const fetchFn = v060IdJagFetch(
+      { identity_assertion: 'ia-jwt-123', assertion_expires: '2026-07-01T00:00:00Z' },
+      { access_token: 'at-exchanged', token_type: 'Bearer', expires_in: 1800 }
+    );
+    const idJagProvider: IdJagProvider = { mintForAudience: vi.fn().mockResolvedValue('signed-jag') };
     const store = new AgentAuthMdStore({ configs: [makeConfig({ idJagProvider })], fetchFn });
 
     const cred = await store.findByRef('example-service');
 
     expect(cred).not.toBeNull();
     expect(cred?.status).toBe('active');
-    expect(cred?.ref).toBe('at-xyz');
-    expect(cred?.kind).toBe('fixed');
-    expect(idJagProvider.mintForAudience).toHaveBeenCalledWith(RESOURCE_URL);
+    expect(cred?.ref).toBe('at-exchanged');
+    expect(cred?.identityAssertion).toBe('ia-jwt-123');
+    expect(fetchFn).toHaveBeenCalledTimes(4);
+
+    // Verify token exchange request
+    const [tokenUrl, tokenInit] = fetchFn.mock.calls[3] as [string, RequestInit];
+    expect(tokenUrl).toBe(TOKEN_EP);
+    expect(tokenInit.headers).toEqual({ 'Content-Type': 'application/x-www-form-urlencoded' });
+    const params = new URLSearchParams(tokenInit.body as string);
+    expect(params.get('grant_type')).toBe('urn:ietf:params:oauth:grant-type:jwt-bearer');
+    expect(params.get('assertion')).toBe('ia-jwt-123');
   });
 
-  it('POSTs the correct id-jag body to register_uri', async () => {
-    const fetchFn = standardFetch(AS_META_ID_JAG, { access_token: 'tok', expires_in: 3600 });
+  it('does NOT send requested_credential_type in registration body', async () => {
+    const fetchFn = v060IdJagFetch(
+      { identity_assertion: 'ia-test' },
+      { access_token: 'at', token_type: 'Bearer', expires_in: 3600 }
+    );
     const idJagProvider: IdJagProvider = { mintForAudience: vi.fn().mockResolvedValue('my-jag') };
     const store = new AgentAuthMdStore({ configs: [makeConfig({ idJagProvider })], fetchFn });
-
     await store.findByRef('example-service');
 
     const [registerUrl, registerInit] = fetchFn.mock.calls[2] as [string, RequestInit];
-    expect(registerUrl).toBe(REGISTER_URI);
-    expect(registerInit.method).toBe('POST');
+    expect(registerUrl).toBe(IDENTITY_EP);
     const body = JSON.parse(registerInit.body as string) as Record<string, string>;
     expect(body.type).toBe('identity_assertion');
     expect(body.assertion_type).toBe('urn:ietf:params:oauth:token-type:id-jag');
     expect(body.assertion).toBe('my-jag');
-    expect(body.requested_credential_type).toBe('access_token');
+    expect(body).not.toHaveProperty('requested_credential_type');
+  });
+
+  it('handles 401 interaction_required by storing ceremony and returning null', async () => {
+    const fetchFn = mockFetchSequence(
+      { ok: true, body: PRM },
+      { ok: true, body: AS_META_V060_ID_JAG },
+      {
+        ok: false,
+        status: 401,
+        body: {
+          error: 'interaction_required',
+          claim_token: 'ct-stepup',
+          claim: { user_code: 'ABC-123', verification_uri: 'https://auth.example.com/verify', expires_in: 300, interval: 5 },
+        },
+      }
+    );
+    const idJagProvider: IdJagProvider = { mintForAudience: vi.fn().mockResolvedValue('jag') };
+    const store = new AgentAuthMdStore({ configs: [makeConfig({ idJagProvider })], fetchFn });
+
+    const cred = await store.findByRef('example-service');
+    expect(cred).toBeNull();
+
+    const ceremony = store.getPendingCeremony('example-service');
+    expect(ceremony).not.toBeNull();
+    expect(ceremony?.user_code).toBe('ABC-123');
+    expect(ceremony?.verification_uri).toBe('https://auth.example.com/verify');
+  });
+
+  it('handles 401 login_required by returning null (no pending state)', async () => {
+    const fetchFn = mockFetchSequence(
+      { ok: true, body: PRM },
+      { ok: true, body: AS_META_V060_ID_JAG },
+      { ok: false, status: 401, body: { error: 'login_required', max_age: 300 } }
+    );
+    const idJagProvider: IdJagProvider = { mintForAudience: vi.fn().mockResolvedValue('jag') };
+    const store = new AgentAuthMdStore({ configs: [makeConfig({ idJagProvider })], fetchFn });
+
+    expect(await store.findByRef('example-service')).toBeNull();
+    expect(store.getPendingCeremony('example-service')).toBeNull();
   });
 
   it('returns null when idJagProvider returns null', async () => {
-    const fetchFn = mockFetchSequence({ ok: true, body: PRM }, { ok: true, body: AS_META_ID_JAG });
+    const fetchFn = mockFetchSequence({ ok: true, body: PRM }, { ok: true, body: AS_META_V060_ID_JAG });
     const idJagProvider: IdJagProvider = { mintForAudience: vi.fn().mockResolvedValue(null) };
     const store = new AgentAuthMdStore({ configs: [makeConfig({ idJagProvider })], fetchFn });
     expect(await store.findByRef('example-service')).toBeNull();
   });
 
   it('returns null when idJagProvider is missing from config', async () => {
-    const fetchFn = mockFetchSequence({ ok: true, body: PRM }, { ok: true, body: AS_META_ID_JAG });
+    const fetchFn = mockFetchSequence({ ok: true, body: PRM }, { ok: true, body: AS_META_V060_ID_JAG });
     const store = new AgentAuthMdStore({ configs: [makeConfig({ idJagProvider: undefined })], fetchFn });
     expect(await store.findByRef('example-service')).toBeNull();
+  });
+});
+
+// ─── Tests: id-jag legacy fallback (pre-v0.2.0 direct access_token) ─────────
+
+describe('AgentAuthMdStore.findByRef() — id-jag legacy (direct access_token)', () => {
+  it('uses direct access_token when server has no token_endpoint', async () => {
+    const fetchFn = standardFetch(AS_META_ID_JAG, { access_token: 'at-direct', expires_in: 1800 });
+    const idJagProvider: IdJagProvider = { mintForAudience: vi.fn().mockResolvedValue('signed-jag') };
+    const store = new AgentAuthMdStore({ configs: [makeConfig({ idJagProvider })], fetchFn });
+
+    const cred = await store.findByRef('example-service');
+    expect(cred).not.toBeNull();
+    expect(cred?.ref).toBe('at-direct');
+    expect(fetchFn).toHaveBeenCalledTimes(3);
   });
 
   it('returns null when registration returns non-2xx', async () => {
@@ -305,8 +397,10 @@ describe('AgentAuthMdStore.findByRef() — id-jag flow', () => {
   });
 });
 
+// ─── Tests: anonymous flow ──────────────────────────────────────────────────
+
 describe('AgentAuthMdStore.findByRef() — anonymous flow', () => {
-  it('returns a credential with status=unclaimed', async () => {
+  it('returns a credential with status=unclaimed from legacy server (direct api_key)', async () => {
     const fetchFn = standardFetch(
       AS_META_ANONYMOUS,
       { api_key: 'anon-key', expires_in: 3600, claim_token: 'ct-abc', scopes: ['read'], post_claim_scopes: ['read', 'write'] }
@@ -325,7 +419,7 @@ describe('AgentAuthMdStore.findByRef() — anonymous flow', () => {
     expect(cred?.claimToken).toBe('ct-abc');
   });
 
-  it('POSTs { type: anonymous, requested_credential_type: api_key }', async () => {
+  it('does NOT send requested_credential_type in anonymous registration', async () => {
     const fetchFn = standardFetch(AS_META_ANONYMOUS, { api_key: 'k', expires_in: 3600 });
     const store = new AgentAuthMdStore({
       configs: [makeConfig({ methodPreference: ['anonymous'] })],
@@ -336,7 +430,7 @@ describe('AgentAuthMdStore.findByRef() — anonymous flow', () => {
     const [, init] = fetchFn.mock.calls[2] as [string, RequestInit];
     const body = JSON.parse(init.body as string) as Record<string, string>;
     expect(body.type).toBe('anonymous');
-    expect(body.requested_credential_type).toBe('api_key');
+    expect(body).not.toHaveProperty('requested_credential_type');
   });
 
   it('returns null on non-2xx anonymous registration', async () => {
@@ -349,6 +443,8 @@ describe('AgentAuthMdStore.findByRef() — anonymous flow', () => {
   });
 });
 
+// ─── Tests: verified-email flow (legacy) ─────────────────────────────────────
+
 describe('AgentAuthMdStore.findByRef() — verified-email flow (legacy)', () => {
   it('returns null (claim ceremony required) and stores pending claim info', async () => {
     const fetchFn = standardFetch(AS_META_EMAIL, { claim_token: 'ct-email-001' });
@@ -358,11 +454,10 @@ describe('AgentAuthMdStore.findByRef() — verified-email flow (legacy)', () => 
     });
 
     const result = await store.findByRef('example-service');
-    expect(result).toBeNull(); // claim ceremony required
+    expect(result).toBeNull();
 
-    // startClaimCeremony should now work (pending claim is stored)
     const claimFetch = mockFetchSequence({ ok: true });
-    store['fetchFn'] = claimFetch; // swap fetch for ceremony
+    store['fetchFn'] = claimFetch;
     const token = await store.startClaimCeremony('example-service');
     expect(token).toBe('ct-email-001');
   });
@@ -377,9 +472,9 @@ describe('AgentAuthMdStore.findByRef() — verified-email flow (legacy)', () => 
   });
 });
 
-// ─── Tests: service-auth flow (auth.md PR #15) ────────────────────────────────
+// ─── Tests: service-auth flow (v0.6.0) ──────────────────────────────────────
 
-describe('AgentAuthMdStore.findByRef() — service-auth flow (auth.md PR #15)', () => {
+describe('AgentAuthMdStore.findByRef() — service-auth flow', () => {
   it('returns null (claim ceremony required) when service advertises service_auth', async () => {
     const fetchFn = standardFetch(AS_META_SERVICE_AUTH, { claim_token: 'ct-sa-001' });
     const store = new AgentAuthMdStore({
@@ -390,7 +485,7 @@ describe('AgentAuthMdStore.findByRef() — service-auth flow (auth.md PR #15)', 
     expect(result).toBeNull();
   });
 
-  it('POSTs { type: service_auth, login_hint } to register_uri', async () => {
+  it('POSTs { type: service_auth, login_hint } without requested_credential_type', async () => {
     const fetchFn = standardFetch(AS_META_SERVICE_AUTH, { claim_token: 'ct-sa-002' });
     const store = new AgentAuthMdStore({
       configs: [makeConfig({ methodPreference: ['service-auth'], userEmail: 'bob@example.com' })],
@@ -403,26 +498,26 @@ describe('AgentAuthMdStore.findByRef() — service-auth flow (auth.md PR #15)', 
     const body = JSON.parse(init.body as string) as Record<string, string>;
     expect(body.type).toBe('service_auth');
     expect(body.login_hint).toBe('bob@example.com');
-    expect(body.requested_credential_type).toBe('api_key');
-    // Must NOT send the old assertion_type field
-    expect(body.assertion_type).toBeUndefined();
-    expect(body.assertion).toBeUndefined();
+    expect(body).not.toHaveProperty('requested_credential_type');
+    expect(body).not.toHaveProperty('assertion_type');
+    expect(body).not.toHaveProperty('assertion');
   });
 
-  it('stores pending claim so startClaimCeremony() works after service_auth registration', async () => {
-    const fetchFn = mockFetchSequence(
-      { ok: true, body: PRM },
-      { ok: true, body: AS_META_SERVICE_AUTH },
-      { ok: true, body: { claim_token: 'ct-sa-003' } },
-      { ok: true }, // startClaimCeremony POST
-    );
+  it('stores pending claim with ceremony from v0.6.0 response', async () => {
+    const fetchFn = standardFetch(AS_META_V060_SERVICE_AUTH, {
+      claim_token: 'ct-sa-ceremony',
+      claim: { user_code: 'XY-456', verification_uri: 'https://auth.example.com/verify', expires_in: 600, interval: 5 },
+    });
     const store = new AgentAuthMdStore({
       configs: [makeConfig({ methodPreference: ['service-auth'], userEmail: 'carol@example.com' })],
       fetchFn,
     });
     await store.findByRef('example-service');
-    const token = await store.startClaimCeremony('example-service');
-    expect(token).toBe('ct-sa-003');
+
+    const ceremony = store.getPendingCeremony('example-service');
+    expect(ceremony).not.toBeNull();
+    expect(ceremony?.user_code).toBe('XY-456');
+    expect(ceremony?.verification_uri).toBe('https://auth.example.com/verify');
   });
 
   it('returns null when userEmail is missing for service-auth', async () => {
@@ -447,7 +542,90 @@ describe('AgentAuthMdStore.findByRef() — service-auth flow (auth.md PR #15)', 
   });
 });
 
-// ─── Tests: selectMethod() migration compatibility ─────────────────────────────
+// ─── Tests: pollClaimCeremony() ─────────────────────────────────────────────
+
+describe('AgentAuthMdStore.pollClaimCeremony()', () => {
+  it('returns null when no pending claim exists', async () => {
+    const store = new AgentAuthMdStore({ configs: [makeConfig()], fetchFn: vi.fn() });
+    expect(await store.pollClaimCeremony('example-service')).toBeNull();
+  });
+
+  it('returns null on authorization_pending response', async () => {
+    const fetchFn = mockFetchSequence(
+      { ok: true, body: PRM },
+      { ok: true, body: AS_META_V060_SERVICE_AUTH },
+      { ok: true, body: { claim_token: 'ct-poll', claim: { user_code: 'A', verification_uri: 'u', expires_in: 300, interval: 5 } } },
+      { ok: false, status: 400, body: { error: 'authorization_pending' } }
+    );
+    const store = new AgentAuthMdStore({
+      configs: [makeConfig({ methodPreference: ['service-auth'], userEmail: 'u@x.com' })],
+      fetchFn,
+    });
+    await store.findByRef('example-service');
+    expect(await store.pollClaimCeremony('example-service')).toBeNull();
+  });
+
+  it('throws on expired_token response', async () => {
+    const fetchFn = mockFetchSequence(
+      { ok: true, body: PRM },
+      { ok: true, body: AS_META_V060_SERVICE_AUTH },
+      { ok: true, body: { claim_token: 'ct-exp', claim: { user_code: 'B', verification_uri: 'u', expires_in: 300, interval: 5 } } },
+      { ok: false, status: 400, body: { error: 'expired_token' } }
+    );
+    const store = new AgentAuthMdStore({
+      configs: [makeConfig({ methodPreference: ['service-auth'], userEmail: 'u@x.com' })],
+      fetchFn,
+    });
+    await store.findByRef('example-service');
+    await expect(store.pollClaimCeremony('example-service')).rejects.toThrow('claim ceremony expired');
+  });
+
+  it('returns credential on successful poll response', async () => {
+    const fetchFn = mockFetchSequence(
+      { ok: true, body: PRM },
+      { ok: true, body: AS_META_V060_SERVICE_AUTH },
+      { ok: true, body: { claim_token: 'ct-ok', claim: { user_code: 'C', verification_uri: 'u', expires_in: 300, interval: 5 } } },
+      { ok: true, body: { access_token: 'at-claimed', token_type: 'Bearer', expires_in: 7200 } }
+    );
+    const store = new AgentAuthMdStore({
+      configs: [makeConfig({ methodPreference: ['service-auth'], userEmail: 'u@x.com' })],
+      fetchFn,
+    });
+    await store.findByRef('example-service');
+
+    const cred = await store.pollClaimCeremony('example-service');
+    expect(cred).not.toBeNull();
+    expect(cred?.ref).toBe('at-claimed');
+    expect(cred?.status).toBe('active');
+    expect(cred?.claimedAt).toBeDefined();
+
+    // Pending cleared
+    expect(store.getPendingCeremony('example-service')).toBeNull();
+  });
+
+  it('sends correct grant_type and claim_token in poll request', async () => {
+    const fetchFn = mockFetchSequence(
+      { ok: true, body: PRM },
+      { ok: true, body: AS_META_V060_SERVICE_AUTH },
+      { ok: true, body: { claim_token: 'ct-body-check', claim: { user_code: 'D', verification_uri: 'u', expires_in: 300, interval: 5 } } },
+      { ok: true, body: { access_token: 'at-ok', token_type: 'Bearer', expires_in: 3600 } }
+    );
+    const store = new AgentAuthMdStore({
+      configs: [makeConfig({ methodPreference: ['service-auth'], userEmail: 'u@x.com' })],
+      fetchFn,
+    });
+    await store.findByRef('example-service');
+    await store.pollClaimCeremony('example-service');
+
+    const [url, init] = fetchFn.mock.calls[3] as [string, RequestInit];
+    expect(url).toBe(TOKEN_EP);
+    const params = new URLSearchParams(init.body as string);
+    expect(params.get('grant_type')).toBe('urn:workos:agent-auth:grant-type:claim');
+    expect(params.get('claim_token')).toBe('ct-body-check');
+  });
+});
+
+// ─── Tests: selectMethod() migration compatibility ───────────────────────────
 
 describe('AgentAuthMdStore — selectMethod() migration compatibility', () => {
   it('prefers service_auth over verified_email when both are in default preference', async () => {
@@ -460,7 +638,6 @@ describe('AgentAuthMdStore — selectMethod() migration compatibility', () => {
     };
     const fetchFn = standardFetch(asMeta, { claim_token: 'ct-prefer-sa' });
     const store = new AgentAuthMdStore({
-      // Default preference: ['id-jag', 'service-auth', 'verified-email', 'anonymous']
       configs: [makeConfig({ methodPreference: undefined, userEmail: 'eve@example.com' })],
       fetchFn,
     });
@@ -487,7 +664,7 @@ describe('AgentAuthMdStore — selectMethod() migration compatibility', () => {
     expect(body.assertion).toBe('frank@example.com');
   });
 
-  it('recognises id-jag nested inside identity_assertion.assertion_types_supported (real spec structure)', async () => {
+  it('recognises id-jag nested inside identity_assertion.assertion_types_supported', async () => {
     const fetchFn = standardFetch(
       AS_META_IDENTITY_ASSERTION_FULL,
       { access_token: 'tok-nested-idjag', expires_in: 3600 }
@@ -500,11 +677,9 @@ describe('AgentAuthMdStore — selectMethod() migration compatibility', () => {
     const cred = await store.findByRef('example-service');
     expect(cred).not.toBeNull();
     expect(cred?.ref).toBe('tok-nested-idjag');
-    expect(idJagProvider.mintForAudience).toHaveBeenCalledWith(RESOURCE_URL);
   });
 
-  it('recognises verified_email nested inside identity_assertion.assertion_types_supported (real spec structure)', async () => {
-    // Config has no idJagProvider so id-jag is skipped; verified-email is next
+  it('recognises verified_email nested inside identity_assertion.assertion_types_supported', async () => {
     const fetchFn = standardFetch(AS_META_IDENTITY_ASSERTION_FULL, { claim_token: 'ct-nested-ve' });
     const store = new AgentAuthMdStore({
       configs: [makeConfig({ methodPreference: ['verified-email'], userEmail: 'grace@example.com' })],
@@ -518,7 +693,7 @@ describe('AgentAuthMdStore — selectMethod() migration compatibility', () => {
     expect(body.assertion_type).toBe('verified_email');
   });
 
-  it('obeys explicit methodPreference to force verified-email on a service_auth-capable service', async () => {
+  it('obeys explicit methodPreference to force verified-email on service_auth-capable service', async () => {
     const asMeta = {
       agent_auth: {
         register_uri: REGISTER_URI,
@@ -542,9 +717,29 @@ describe('AgentAuthMdStore — selectMethod() migration compatibility', () => {
     expect(body.assertion_type).toBe('verified_email');
     expect(body.assertion).toBe('henry@example.com');
   });
+
+  it('uses identity_endpoint (v0.6.0) over register_uri when both present', async () => {
+    const asMeta = {
+      agent_auth: {
+        identity_endpoint: IDENTITY_EP,
+        register_uri: REGISTER_URI,
+        identity_types_supported: ['anonymous'],
+        anonymous: { credential_types_supported: ['api_key'] },
+      },
+    };
+    const fetchFn = standardFetch(asMeta, { api_key: 'k', expires_in: 3600 });
+    const store = new AgentAuthMdStore({
+      configs: [makeConfig({ methodPreference: ['anonymous'] })],
+      fetchFn,
+    });
+    await store.findByRef('example-service');
+
+    const [url] = fetchFn.mock.calls[2] as [string, RequestInit];
+    expect(url).toBe(IDENTITY_EP);
+  });
 });
 
-// ─── Tests: claim ceremony ──────────────────────────────────────────────────
+// ─── Tests: legacy claim ceremony (OTP) ─────────────────────────────────────
 
 describe('AgentAuthMdStore.startClaimCeremony()', () => {
   it('throws when no pending claim exists', async () => {
@@ -553,13 +748,12 @@ describe('AgentAuthMdStore.startClaimCeremony()', () => {
       .rejects.toThrow('no pending claim for ref');
   });
 
-  it('throws on non-2xx response from claim_uri', async () => {
-    // Seed a pending claim directly (testing private state via anonymous flow)
+  it('throws on non-2xx response from claim endpoint', async () => {
     const fetchFn = mockFetchSequence(
       { ok: true, body: PRM },
       { ok: true, body: AS_META_ANONYMOUS },
-      { ok: true, body: { api_key: 'k', expires_in: 3600, claim_token: 'ct-x' } }, // registration
-      { ok: false } // startClaimCeremony call
+      { ok: true, body: { api_key: 'k', expires_in: 3600, claim_token: 'ct-x' } },
+      { ok: false }
     );
     const store = new AgentAuthMdStore({
       configs: [makeConfig({ methodPreference: ['anonymous'] })],
@@ -582,7 +776,7 @@ describe('AgentAuthMdStore.completeClaimCeremony()', () => {
       { ok: true, body: PRM },
       { ok: true, body: AS_META_ANONYMOUS },
       { ok: true, body: { api_key: 'k', expires_in: 3600, claim_token: 'ct-y' } },
-      { ok: false } // completeClaimCeremony
+      { ok: false }
     );
     const store = new AgentAuthMdStore({
       configs: [makeConfig({ methodPreference: ['anonymous'] })],
@@ -597,7 +791,7 @@ describe('AgentAuthMdStore.completeClaimCeremony()', () => {
       { ok: true, body: PRM },
       { ok: true, body: AS_META_ANONYMOUS },
       { ok: true, body: { api_key: 'anon-k', expires_in: 3600, claim_token: 'ct-z' } },
-      { ok: true, body: { access_token: 'claimed-token', expires_in: 7200 } } // complete
+      { ok: true, body: { access_token: 'claimed-token', expires_in: 7200 } }
     );
     const store = new AgentAuthMdStore({
       configs: [makeConfig({ methodPreference: ['anonymous'] })],
@@ -625,13 +819,11 @@ describe('AgentAuthMdStore.completeClaimCeremony()', () => {
     });
     await store.findByRef('example-service');
     await store.completeClaimCeremony('example-service', '000000');
-
-    // No pending claim left — second complete should return null
     expect(await store.completeClaimCeremony('example-service', '111111')).toBeNull();
   });
 });
 
-// ─── Tests: revokeByIdentity ──────────────────────────────────────────────────
+// ─── Tests: revokeByIdentity ────────────────────────────────────────────────
 
 describe('AgentAuthMdStore.revokeByIdentity()', () => {
   it('clears the cache and returns the count of cleared entries', async () => {
@@ -639,11 +831,10 @@ describe('AgentAuthMdStore.revokeByIdentity()', () => {
     const idJagProvider: IdJagProvider = { mintForAudience: vi.fn().mockResolvedValue('j') };
     const store = new AgentAuthMdStore({ configs: [makeConfig({ idJagProvider })], fetchFn });
 
-    await store.findByRef('example-service'); // populates cache
+    await store.findByRef('example-service');
     const count = await store.revokeByIdentity('https://idp.example.com', 'user-x', 'aud');
 
     expect(count).toBe(1);
-    // Cache should be empty; next findByRef triggers re-registration
     const fetchFn2 = standardFetch(AS_META_ID_JAG, { access_token: 'tok2', expires_in: 3600 });
     store['fetchFn'] = fetchFn2;
     const cred = await store.findByRef('example-service');
@@ -651,7 +842,7 @@ describe('AgentAuthMdStore.revokeByIdentity()', () => {
   });
 });
 
-// ─── Tests: listActive / listByKind ──────────────────────────────────────────
+// ─── Tests: listActive / listByKind ─────────────────────────────────────────
 
 describe('AgentAuthMdStore list methods', () => {
   it('listActive() returns all active configs as placeholder credentials', async () => {

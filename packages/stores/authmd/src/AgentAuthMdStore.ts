@@ -1,33 +1,29 @@
 /**
- * AgentAuthMdStore — auth.md registration CredentialStore
+ * AgentAuthMdStore — auth.md registration CredentialStore (v0.6.0 aligned)
  *
  * Implements @datacules/agent-identity's CredentialStore interface.
  * On findByRef() it:
  *   1. Checks the local token cache (returns early if fresh).
  *   2. Discovers the service's agent_auth block via RFC 9728 PRM discovery.
  *   3. Selects the best registration method from the caller's preference list.
- *   4. Runs the appropriate registration flow (ID-JAG, service-auth, verified-email, anonymous).
- *   5. Caches the resulting credential and returns it.
+ *   4. Runs the appropriate registration flow (ID-JAG, service-auth, anonymous).
+ *   5. For ID-JAG: exchanges the service-signed identity_assertion at
+ *      /oauth2/token (jwt-bearer grant) for an access_token.
+ *   6. For service-auth/anonymous: stores pending claim state for ceremony polling.
+ *   7. Caches the resulting credential and returns it.
  *
  * Returns null (never throws) on any non-2xx HTTP response or network error.
  *
- * Upstream compat
- * ---------------
- * workos/auth.md PR #15 introduces service_auth as a new top-level type,
- * replacing identity_assertion + verified_email. selectMethod() handles both
- * shapes transparently:
- *
- *   Post-PR#15 service → identity_types_supported includes 'service_auth'
- *                         → resolved to AgentAuthMdMethod 'service-auth'
- *                         → registerServiceAuth() sends { type: 'service_auth', login_hint }
- *
- *   Pre-PR#15 service  → identity_types_supported may include 'verified_email'
- *                         (direct) or 'identity_assertion' (real spec structure)
- *                         → resolved to AgentAuthMdMethod 'verified-email'
- *                         → registerVerifiedEmail() sends { type: 'identity_assertion',
- *                           assertion_type: 'verified_email', assertion }
- *
- * Pattern mirrors TokenExchangeStore — same cache → refresh → return shape.
+ * Upstream alignment (workos/auth.md v0.6.0)
+ * ──────────────────────────────────────────
+ * - Discovery: accepts both new (identity_endpoint) and old (register_uri) field names
+ * - Registration: no longer sends requested_credential_type
+ * - ID-JAG: handles 401 interaction_required (step-up) and login_required (stale auth_time)
+ * - Token exchange: identity_assertion from registration → /oauth2/token jwt-bearer grant
+ * - Claim ceremony: RFC 8628-shaped user_code + verification_uri; polls /oauth2/token
+ *   with urn:workos:agent-auth:grant-type:claim
+ * - service_auth: top-level registration type with login_hint body
+ * - verified-email: removed from spec; kept as legacy fallback for pre-v0.6.0 services
  */
 import type { Credential, CredentialKind, CredentialStore } from '@datacules/agent-identity';
 import type {
@@ -37,33 +33,27 @@ import type {
   AgentAuthMdStoreOptions,
   RegistrationResponse,
   ClaimCeremonyResponse,
+  PendingClaimState,
+  CeremonyBlock,
+  TokenResponse,
+  TokenErrorResponse,
 } from './types';
+import { resolveIdentityEndpoint, resolveClaimEndpoint } from './types';
 import { discoverService } from './discovery';
 
 // ─── Internal types ───────────────────────────────────────────────────────────
 
 interface CacheEntry {
   credential: Credential;
-  /** Unix timestamp (ms) when the credential expires. */
   expiresAt: number;
-}
-
-interface PendingClaim {
-  claimUri: string;
-  claimToken: string;
 }
 
 // ─── Constants ─────────────────────────────────────────────────────────────
 
 const DEFAULT_EXPIRY_BUFFER_MS = 30_000;
+const CLAIM_GRANT_TYPE = 'urn:workos:agent-auth:grant-type:claim';
+const JWT_BEARER_GRANT_TYPE = 'urn:ietf:params:oauth:grant-type:jwt-bearer';
 
-/**
- * Default method preference order.
- * 'service-auth' is placed ahead of 'verified-email' so post-PR#15 services
- * automatically use the new shape without any config change.
- * Legacy services that only advertise 'verified_email' still fall through to
- * the 'verified-email' slot.
- */
 const DEFAULT_METHOD_PREFERENCE: AgentAuthMdMethod[] = [
   'id-jag',
   'service-auth',
@@ -76,8 +66,7 @@ const DEFAULT_METHOD_PREFERENCE: AgentAuthMdMethod[] = [
 export class AgentAuthMdStore implements CredentialStore {
   private readonly configMap = new Map<string, AgentAuthMdConfig>();
   private readonly cache     = new Map<string, CacheEntry>();
-  private readonly pending   = new Map<string, PendingClaim>();
-  // Not readonly so tests can swap the fetch implementation via bracket notation
+  private readonly pending   = new Map<string, PendingClaimState>();
   private fetchFn: typeof globalThis.fetch;
 
   constructor(options: AgentAuthMdStoreOptions) {
@@ -89,36 +78,28 @@ export class AgentAuthMdStore implements CredentialStore {
 
   // ─── CredentialStore interface ──────────────────────────────────────────────
 
-  /**
-   * Find a credential by ref. Runs discovery + registration on cache miss.
-   * Returns null (never throws) for unknown refs, inactive configs, discovery
-   * failures, and non-2xx registration responses.
-   */
   async findByRef(ref: string): Promise<Credential | null> {
     const cfg = this.configMap.get(ref);
     if (!cfg || cfg.status !== 'active') return null;
 
-    // ─ Cache hit ───────────────────────────────────────────────────────────────
     const expiryBuffer = cfg.expiryBufferMs ?? DEFAULT_EXPIRY_BUFFER_MS;
     const cached = this.cache.get(ref);
     if (cached && cached.expiresAt > Date.now() + expiryBuffer) {
       return cached.credential;
     }
 
-    // ─ Discovery ─────────────────────────────────────────────────────────────
-    const agentAuthBlock = await discoverService(cfg.resourceServerUrl, this.fetchFn);
-    if (!agentAuthBlock) return null;
+    const discovery = await discoverService(cfg.resourceServerUrl, this.fetchFn);
+    if (!discovery) return null;
 
-    // ─ Method selection ──────────────────────────────────────────────────────
-    const method = this.selectMethod(agentAuthBlock, cfg.methodPreference);
+    const { agentAuth, tokenEndpoint } = discovery;
+    const method = this.selectMethod(agentAuth, cfg.methodPreference);
     if (!method) return null;
 
-    // ─ Registration dispatch ──────────────────────────────────────────────
     switch (method) {
-      case 'id-jag':       return this.registerIdJag(cfg, agentAuthBlock);
-      case 'service-auth': return this.registerServiceAuth(cfg, agentAuthBlock);
-      case 'verified-email': return this.registerVerifiedEmail(cfg, agentAuthBlock);
-      case 'anonymous':    return this.registerAnonymous(cfg, agentAuthBlock);
+      case 'id-jag':       return this.registerIdJag(cfg, agentAuth, tokenEndpoint);
+      case 'service-auth': return this.registerServiceAuth(cfg, agentAuth, tokenEndpoint);
+      case 'verified-email': return this.registerVerifiedEmail(cfg, agentAuth, tokenEndpoint);
+      case 'anonymous':    return this.registerAnonymous(cfg, agentAuth, tokenEndpoint);
     }
   }
 
@@ -132,23 +113,73 @@ export class AgentAuthMdStore implements CredentialStore {
     return (await this.listActive()).filter(c => c.kind === kind);
   }
 
-  /**
-   * Revoke all cached credentials (conservative: clears entire cache).
-   * Called when a logout+jwt is received at the revocation_uri endpoint.
-   */
   async revokeByIdentity(_issuer: string, _subject: string, _audience: string): Promise<number> {
     const count = this.cache.size;
     this.cache.clear();
     return count;
   }
 
-  // ─── Claim ceremony ────────────────────────────────────────────────────────
+  // ─── Claim ceremony (v0.6.0: RFC 8628-shaped polling) ─────────────────────
 
   /**
-   * Begins the OTP claim ceremony for a pending service-auth, verified-email,
-   * or anonymous registration. Returns the claim_token. Throws if no pending
-   * claim exists.
+   * Poll the token endpoint for claim ceremony completion.
+   * Returns the credential on success, null if still pending, throws on expiry.
+   *
+   * v0.6.0 flow: agent polls /oauth2/token with grant_type=urn:workos:agent-auth:grant-type:claim
+   * Responses: authorization_pending (keep polling), expired_token (re-initiate), success.
    */
+  async pollClaimCeremony(ref: string): Promise<Credential | null> {
+    const claim = this.pending.get(ref);
+    if (!claim || !claim.tokenEndpoint) return null;
+
+    const cfg = this.configMap.get(ref);
+    if (!cfg) return null;
+
+    try {
+      const resp = await this.fetchFn(claim.tokenEndpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          grant_type: CLAIM_GRANT_TYPE,
+          claim_token: claim.claimToken,
+        }).toString(),
+      });
+
+      if (!resp.ok) {
+        const err = await resp.json() as TokenErrorResponse;
+        if (err.error === 'authorization_pending') return null;
+        if (err.error === 'expired_token') {
+          throw new Error(`AgentAuthMdStore: claim ceremony expired for ref '${ref}'. Re-initiate via findByRef().`);
+        }
+        return null;
+      }
+
+      const data = await resp.json() as TokenResponse;
+      const credential = this.cacheAndReturn(cfg, data.access_token, data.expires_in, 'active');
+      credential.claimedAt = new Date().toISOString();
+
+      if (data.identity_assertion) {
+        credential.identityAssertion = data.identity_assertion;
+      }
+
+      this.pending.delete(ref);
+      return credential;
+    } catch (err) {
+      if (err instanceof Error && err.message.startsWith('AgentAuthMdStore:')) throw err;
+      return null;
+    }
+  }
+
+  /**
+   * Get the pending ceremony info for a ref (user_code, verification_uri, etc).
+   * Returns null if no pending claim exists.
+   */
+  getPendingCeremony(ref: string): CeremonyBlock | null {
+    return this.pending.get(ref)?.ceremony ?? null;
+  }
+
+  // ─── Legacy claim ceremony (OTP path — pre-v0.4.0 compat) ─────────────────
+
   async startClaimCeremony(ref: string, email?: string): Promise<string> {
     const claim = this.pending.get(ref);
     if (!claim) {
@@ -162,7 +193,7 @@ export class AgentAuthMdStore implements CredentialStore {
     if (email) body.email = email;
 
     try {
-      const resp = await this.fetchFn(claim.claimUri, {
+      const resp = await this.fetchFn(claim.claimEndpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
@@ -178,12 +209,6 @@ export class AgentAuthMdStore implements CredentialStore {
     return claim.claimToken;
   }
 
-  /**
-   * Submits the OTP to complete the claim ceremony.
-   * On success: caches the final credential with status='active', clears
-   * the pending entry, sets claimedAt.
-   * Returns null (never throws) on non-2xx responses or missing claim state.
-   */
   async completeClaimCeremony(ref: string, otp: string): Promise<Credential | null> {
     const claim = this.pending.get(ref);
     if (!claim) return null;
@@ -192,7 +217,7 @@ export class AgentAuthMdStore implements CredentialStore {
     if (!cfg) return null;
 
     try {
-      const resp = await this.fetchFn(claim.claimUri, {
+      const resp = await this.fetchFn(claim.claimEndpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ claim_token: claim.claimToken, otp }),
@@ -220,38 +245,16 @@ export class AgentAuthMdStore implements CredentialStore {
 
   // ─── Cache management ─────────────────────────────────────────────────────
 
-  /** Invalidate the cached token for a specific ref (forces re-registration next call). */
   invalidateCache(ref: string): void {
     this.cache.delete(ref);
   }
 
-  /** Flush all cached tokens. */
   flushCache(): void {
     this.cache.clear();
   }
 
   // ─── Private helpers ───────────────────────────────────────────────────────
 
-  /**
-   * Maps the service's agent_auth block to a concrete AgentAuthMdMethod.
-   *
-   * Handles three discovery response shapes:
-   *
-   *  1. Simplified shorthands (direct values in identity_types_supported):
-   *       'id-jag', 'urn:...id-jag', 'verified_email', 'verified-email',
-   *       'service_auth', 'service-auth', 'anonymous'
-   *     Used by test mocks and simplified server implementations.
-   *
-   *  2. Real spec structure (pre-PR#15):
-   *       identity_types_supported: ['identity_assertion', 'anonymous']
-   *       identity_assertion.assertion_types_supported: ['urn:...id-jag', 'verified_email']
-   *     Nested types are expanded into the supported set.
-   *
-   *  3. Post-PR#15 structure:
-   *       identity_types_supported: ['identity_assertion', 'service_auth', 'anonymous']
-   *       identity_assertion.assertion_types_supported: ['urn:...id-jag']  ← no verified_email
-   *     'service_auth' maps to 'service-auth'.
-   */
   private selectMethod(
     block: AgentAuthBlock,
     preference?: AgentAuthMdMethod[]
@@ -261,7 +264,6 @@ export class AgentAuthMdStore implements CredentialStore {
 
     for (const t of block.identity_types_supported) {
       switch (t) {
-        // Direct shorthands — simplified servers and test mocks
         case 'id-jag':
         case 'urn:ietf:params:oauth:token-type:id-jag':
           supported.add('id-jag');
@@ -276,13 +278,11 @@ export class AgentAuthMdStore implements CredentialStore {
           supported.add('anonymous');
           break;
 
-        // auth.md PR #15 — new top-level type
         case 'service_auth':
         case 'service-auth':
           supported.add('service-auth');
           break;
 
-        // Real spec structure — 'identity_assertion' nests assertion sub-types
         case 'identity_assertion': {
           const ia = block.identity_assertion;
           if (ia?.assertion_types_supported) {
@@ -302,7 +302,6 @@ export class AgentAuthMdStore implements CredentialStore {
       }
     }
 
-    // Fallback: presence of anonymous block also implies anonymous support
     if (block.anonymous) supported.add('anonymous');
 
     for (const m of pref) {
@@ -311,29 +310,63 @@ export class AgentAuthMdStore implements CredentialStore {
     return null;
   }
 
+  /**
+   * ID-JAG registration flow (v0.6.0):
+   * 1. POST assertion to identity_endpoint
+   * 2. On 200: receive identity_assertion → exchange at /oauth2/token
+   * 3. On 401 interaction_required: store ceremony for step-up, return null
+   * 4. On 401 login_required: return null (caller must re-authenticate upstream)
+   */
   private async registerIdJag(
     cfg: AgentAuthMdConfig,
-    block: AgentAuthBlock
+    block: AgentAuthBlock,
+    tokenEndpoint?: string
   ): Promise<Credential | null> {
     if (!cfg.idJagProvider) return null;
 
     const assertion = await cfg.idJagProvider.mintForAudience(cfg.resourceServerUrl);
     if (!assertion) return null;
 
+    const identityEndpoint = resolveIdentityEndpoint(block);
+    if (!identityEndpoint) return null;
+
     try {
-      const resp = await this.fetchFn(block.register_uri, {
+      const resp = await this.fetchFn(identityEndpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           type: 'identity_assertion',
           assertion_type: 'urn:ietf:params:oauth:token-type:id-jag',
           assertion,
-          requested_credential_type: 'access_token',
         }),
       });
+
+      if (resp.status === 401) {
+        const errData = await resp.json() as RegistrationResponse;
+        if (errData.error === 'interaction_required' && errData.claim_token) {
+          const claimEndpoint = resolveClaimEndpoint(block) ?? errData.claim_url ?? '';
+          this.pending.set(cfg.ref, {
+            claimEndpoint,
+            claimToken: errData.claim_token,
+            tokenEndpoint,
+            ceremony: errData.claim,
+          });
+          return null;
+        }
+        // login_required — caller needs to re-authenticate upstream
+        return null;
+      }
+
       if (!resp.ok) return null;
 
       const data = await resp.json() as RegistrationResponse;
+
+      // v0.6.0: exchange identity_assertion at /oauth2/token
+      if (data.identity_assertion && tokenEndpoint) {
+        return this.exchangeAssertion(cfg, data.identity_assertion, tokenEndpoint);
+      }
+
+      // Fallback: pre-v0.2.0 servers may return access_token directly
       const token = data.access_token ?? data.credential_token;
       if (!token) return null;
 
@@ -344,42 +377,73 @@ export class AgentAuthMdStore implements CredentialStore {
   }
 
   /**
-   * auth.md PR #15 — service_auth registration.
-   *
-   * Sends { type: 'service_auth', login_hint: email } to the register_uri.
-   * The server emails the user an OTP; the agent collects it and calls
-   * startClaimCeremony() + completeClaimCeremony() to bind the credential.
-   * Returns null (pending claim) until the ceremony completes.
+   * Exchange a service-signed identity_assertion at /oauth2/token using
+   * the RFC 7523 jwt-bearer grant.
+   */
+  private async exchangeAssertion(
+    cfg: AgentAuthMdConfig,
+    identityAssertion: string,
+    tokenEndpoint: string
+  ): Promise<Credential | null> {
+    try {
+      const resp = await this.fetchFn(tokenEndpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          grant_type: JWT_BEARER_GRANT_TYPE,
+          assertion: identityAssertion,
+        }).toString(),
+      });
+
+      if (!resp.ok) return null;
+
+      const data = await resp.json() as TokenResponse;
+      const credential = this.cacheAndReturn(cfg, data.access_token, data.expires_in, 'active');
+      credential.identityAssertion = identityAssertion;
+      return credential;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * service_auth registration (v0.6.0):
+   * Sends { type: 'service_auth', login_hint } to identity_endpoint.
+   * Returns null — caller must poll via pollClaimCeremony() or legacy OTP path.
    */
   private async registerServiceAuth(
     cfg: AgentAuthMdConfig,
-    block: AgentAuthBlock
+    block: AgentAuthBlock,
+    tokenEndpoint?: string
   ): Promise<Credential | null> {
     if (!cfg.userEmail) return null;
 
+    const identityEndpoint = resolveIdentityEndpoint(block);
+    if (!identityEndpoint) return null;
+
     try {
-      const resp = await this.fetchFn(block.register_uri, {
+      const resp = await this.fetchFn(identityEndpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           type: 'service_auth',
           login_hint: cfg.userEmail,
-          requested_credential_type: 'api_key',
         }),
       });
       if (!resp.ok) return null;
 
       const data = await resp.json() as RegistrationResponse;
 
-      // Store claim info for the OTP ceremony
-      if (data.claim_token && block.claim_uri) {
+      if (data.claim_token) {
+        const claimEndpoint = resolveClaimEndpoint(block) ?? data.claim_url ?? '';
         this.pending.set(cfg.ref, {
-          claimUri: block.claim_uri,
+          claimEndpoint,
           claimToken: data.claim_token,
+          tokenEndpoint,
+          ceremony: data.claim,
         });
       }
 
-      // Spec: service_auth returns null until claim ceremony completes
       return null;
     } catch {
       return null;
@@ -387,41 +451,43 @@ export class AgentAuthMdStore implements CredentialStore {
   }
 
   /**
-   * Legacy verified-email registration (pre-PR#15 services).
-   * Sends { type: 'identity_assertion', assertion_type: 'verified_email', assertion: email }.
-   * For services that have migrated to PR#15, selectMethod() will prefer 'service-auth'
-   * and this method will not be called.
+   * Legacy verified-email registration (pre-v0.6.0 services).
+   * Kept for backward compatibility with servers that haven't adopted service_auth.
    */
   private async registerVerifiedEmail(
     cfg: AgentAuthMdConfig,
-    block: AgentAuthBlock
+    block: AgentAuthBlock,
+    tokenEndpoint?: string
   ): Promise<Credential | null> {
     if (!cfg.userEmail) return null;
 
+    const identityEndpoint = resolveIdentityEndpoint(block);
+    if (!identityEndpoint) return null;
+
     try {
-      const resp = await this.fetchFn(block.register_uri, {
+      const resp = await this.fetchFn(identityEndpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           type: 'identity_assertion',
           assertion_type: 'verified_email',
           assertion: cfg.userEmail,
-          requested_credential_type: 'api_key',
         }),
       });
       if (!resp.ok) return null;
 
       const data = await resp.json() as RegistrationResponse;
 
-      // Store claim info for the OTP ceremony
-      if (data.claim_token && block.claim_uri) {
+      if (data.claim_token) {
+        const claimEndpoint = resolveClaimEndpoint(block) ?? data.claim_url ?? '';
         this.pending.set(cfg.ref, {
-          claimUri: block.claim_uri,
+          claimEndpoint,
           claimToken: data.claim_token,
+          tokenEndpoint,
+          ceremony: data.claim,
         });
       }
 
-      // Spec: verified-email returns null until claim ceremony completes
       return null;
     } catch {
       return null;
@@ -430,40 +496,67 @@ export class AgentAuthMdStore implements CredentialStore {
 
   private async registerAnonymous(
     cfg: AgentAuthMdConfig,
-    block: AgentAuthBlock
+    block: AgentAuthBlock,
+    tokenEndpoint?: string
   ): Promise<Credential | null> {
+    const identityEndpoint = resolveIdentityEndpoint(block);
+    if (!identityEndpoint) return null;
+
     try {
-      const resp = await this.fetchFn(block.register_uri, {
+      const resp = await this.fetchFn(identityEndpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          type: 'anonymous',
-          requested_credential_type: 'api_key',
-        }),
+        body: JSON.stringify({ type: 'anonymous' }),
       });
       if (!resp.ok) return null;
 
       const data = await resp.json() as RegistrationResponse;
+
+      // v0.6.0: anonymous gets identity_assertion → exchange
+      if (data.identity_assertion && tokenEndpoint) {
+        const credential = await this.exchangeAssertion(cfg, data.identity_assertion, tokenEndpoint);
+        if (credential) {
+          credential.status = 'unclaimed';
+          if (data.pre_claim_scopes) credential.preClaimScopes = data.pre_claim_scopes;
+          if (data.post_claim_scopes) credential.postClaimScopes = data.post_claim_scopes;
+
+          if (data.claim_token) {
+            const claimEndpoint = resolveClaimEndpoint(block) ?? data.claim_url ?? '';
+            this.pending.set(cfg.ref, {
+              claimEndpoint,
+              claimToken: data.claim_token,
+              tokenEndpoint,
+              ceremony: data.claim,
+            });
+            credential.claimToken = data.claim_token;
+          }
+
+          const entry = this.cache.get(cfg.ref);
+          if (entry) entry.credential = credential;
+          return credential;
+        }
+      }
+
+      // Fallback: pre-v0.2.0 servers return api_key/access_token directly
       const token = data.api_key ?? data.credential_token ?? data.access_token;
       if (!token) return null;
 
       const credential = this.cacheAndReturn(cfg, token, data.expires_in, 'unclaimed');
 
-      // Annotate with pre/post claim scopes
-      if (data.scopes)            credential.preClaimScopes  = data.scopes;
+      if (data.scopes ?? data.pre_claim_scopes) credential.preClaimScopes = data.scopes ?? data.pre_claim_scopes;
       if (data.post_claim_scopes) credential.postClaimScopes = data.post_claim_scopes;
 
-      // Store claim info for later OTP ceremony
-      if (data.claim_token && block.claim_uri) {
+      if (data.claim_token) {
+        const claimEndpoint = resolveClaimEndpoint(block) ?? data.claim_url ?? '';
         this.pending.set(cfg.ref, {
-          claimUri: block.claim_uri,
+          claimEndpoint,
           claimToken: data.claim_token,
+          tokenEndpoint,
+          ceremony: data.claim,
         });
-        // Expose claim_token on the credential (in-memory only; never serialised)
         credential.claimToken = data.claim_token;
       }
 
-      // Update cache with annotated credential
       const entry = this.cache.get(cfg.ref);
       if (entry) entry.credential = credential;
 
@@ -473,10 +566,6 @@ export class AgentAuthMdStore implements CredentialStore {
     }
   }
 
-  /**
-   * Cache a credential and return it.
-   * `expiresIn` is in seconds (from the registration response).
-   */
   private cacheAndReturn(
     cfg: AgentAuthMdConfig,
     token: string,

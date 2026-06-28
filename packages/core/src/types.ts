@@ -121,6 +121,13 @@ export interface Credential {
    * Present only on the in-memory Credential inside AgentAuthMdStore's cache.
    */
   claimToken?: string;
+
+  /**
+   * Service-signed identity_assertion JWT (v0.6.0).
+   * Set after token exchange; used for subsequent re-authentication
+   * without re-minting the original ID-JAG.
+   */
+  identityAssertion?: string;
 }
 
 // ─── Approval Policy ──────────────────────────────────────────────────────────

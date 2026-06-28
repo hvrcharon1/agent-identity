@@ -18,6 +18,15 @@ export type {
   AgentAuthMdStoreOptions,
   RegistrationResponse,
   ClaimCeremonyResponse,
+  CeremonyBlock,
+  TokenResponse,
+  TokenErrorResponse,
+  PendingClaimState,
+} from './types';
+export {
+  resolveIdentityEndpoint,
+  resolveClaimEndpoint,
+  resolveEventsEndpoint,
 } from './types';
 export {
   AgentAuthMdMethodSchema,
@@ -29,3 +38,4 @@ export type {
   AgentAuthMdStoreOptionsInput,
 } from './schemas';
 export { discoverService, fetchASMetadata } from './discovery';
+export type { DiscoveryResult } from './discovery';

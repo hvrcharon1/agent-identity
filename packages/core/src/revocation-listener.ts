@@ -1,20 +1,18 @@
 /**
- * RevocationListener — framework-agnostic inbound revocation handler.
+ * RevocationListener — framework-agnostic inbound revocation/SET handler.
+ *
+ * Accepts both:
+ *   - application/logout+jwt (legacy, pre-v0.6.0)
+ *   - application/secevent+jwt (RFC 8935, v0.6.0+)
  *
  * The listener does NOT handle JWKS fetching or JWT signature verification —
- * those depend on external libraries. Pass a LogoutJwtVerifier that handles
+ * those depend on external libraries. Pass a SecEventJwtVerifier that handles
  * verification for your environment, then wire handleRequest() into your router.
  *
  * Express example:
- *   app.post('/agent/auth/revoke', async (req, res) => {
+ *   app.post('/agent/auth/events', async (req, res) => {
  *     const result = await listener.handleRequest(req.body, req.headers);
- *     res.status(result.httpStatus).json(result.body);
- *   });
- *
- * Fastify example:
- *   fastify.post('/agent/auth/revoke', async (req, reply) => {
- *     const result = await listener.handleRequest(req.body as string, req.headers);
- *     reply.code(result.httpStatus).send(result.body);
+ *     res.status(result.httpStatus).send(result.body ?? '');
  *   });
  *
  * @module revocation-listener
@@ -25,9 +23,12 @@ import type { LogoutTokenPayload } from './revocation';
 
 // ─── Public interfaces ───────────────────────────────────────────────────
 
-export interface LogoutJwtVerifier {
+/** @deprecated Use SecEventJwtVerifier instead. */
+export type LogoutJwtVerifier = SecEventJwtVerifier;
+
+export interface SecEventJwtVerifier {
   /**
-   * Verify a logout+jwt string and return the decoded payload.
+   * Verify a secevent+jwt (or logout+jwt) string and return the decoded payload.
    * Return null if the signature is invalid, issuer is untrusted, or token is
    * malformed. Never throw — return null on any error.
    */
@@ -36,13 +37,17 @@ export interface LogoutJwtVerifier {
 
 export interface RevocationListenerOptions {
   handler: RevocationHandler;
-  verifier: LogoutJwtVerifier;
+  verifier: SecEventJwtVerifier;
 }
 
 export interface RevocationListenerResult {
-  httpStatus: 200 | 400;
-  body: { status: 'ok'; credentialsRevoked: number } | { error: string };
+  httpStatus: 200 | 202 | 400;
+  body?: { status: 'ok'; credentialsRevoked: number } | { error: string };
 }
+
+// ─── Constants ───────────────────────────────────────────────────────────
+
+const ACCEPTED_CONTENT_TYPES = ['application/secevent+jwt', 'application/logout+jwt'];
 
 // ─── RevocationListener ──────────────────────────────────────────────────
 
@@ -53,53 +58,40 @@ export class RevocationListener {
    * Handle a raw revocation request body and headers.
    *
    * Processing steps:
-   *   1. Validate Content-Type contains 'application/logout+jwt'.
+   *   1. Validate Content-Type contains 'application/secevent+jwt' or 'application/logout+jwt'.
    *   2. Call verifier.verify(rawBody) — if null, reject with 400.
-   *   3. Call handler.process(payload) — if replay, return 200 with 0 revoked.
-   *   4. Return 200 with credentialsRevoked count.
+   *   3. Call handler.process(payload) — if replay, return 202 (idempotent).
+   *   4. Return 202 Accepted with no body (RFC 8935 §2.4).
    *
-   * @param rawBody  The request body string (the logout+jwt token itself,
-   *                 per Content-Type: application/logout+jwt)
+   * @param rawBody  The request body string (the SET/logout+jwt token itself)
    * @param headers  Request headers (for Content-Type validation)
    */
   async handleRequest(
     rawBody: string,
     headers: Record<string, string | string[] | undefined>
   ): Promise<RevocationListenerResult> {
-    // 1. Content-Type validation
     const contentType = headers['content-type'] ?? headers['Content-Type'] ?? '';
     const ctString = Array.isArray(contentType) ? contentType[0] : contentType;
-    if (!ctString.includes('application/logout+jwt')) {
+
+    const isAccepted = ACCEPTED_CONTENT_TYPES.some(ct => ctString.includes(ct));
+    if (!isAccepted) {
       return {
         httpStatus: 400,
         body: { error: 'invalid_content_type' },
       };
     }
 
-    // 2. Signature verification (delegated to caller-supplied verifier)
     const payload = await this.opts.verifier.verify(rawBody);
     if (!payload) {
       return {
         httpStatus: 400,
-        body: { error: 'invalid_logout_token' },
+        body: { error: 'invalid_token' },
       };
     }
 
-    // 3. Process revocation (includes replay detection)
-    const result = await this.opts.handler.process(payload);
+    await this.opts.handler.process(payload);
 
-    // Replay: return 200 with 0 revoked (idempotent)
-    if (result.replay) {
-      return {
-        httpStatus: 200,
-        body: { status: 'ok', credentialsRevoked: 0 },
-      };
-    }
-
-    // 4. Success
-    return {
-      httpStatus: 200,
-      body: { status: 'ok', credentialsRevoked: result.credentialsRevoked },
-    };
+    // RFC 8935 §2.4: 202 Accepted, no body on success
+    return { httpStatus: 202 };
   }
 }
