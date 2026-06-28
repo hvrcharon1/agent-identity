@@ -42,6 +42,7 @@ jobs:
             packages/stores/spiffe/package.json \
             packages/stores/authmd/package.json \
             packages/stores/libsql/package.json \
+            packages/stores/redis/package.json \
             packages/integrations/express/package.json \
             packages/integrations/fastify/package.json \
             packages/integrations/langchain/package.json \
@@ -82,6 +83,7 @@ jobs:
             packages/stores/spiffe \
             packages/stores/authmd \
             packages/stores/libsql \
+            packages/stores/redis \
             packages/integrations/express \
             packages/integrations/fastify \
             packages/integrations/langchain \
@@ -113,6 +115,7 @@ jobs:
           npm run build --workspace=packages/stores/spiffe
           npm run build --workspace=packages/stores/authmd
           npm run build --workspace=packages/stores/libsql
+          npm run build --workspace=packages/stores/redis
           npm run build --workspace=packages/integrations/express
           npm run build --workspace=packages/integrations/fastify
           npm run build --workspace=packages/integrations/langchain
@@ -258,6 +261,21 @@ jobs:
           fi
           exit $STATUS
         working-directory: packages/stores/libsql
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Publish @datacules/agent-identity-store-redis
+        run: |
+          set +e
+          OUT=$(npm publish --access public 2>&1)
+          STATUS=$?
+          echo "$OUT"
+          if echo "$OUT" | grep -qiE '(cannot publish over|E409|already exists|previously published)'; then
+            echo "SKIP: version already published — treating as success"
+            exit 0
+          fi
+          exit $STATUS
+        working-directory: packages/stores/redis
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
@@ -484,6 +502,10 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "$GITHUB_REF_NAME" \
-            --title "$GITHUB_REF_NAME" \
-            --generate-notes
+          if gh release view "$GITHUB_REF_NAME" > /dev/null 2>&1; then
+            echo "Release $GITHUB_REF_NAME already exists — skipping creation"
+          else
+            gh release create "$GITHUB_REF_NAME" \
+              --title "$GITHUB_REF_NAME" \
+              --generate-notes
+          fi
