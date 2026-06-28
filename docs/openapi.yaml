@@ -1,415 +1,73 @@
 openapi: 3.1.0
 info:
-  title: agent-identity credential resolution API
-  version: 0.11.0
-  description: |
-    Language-agnostic REST contract for resolving agent credentials.
-    Any application (Python, Go, Ruby, Java) can POST to /api/resolve or
-    /api/migrate/resolve. The server resolves the credential from an encrypted
-    store and returns only safe metadata — never the raw secret.
-
-    v0.10.0 updates:
-      - GET /api/health: new liveness probe endpoint (resolves ISS-001);
-        used by agent-identity-cli health, Docker HEALTHCHECK, and
-        Kubernetes liveness probes.
-
-    v0.9.0 notes:
-      - No new REST endpoints; v0.9.0 added @datacules/agent-identity-cli,
-        auth.md enhancements (G-A1–G-A6), AzureManagedIdentityProvisioner,
-        rotateAfterUses + grace period, and the LibSQL store adapter.
-
-    v0.8.0 notes:
-      - No new REST endpoints in v0.7.0 or v0.8.0; those releases were
-        dashboard-only (TokenExchangeTab, RotationTab, OtelTab, JitTab,
-        SpiffeTab, ComplianceTab) and CI / test improvements.
-      - Version bumped from 0.6.0 to match the package release stream.
-
-    v0.6.0 updates (last schema-impacting release before v0.10.0):
-      - MigrateResolveResponse: added sourceCredentialId + targetCredentialId
-        (both now required in the response, added in the PR #32 route rewrite)
-      - ResolveResponse: credentialId and expiresAt already present since v0.3.0
-      - TokenExchangeStore is a library (no new REST endpoints)
-      - All existing endpoint schemas remain backward-compatible
-  contact:
-    name: Datacules LLC
-    url: https://github.com/hvrcharon1/agent-identity
+  title: Agent Identity API
+  version: 0.11.1
+  description: Provider-agnostic credential routing and identity management for AI agents
   license:
-    name: Datacules Open Source License
-    url: https://github.com/hvrcharon1/agent-identity/blob/main/LICENSE
-
+    name: SEE LICENSE IN LICENSE
 servers:
   - url: http://localhost:3000
-    description: Local dev
-  - url: http://localhost:3001
-    description: Docker sidecar
-
-paths:
-
-  # ── Health ──────────────────────────────────────────────────────────────────────────────
-
-  /api/health:
-    get:
-      operationId: getHealth
-      summary: Server liveness probe
-      description: |
-        Returns the current server status, package version, number of active
-        credentials, and number of loaded routing rules. Used by the CLI
-        `health` command, Docker HEALTHCHECK directives, and Kubernetes
-        liveness probes. Never exposes credential secrets or raw configuration.
-      tags: [Core]
-      responses:
-        '200':
-          description: Server is operational
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HealthResponse'
-
-  # ── Core resolution ─────────────────────────────────────────────────────────────────────
-
-  /api/resolve:
-    post:
-      operationId: resolveCredential
-      summary: Resolve the best credential for an agent request
-      description: |
-        The caller sends an AgentRequestContext describing the current task.
-        The server matches it against routing rules, resolves the credential
-        from the configured store (Vault, AWS Secrets Manager, Azure Key Vault,
-        or in-memory), and returns only safe metadata.
-        The raw secret never leaves the server.
-      tags: [Core]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/AgentRequestContext'
-            examples:
-              personal-resource:
-                summary: User reading from their knowledge base
-                value:
-                  userId: user-abc
-                  resourceId: kb-1
-                  resourceKind: personal
-                  provider: anthropic
-                  model: claude-sonnet-4-20250514
-                  action: read
-                  traceId: trace-xyz
-                  requestedAt: '2026-05-26T10:00:00.000Z'
-              shared-tool:
-                summary: Agent writing to a shared Linear board
-                value:
-                  userId: user-abc
-                  resourceId: linear-board-1
-                  resourceKind: shared
-                  provider: openai
-                  model: gpt-4o
-                  action: write
-                  traceId: trace-abc
-                  requestedAt: '2026-05-26T10:00:00.000Z'
-      responses:
-        '200':
-          description: Credential resolved successfully
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ResolveResponse'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '403':
-          $ref: '#/components/responses/NoCredential'
-
-  /api/migrate/resolve:
-    post:
-      operationId: resolveMigrationCredentials
-      summary: Resolve source + target credentials for a migration phase
-      tags: [Core]
-      description: |
-        A migration job calls this once per phase to establish both source
-        (read) and target (write) credentials upfront. Returns the earliest
-        expiry of the two, so the agent knows when to refresh before the
-        batch loop ends. One round-trip per phase, not per row.
-
-        As of v0.6.0 the response includes sourceCredentialId and
-        targetCredentialId in addition to the resolvedFor strings, enabling
-        downstream services to trace exactly which credentials were used
-        for each phase without a second lookup.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/MigrateResolveRequest'
-            examples:
-              load-phase:
-                summary: Starting the load phase of a CRM migration
-                value:
-                  migrationId: migration-2026-q2
-                  phase: load
-                  sourceResourceId: crm-postgres-prod
-                  targetResourceId: crm-postgres-v2
-                  userId: svc-migration-bot
-                  provider: anthropic
-                  model: claude-sonnet-4-20250514
-                  traceId: trace-mig-001
-                  dryRun: false
-      responses:
-        '200':
-          description: Both credentials resolved successfully
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/MigrateResolveResponse'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '403':
-          $ref: '#/components/responses/NoCredential'
-
-  # ── Attestation ──────────────────────────────────────────────────────────────────────
-
-  /api/attest:
-    post:
-      operationId: verifyAttestation
-      summary: Verify a JWT attestation token
-      tags: [Attestation]
-      description: |
-        Verifies a signed JWT attestation produced by buildAttestation().
-        Returns the decoded payload on success, or an error if the token
-        is expired, tampered, or signed with a different key.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/AttestVerifyRequest'
-      responses:
-        '200':
-          description: Token valid — decoded payload returned
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/AttestVerifyResponse'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          description: Token invalid, expired, or tampered
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-
-  /api/attest/sign:
-    post:
-      operationId: signAttestation
-      summary: Sign a new JWT attestation for a resolved credential
-      tags: [Attestation]
-      description: |
-        Takes an AgentRequestContext, calls buildAttestation() using the
-        server-side HMAC key, and returns the signed JWT. Downstream
-        services verify the token with verifyAttestation().
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/AgentRequestContext'
-      responses:
-        '200':
-          description: Attestation token signed
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/AttestSignResponse'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-
-  # ── Approvals ──────────────────────────────────────────────────────────────────────
-
-  /api/approve:
-    post:
-      operationId: approveOrReject
-      summary: Approve or reject a pending approval request
-      tags: [Approvals]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/ApproveRequest'
-      responses:
-        '200':
-          description: Decision recorded
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApproveResponse'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '404':
-          description: Approval request not found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-
-  /api/approve/break-glass:
-    post:
-      operationId: breakGlassOverride
-      summary: Emergency break-glass credential override
-      tags: [Approvals]
-      description: |
-        Bypasses the normal approval workflow for emergency access.
-        Requires a written justification. Creates a non-deletable audit
-        entry marked as a break-glass event.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/BreakGlassRequest'
-      responses:
-        '200':
-          description: Break-glass override recorded
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/BreakGlassResponse'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-
-  # ── Budget ─────────────────────────────────────────────────────────────────────────
-
-  /api/budget:
-    get:
-      operationId: getBudgetUtilisation
-      summary: Current usage utilisation for all budget-enabled credentials
-      tags: [Budget]
-      responses:
-        '200':
-          description: Budget utilisation for each credential
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/BudgetResponse'
-    post:
-      operationId: resetBudgetCounter
-      summary: Reset hourly or daily counter for a credential
-      tags: [Budget]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/BudgetResetRequest'
-      responses:
-        '200':
-          description: Counter reset
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/OkResponse'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-
-  # ── Federation ─────────────────────────────────────────────────────────────────────
-
-  /api/federation/issue:
-    post:
-      operationId: issueIdentityChain
-      summary: Issue a new cross-org identity chain from an AgentRequestContext
-      tags: [Federation]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/AgentRequestContext'
-      responses:
-        '200':
-          description: Identity chain issued
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/FederationIssueResponse'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-
-  /api/federation/verify:
-    post:
-      operationId: verifyIdentityChain
-      summary: Verify an inbound identity chain against the trust config
-      tags: [Federation]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/FederationVerifyRequest'
-      responses:
-        '200':
-          description: Verification result
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/FederationVerifyResponse'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-
-  # ── Anomaly ────────────────────────────────────────────────────────────────────────
-
-  /api/anomaly:
-    post:
-      operationId: observeAnomaly
-      summary: Pass an AgentRequestContext through the anomaly detector
-      tags: [Anomaly]
-      description: |
-        Wraps a resolve() call with anomaly detection. Scores the context
-        against the agent's behavioral baseline and returns any anomaly events.
-        If the policy action is 'block' and a high-severity anomaly is detected,
-        blocked: true is returned and the caller should not proceed.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/AgentRequestContext'
-      responses:
-        '200':
-          description: Anomaly check complete
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/AnomalyObserveResponse'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-    delete:
-      operationId: resetAnomalyBaseline
-      summary: Reset a specific agent's behavioral baseline
-      tags: [Anomaly]
-      parameters:
-        - name: userId
-          in: query
-          required: true
-          schema:
-            type: string
-          description: Agent user ID whose baseline to reset
-      responses:
-        '200':
-          description: Baseline reset
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/OkResponse'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-
+    description: Local development
 components:
   schemas:
-
-    # ── Core ────────────────────────────────────────────────────────────────────────
-
+    SupportedProvider:
+      type: string
+      enum: &a2
+        - openai
+        - anthropic
+        - gemini
+        - mistral
+        - local
+      description: AI provider identifier
+    ResourceKind:
+      type: string
+      enum: &a1
+        - shared
+        - personal
+      description: Resource access scope
+    MigrationPhase:
+      type: string
+      enum: &a3
+        - dry-run
+        - extract
+        - transform
+        - load
+        - verify
+        - rollback
+      description: Migration lifecycle phase
     AgentRequestContext:
       type: object
+      properties:
+        userId:
+          type: string
+          minLength: 1
+        resourceId:
+          type: string
+          minLength: 1
+        resourceKind:
+          type: string
+          enum: *a1
+        provider:
+          type: string
+          enum: *a2
+        model:
+          type: string
+          minLength: 1
+        action:
+          type: string
+          minLength: 1
+        traceId:
+          type: string
+          minLength: 1
+        sessionId:
+          type: string
+        requestedAt:
+          type: string
+          format: date-time
+        parentTraceId:
+          type: string
+        spiffeId:
+          type: string
       required:
         - userId
         - resourceId
@@ -419,6 +77,9 @@ components:
         - action
         - traceId
         - requestedAt
+      description: Context for credential resolution
+    MigrateResolveRequest:
+      type: object
       properties:
         userId:
           type: string
@@ -427,15 +88,20 @@ components:
           type: string
           minLength: 1
         resourceKind:
-          $ref: '#/components/schemas/ResourceKind'
+          type: string
+          enum: *a1
         provider:
-          $ref: '#/components/schemas/SupportedProvider'
+          type: string
+          enum: *a2
         model:
           type: string
+          minLength: 1
         action:
           type: string
+          minLength: 1
         traceId:
           type: string
+          minLength: 1
         sessionId:
           type: string
         requestedAt:
@@ -443,69 +109,79 @@ components:
           format: date-time
         parentTraceId:
           type: string
-
-    MigrateResolveRequest:
-      type: object
-      required:
-        - migrationId
-        - phase
-        - sourceResourceId
-        - targetResourceId
-        - userId
-        - provider
-        - model
-        - traceId
-      properties:
+        spiffeId:
+          type: string
         migrationId:
           type: string
+          minLength: 1
         phase:
-          $ref: '#/components/schemas/MigrationPhase'
+          type: string
+          enum: *a3
         sourceResourceId:
           type: string
+          minLength: 1
         targetResourceId:
           type: string
-        userId:
-          type: string
-        provider:
-          $ref: '#/components/schemas/SupportedProvider'
-        model:
-          type: string
-        traceId:
-          type: string
+          minLength: 1
         dryRun:
           type: boolean
-          default: false
         batchIndex:
           type: integer
           minimum: 0
         totalBatches:
           type: integer
-          minimum: 1
-
+          exclusiveMinimum: 0
+      required:
+        - userId
+        - resourceId
+        - resourceKind
+        - provider
+        - model
+        - action
+        - traceId
+        - requestedAt
+        - migrationId
+        - phase
+        - sourceResourceId
+        - targetResourceId
+        - dryRun
+      description: Migration credential resolution request
     ResolveResponse:
       type: object
-      required: [ok, resolvedFor]
       properties:
         ok:
           type: boolean
-        resolvedFor:
-          type: string
         credentialId:
           type: string
-          description: Stable credential identifier for audit correlation
-        isCanary:
-          type: boolean
-          description: True if the canary credential was selected for this request
+        resolvedFor:
+          type: string
         expiresAt:
           type: string
-          format: date-time
-          description: ISO 8601 expiry of the resolved credential, if applicable
-        credentialAttestation:
-          type: string
-          description: Signed JWT attestation (present only if AttestationSigner is configured)
-
+      required:
+        - ok
+        - credentialId
+        - resolvedFor
+      description: Successful credential resolution response
     MigrateResolveResponse:
       type: object
+      properties:
+        migrationId:
+          type: string
+        phase:
+          type: string
+          enum: *a3
+        sourceCredentialId:
+          type: string
+        sourceResolvedFor:
+          type: string
+        targetCredentialId:
+          type: string
+        targetResolvedFor:
+          type: string
+        dryRun:
+          type: boolean
+        expiresAt:
+          type: string
       required:
         - migrationId
         - phase
@@ -514,322 +190,525 @@ components:
         - targetCredentialId
         - targetResolvedFor
         - dryRun
-      properties:
-        migrationId:
-          type: string
-        phase:
-          $ref: '#/components/schemas/MigrationPhase'
-        sourceCredentialId:
-          type: string
-          description: >
-            Stable identifier of the source (read) credential. Added in v0.6.0
-            alongside targetCredentialId to allow downstream services and audit
-            systems to trace exactly which credential was used for each phase
-            without a second store lookup.
-        sourceResolvedFor:
-          type: string
-          description: userId or 'service' — who the source credential was resolved for
-        targetCredentialId:
-          type: string
-          description: >
-            Stable identifier of the target (write) credential. Added in v0.6.0.
-        targetResolvedFor:
-          type: string
-          description: userId or 'service' — who the target credential was resolved for
-        dryRun:
-          type: boolean
-        expiresAt:
-          type: string
-          format: date-time
-          description: >
-            Earliest expiry across both resolved credentials. The migration job
-            should refresh before this timestamp to avoid mid-batch 401 errors.
-
+      description: Migration credential pair resolution response
     HealthResponse:
       type: object
-      required: [status, version, timestamp, credentialsLoaded, rulesLoaded]
       properties:
         status:
           type: string
-          enum: [ok]
-          description: Always 'ok' when the server is responsive
+          enum:
+            - ok
         version:
           type: string
-          description: >
-            npm_package_version of the running server process.
-            Returns 'unknown' in local dev when the variable is not set.
         timestamp:
           type: string
-          format: date-time
-          description: ISO 8601 timestamp of this health response
         credentialsLoaded:
-          type: integer
-          description: Number of active credentials currently held in the configured store
+          type: number
         rulesLoaded:
-          type: integer
-          description: Number of routing rules currently loaded into the resolver
-
-    # ── Attestation ─────────────────────────────────────────────────────────────────
-
-    AttestVerifyRequest:
-      type: object
-      required: [token]
-      properties:
-        token:
-          type: string
-          description: JWT attestation token produced by buildAttestation()
-
-    AttestVerifyResponse:
-      type: object
-      required: [valid]
-      properties:
-        valid:
-          type: boolean
-        payload:
-          type: object
-          description: Decoded JWT payload (iss, sub, credentialId, action, ruleId, iat, exp)
-          additionalProperties: true
-
-    AttestSignResponse:
-      type: object
-      required: [token]
-      properties:
-        token:
-          type: string
-          description: Signed JWT attestation
-        expiresAt:
-          type: string
-          format: date-time
-
-    # ── Approvals ──────────────────────────────────────────────────────────────────
-
+          type: number
+      required:
+        - status
+        - version
+        - timestamp
+        - credentialsLoaded
+        - rulesLoaded
+      description: Server health check response
     ApproveRequest:
       type: object
-      required: [requestId, decision, resolvedBy]
       properties:
         requestId:
           type: string
-        decision:
+        action:
           type: string
-          enum: [approved, rejected]
+          enum:
+            - approve
+            - reject
         resolvedBy:
-          type: string
-          description: ID of the approver
-        reason:
-          type: string
-
-    ApproveResponse:
-      type: object
-      required: [ok, requestId, status]
-      properties:
-        ok:
-          type: boolean
-        requestId:
-          type: string
-        status:
-          type: string
-          enum: [approved, rejected]
-
-    BreakGlassRequest:
-      type: object
-      required: [credentialRef, requestedBy, justification]
-      properties:
-        credentialRef:
-          type: string
-        requestedBy:
           type: string
         justification:
           type: string
-          minLength: 20
-          description: Must be substantive — stored in non-deletable audit log
-
-    BreakGlassResponse:
+      required:
+        - requestId
+        - action
+      description: Approve or reject a pending request
+    ApproveResponse:
       type: object
-      required: [ok, auditEntryId, breakGlass]
       properties:
         ok:
           type: boolean
-        auditEntryId:
+        request:
+          type: object
+          properties:
+            requestId:
+              type: string
+            status:
+              type: string
+            resolvedAt:
+              type: string
+            resolvedBy:
+              type: string
+          required:
+            - requestId
+            - status
+      required:
+        - ok
+        - request
+      description: Approval action response
+    BreakGlassRequest:
+      type: object
+      properties:
+        requestId:
           type: string
-        breakGlass:
+        operator:
+          type: string
+          minLength: 1
+        justification:
+          type: string
+          minLength: 10
+      required:
+        - requestId
+        - operator
+        - justification
+      description: Emergency break-glass override request
+    BreakGlassResponse:
+      type: object
+      properties:
+        ok:
           type: boolean
-          enum: [true]
-
-    # ── Budget ───────────────────────────────────────────────────────────────────────
-
+        warning:
+          type: string
+        request:
+          type: object
+          properties:
+            requestId:
+              type: string
+            status:
+              type: string
+              enum:
+                - break_glass
+          required:
+            - requestId
+            - status
+      required:
+        - ok
+        - request
+      description: Break-glass override response
     BudgetResponse:
       type: object
-      required: [credentials]
       properties:
         credentials:
           type: array
           items:
             type: object
-            required: [credentialId, hourlyCount, hourlyLimit]
             properties:
               credentialId:
                 type: string
-              hourlyCount:
-                type: integer
-              hourlyLimit:
-                type: integer
-              dailyCount:
-                type: integer
-              dailyLimit:
-                type: integer
-              sessionCount:
-                type: integer
-              sessionLimit:
-                type: integer
-              softThresholdPct:
-                type: integer
-              status:
+              name:
                 type: string
-                enum: [ok, warning, exceeded]
-
+              usage:
+                type: object
+                properties:
+                  hourlyCount:
+                    type: number
+                  sessions:
+                    type: number
+                  dailySpend:
+                    type: number
+                required:
+                  - hourlyCount
+                  - sessions
+                  - dailySpend
+            required:
+              - credentialId
+              - name
+              - usage
+      required:
+        - credentials
+      description: Budget utilisation for all credentials
     BudgetResetRequest:
       type: object
-      required: [credentialId, period]
       properties:
         credentialId:
           type: string
-        period:
+        counter:
           type: string
-          enum: [hourly, daily]
-
-    # ── Federation ──────────────────────────────────────────────────────────────────
-
-    FederationIssueResponse:
+          enum:
+            - hourly
+            - daily
+      required:
+        - credentialId
+        - counter
+      description: Reset a budget counter
+    OkResponse:
       type: object
-      required: [chain]
       properties:
-        chain:
-          type: array
-          items:
-            $ref: '#/components/schemas/IdentityChainEntry'
-
-    FederationVerifyRequest:
-      type: object
-      required: [chain]
-      properties:
-        chain:
-          type: array
-          items:
-            $ref: '#/components/schemas/IdentityChainEntry'
-
-    FederationVerifyResponse:
-      type: object
-      required: [valid]
-      properties:
-        valid:
+        ok:
           type: boolean
-        reason:
-          type: string
-          description: Present when valid is false
-
-    IdentityChainEntry:
+      required:
+        - ok
+      description: Generic success response
+    Error:
       type: object
-      required: [org, userId, agentId, issuedAt, signature, trustDomain]
       properties:
-        org:
+        error:
           type: string
-        userId:
-          type: string
-        agentId:
-          type: string
-        issuedAt:
-          type: string
-          format: date-time
-        signature:
-          type: string
-        trustDomain:
-          type: string
-
-    # ── Anomaly ───────────────────────────────────────────────────────────────────────
-
+      required:
+        - error
+      description: Error response
     AnomalyObserveResponse:
       type: object
-      required: [ok, observed, anomalies, blocked]
       properties:
         ok:
           type: boolean
         observed:
           type: string
-          description: userId that was scored
         anomalies:
           type: array
           items:
-            $ref: '#/components/schemas/AnomalyEvent'
+            type: object
+            properties:
+              type:
+                type: string
+              severity:
+                type: string
+              message:
+                type: string
+            required:
+              - type
+              - severity
+              - message
         blocked:
           type: boolean
-          description: True if a block-policy anomaly prevented credential resolution
-
-    AnomalyEvent:
+      required:
+        - ok
+        - observed
+        - anomalies
+        - blocked
+      description: Anomaly detection observation result
+    AttestSignResponse:
       type: object
-      required: [signal, severity, baselineValue, observedValue, userId, timestamp]
       properties:
-        signal:
+        token:
           type: string
-          enum:
-            - rate_spike
-            - new_credential_type
-            - new_action_type
-            - new_resource_kind
-            - off_hours
-            - new_provider
-        severity:
-          type: string
-          enum: [low, medium, high]
-        baselineValue:
-          description: The known-good value or set
-        observedValue:
-          description: The value that triggered the anomaly
-        userId:
-          type: string
-        credentialId:
-          type: string
-        timestamp:
-          type: string
-          format: date-time
-
-    # ── Shared ────────────────────────────────────────────────────────────────────────
-
-    OkResponse:
+      required:
+        - token
+      description: Signed attestation token
+    AttestVerifyResponse:
       type: object
-      required: [ok]
+      properties:
+        valid:
+          type: boolean
+        expired:
+          type: boolean
+        payload:
+          type: object
+          properties: {}
+        remainingSeconds:
+          type: number
+        error:
+          type: string
+      required:
+        - valid
+      description: Attestation verification result
+    FederationIssueResponse:
+      type: object
       properties:
         ok:
           type: boolean
-
-    ResourceKind:
-      type: string
-      enum: [shared, personal]
-
-    SupportedProvider:
-      type: string
-      enum: [openai, anthropic, gemini, mistral, local]
-
-    MigrationPhase:
-      type: string
-      enum: [dry-run, extract, transform, load, verify, rollback]
-
-    Error:
-      type: object
-      required: [error]
-      properties:
-        error:
+        chain:
+          type: array
+          items:
+            type: object
+            properties:
+              trustDomain:
+                type: string
+              userId:
+                type: string
+              action:
+                type: string
+              timestamp:
+                type: string
+              signature:
+                type: string
+            required:
+              - trustDomain
+              - userId
+              - action
+              - timestamp
+              - signature
+        trustDomain:
           type: string
-
-  responses:
-    BadRequest:
-      description: Missing or invalid field in request body
-      content:
-        application/json:
+      required:
+        - ok
+        - chain
+        - trustDomain
+      description: Federation chain issue response
+    FederationVerifyResponse:
+      type: object
+      properties:
+        ok:
+          type: boolean
+        chain:
+          type: array
+          items:
+            type: object
+            properties: {}
+        entriesVerified:
+          type: number
+        trustedDomains:
+          type: array
+          items:
+            type: string
+      required:
+        - ok
+        - entriesVerified
+        - trustedDomains
+      description: Federation chain verification response
+  parameters: {}
+paths:
+  /api/health:
+    get:
+      summary: Health check
+      description: Liveness probe for the agent-identity server
+      responses:
+        "200":
+          description: Server is healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+  /api/resolve:
+    post:
+      summary: Resolve credential
+      description: Server-side credential resolution using the configured store and routing rules
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AgentRequestContext"
+      responses:
+        "200":
+          description: Credential resolved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ResolveResponse"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: No credential matched
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /api/migrate/resolve:
+    post:
+      summary: Resolve migration credential pair
+      description: Resolves separate source and target credentials for a migration context
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MigrateResolveRequest"
+      responses:
+        "200":
+          description: Credential pair resolved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MigrateResolveResponse"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: No credential matched
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /api/approve:
+    post:
+      summary: Approve or reject a pending request
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ApproveRequest"
+      responses:
+        "200":
+          description: Action applied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApproveResponse"
+        "404":
+          description: Request not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: Request not pending
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /api/approve/break-glass:
+    post:
+      summary: Emergency break-glass override
+      description: Bypasses approval flow. Logged as a non-deletable audit entry.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BreakGlassRequest"
+      responses:
+        "200":
+          description: Override applied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BreakGlassResponse"
+        "404":
+          description: Request not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: Request not pending
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /api/budget:
+    get:
+      summary: Get budget utilisation
+      description: Returns per-credential hourly count, concurrent sessions, and daily spend
+      responses:
+        "200":
+          description: Budget data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BudgetResponse"
+    post:
+      summary: Reset budget counter
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BudgetResetRequest"
+      responses:
+        "200":
+          description: Counter reset
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OkResponse"
+  /api/anomaly:
+    post:
+      summary: Observe agent request for anomalies
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AgentRequestContext"
+      responses:
+        "200":
+          description: Observation recorded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AnomalyObserveResponse"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    delete:
+      summary: Reset anomaly baseline
+      parameters:
+        - name: userId
+          in: query
+          required: true
           schema:
-            $ref: '#/components/schemas/Error'
-    NoCredential:
-      description: No routing rule matched or credential could not be resolved
-      content:
-        application/json:
-          schema:
-            $ref: '#/components/schemas/Error'
+            type: string
+      responses:
+        "200":
+          description: Baseline reset
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OkResponse"
+  /api/attest/sign:
+    post:
+      summary: Sign attestation token
+      description: Creates a signed JWT attestation token for a credential resolution
+      responses:
+        "200":
+          description: Token signed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AttestSignResponse"
+        "400":
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /api/attest:
+    post:
+      summary: Verify attestation token
+      description: Verifies a signed JWT attestation token
+      responses:
+        "200":
+          description: Verification result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AttestVerifyResponse"
+  /api/federation/issue:
+    post:
+      summary: Issue identity chain
+      description: Creates or extends a cross-domain identity chain
+      responses:
+        "200":
+          description: Chain issued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FederationIssueResponse"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /api/federation/verify:
+    post:
+      summary: Verify identity chain
+      description: Verifies all entries in a cross-domain identity chain
+      responses:
+        "200":
+          description: Chain verified
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FederationVerifyResponse"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+webhooks: {}
