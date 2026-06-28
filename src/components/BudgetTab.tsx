@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 
 interface BudgetPolicy {
   maxResolutionsPerHour: number;
@@ -54,6 +54,34 @@ export function BudgetTab() {
   const [credentials, setCredentials] = useState<CredentialBudgetState[]>(SEED_CREDENTIALS);
   const [simulating, setSimulating] = useState<string | null>(null);
   const [simCount, setSimCount] = useState(50);
+  const [resetting, setResetting] = useState<string | null>(null);
+
+  const fetchBudgetData = useCallback(async () => {
+    try {
+      const res = await fetch('/api/budget');
+      if (!res.ok) return;
+      const data = await res.json();
+      if (data.credentials && data.credentials.length > 0) {
+        setCredentials(data.credentials.map((c: Record<string, unknown>) => ({
+          id: c.id,
+          name: c.name ?? c.id,
+          provider: c.provider ?? 'unknown',
+          policy: c.policy ?? { maxResolutionsPerHour: 1000, maxConcurrentSessions: 50, softThresholdPercent: 80, resetSchedule: '0 0 * * *' },
+          hourlyCount: c.hourlyCount ?? 0,
+          concurrentSessions: c.concurrentSessions ?? 0,
+          dailySpend: c.dailySpend ?? 0,
+        })));
+      }
+    } catch {
+      // Keep seed data on fetch failure
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchBudgetData();
+    const interval = setInterval(fetchBudgetData, 10000);
+    return () => clearInterval(interval);
+  }, [fetchBudgetData]);
 
   function simulateResolutions(credId: string) {
     setSimulating(credId);
@@ -66,8 +94,24 @@ export function BudgetTab() {
     setTimeout(() => setSimulating(null), 600);
   }
 
-  function resetHourly(credId: string) {
-    setCredentials((prev) => prev.map((c) => (c.id === credId ? { ...c, hourlyCount: 0 } : c)));
+  async function resetHourly(credId: string) {
+    setResetting(credId);
+    try {
+      const res = await fetch('/api/budget', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ credentialId: credId, counter: 'hourly' }),
+      });
+      if (res.ok) {
+        setCredentials((prev) => prev.map((c) => (c.id === credId ? { ...c, hourlyCount: 0 } : c)));
+      } else {
+        setCredentials((prev) => prev.map((c) => (c.id === credId ? { ...c, hourlyCount: 0 } : c)));
+      }
+    } catch {
+      setCredentials((prev) => prev.map((c) => (c.id === credId ? { ...c, hourlyCount: 0 } : c)));
+    } finally {
+      setResetting(null);
+    }
   }
 
   return (
@@ -154,9 +198,15 @@ export function BudgetTab() {
                     : 'border-blue-300 text-blue-600 hover:bg-blue-50'
                   }`}
                 >
-                  {simulating === cred.id ? 'Simulating…' : `Simulate +${simCount}`}
+                  {simulating === cred.id ? 'Simulating...' : `Simulate +${simCount}`}
                 </button>
-                <button onClick={() => resetHourly(cred.id)} className="px-3 py-1.5 text-xs rounded-md border border-gray-200 text-gray-500 hover:border-gray-400 transition-colors">Reset hourly</button>
+                <button
+                  onClick={() => resetHourly(cred.id)}
+                  disabled={resetting === cred.id}
+                  className="px-3 py-1.5 text-xs rounded-md border border-gray-200 text-gray-500 hover:border-gray-400 transition-colors disabled:opacity-50"
+                >
+                  {resetting === cred.id ? 'Resetting...' : 'Reset hourly'}
+                </button>
               </div>
 
               {hourlyExceeded && (
@@ -177,10 +227,11 @@ export function BudgetTab() {
         <p className="text-xs font-medium text-gray-700 mb-2">API endpoints</p>
         <div className="space-y-1">
           {[
-            { method: 'GET',  path: '/api/budget',       desc: 'Current utilisation for all credentials' },
-            { method: 'POST', path: '/api/budget/reset', desc: 'Reset hourly or daily counter for a credential' },
+            { method: 'GET',  path: '/api/budget',                        desc: 'Current utilisation for all credentials' },
+            { method: 'POST', path: '/api/budget',                        desc: 'Reset hourly or daily counter for a credential' },
+            { method: 'GET',  path: '/api/budget/:credentialId/history',  desc: 'Time-series hourly and daily data' },
           ].map((e) => (
-            <div key={e.path} className="flex items-start gap-2">
+            <div key={e.path + e.method} className="flex items-start gap-2">
               <span className="text-xs font-mono font-bold text-blue-600">{e.method}</span>
               <span className="text-xs font-mono text-gray-600">{e.path}</span>
               <span className="text-xs text-gray-400">{e.desc}</span>
