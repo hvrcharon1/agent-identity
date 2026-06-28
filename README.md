@@ -17,8 +17,8 @@
   <a href="https://github.com/hvrcharon1/agent-identity/actions/workflows/ci.yml">
     <img src="https://img.shields.io/github/actions/workflow/status/hvrcharon1/agent-identity/ci.yml?branch=main&style=flat-square&label=CI&color=black" alt="CI"/>
   </a>
-  <img src="https://img.shields.io/badge/version-0.11.0-black?style=flat-square" alt="Version"/>
-  <img src="https://img.shields.io/badge/packages-21%20(npm%20%2B%20PyPI)-black?style=flat-square" alt="Packages"/>
+  <img src="https://img.shields.io/badge/version-0.12.0-black?style=flat-square" alt="Version"/>
+  <img src="https://img.shields.io/badge/packages-22%20(npm%20%2B%20PyPI)-black?style=flat-square" alt="Packages"/>
   <img src="https://img.shields.io/badge/providers-OpenAI%20%7C%20Anthropic%20%7C%20Gemini%20%7C%20Mistral%20%7C%20Local-black?style=flat-square" alt="Supported providers"/>
   <img src="https://img.shields.io/badge/MCP-server%20%2B%20client-black?style=flat-square" alt="MCP support"/>
   <img src="https://img.shields.io/badge/stack-Next.js%20%2B%20TypeScript-black?style=flat-square" alt="Stack"/>
@@ -175,7 +175,7 @@ The same phase-aware model applies to any stateful multi-step workflow — not j
 | `ProviderAdapter` | All five built-in | Implement `ProviderAdapter` to add any provider |
 | `AttestationSigner` | `HmacAttestationSigner` | `AsymmetricAttestationSigner` (RS256/ES256), custom |
 | `ApprovalManager` | `MemoryApprovalStore` | Extend with any webhook/email/Slack integration |
-| `BudgetEnforcer` | `MemoryBudgetStore` | `LibSqlBudgetStore`, custom |
+| `BudgetEnforcer` | `MemoryBudgetStore` | `LibSqlBudgetStore`, `RedisBudgetStore`, custom |
 
 Any layer can be swapped without touching any other. Build a custom `CredentialStore` against your own secrets backend in under 50 lines — implement `findByRef`, `listActive`, `listByKind`, and optionally `reserve`/`release` for migration safety. The rest of the framework does not notice.
 
@@ -223,6 +223,7 @@ A provider-agnostic framework for AI agents that act on behalf of users and serv
 | `@datacules/agent-identity-store-dynamic` | `npm install @datacules/agent-identity-store-dynamic` | JIT credential provisioning — Vault dynamic secrets, AWS IAM Roles Anywhere, Azure Managed Identity (system-assigned + user-assigned via `AzureManagedIdentityProvisioner`) |
 | `@datacules/agent-identity-store-authmd` | `npm install @datacules/agent-identity-store-authmd` | auth.md registration CredentialStore — ID-JAG, verified-email, and anonymous OTP claim ceremony; inbound `logout+jwt` revocation |
 | `@datacules/agent-identity-store-libsql` | `npm install @datacules/agent-identity-store-libsql` | LibSQL (SQLite / Turso) persistence — `CredentialStore`, `ApprovalStore`, `BudgetStore`, `AuditLogger`; embedded SQLite or globally distributed Turso via one connection string |
+| `@datacules/agent-identity-store-redis` | `npm install @datacules/agent-identity-store-redis` | Redis `BudgetStore` — sliding-window hourly counters, concurrent session tracking, and daily spend aggregation using sorted sets |
 | `@datacules/agent-identity-express` | `npm install @datacules/agent-identity-express` | Express middleware |
 | `@datacules/agent-identity-fastify` | `npm install @datacules/agent-identity-fastify` | Fastify plugin |
 | `@datacules/agent-identity-langchain` | `npm install @datacules/agent-identity-langchain` | LangChain tool + LangGraph node |
@@ -450,7 +451,7 @@ if (!parsed.success) {
 const ctx = parsed.data; // fully typed AgentRequestContext
 ```
 
-Also usable for OpenAPI spec generation via `zod-to-json-schema` and Python Pydantic model generation.
+OpenAPI spec is auto-generated from these schemas — run `npm run generate:openapi` to regenerate `docs/openapi.yaml` (OpenAPI 3.1, 11 paths, 21 schemas). Also usable for Python Pydantic model generation.
 
 ---
 
@@ -872,6 +873,16 @@ const store = new AgentAuthMdStore({
 });
 const router = createRouterFromStore(store, rules, logger);
 
+// Redis — sliding-window budget enforcement with sorted sets
+// Sub-millisecond rate limiting for high-throughput credential resolution
+import { RedisBudgetStore } from '@datacules/agent-identity-store-redis';
+const budgetStore = new RedisBudgetStore({
+  host: 'redis.internal',
+  port: 6379,
+  keyPrefix: 'agent-id:budget:',
+});
+// Use with BudgetEnforcer or pass directly to createRouterFromStore options
+
 // Wire up inbound logout+jwt revocation at your revocation_uri endpoint
 import { RevocationHandler, RevocationListener } from '@datacules/agent-identity';
 const revocationHandler = new RevocationHandler({ store, jtiCacheTtl: 3600 });
@@ -1272,7 +1283,8 @@ agent-identity/
 │   │   ├── spiffe/                        # @datacules/agent-identity-store-spiffe
 │   │   ├── dynamic/                       # @datacules/agent-identity-store-dynamic (JIT provisioning)
 │   │   ├── authmd/                        # @datacules/agent-identity-store-authmd (auth.md / ID-JAG)
-│   │   └── libsql/                        # @datacules/agent-identity-store-libsql (SQLite / Turso)
+│   │   ├── libsql/                        # @datacules/agent-identity-store-libsql (SQLite / Turso)
+│   │   └── redis/                         # @datacules/agent-identity-store-redis (sliding-window budget)
 │   ├── integrations/
 │   │   ├── express/                       # @datacules/agent-identity-express
 │   │   ├── fastify/                       # @datacules/agent-identity-fastify
@@ -1287,12 +1299,14 @@ agent-identity/
 │   ├── cli/                               # @datacules/agent-identity-cli
 │   └── python-sdk/                        # pip install datacules-agent-identity
 ├── src/                               # Next.js 14 dashboard app (17 tabs)
+├── scripts/
+│   └── generate-openapi.ts           # Zod → OpenAPI 3.1 spec generator
 ├── assets/logo.svg                    # master brand mark
 ├── public/logo.svg                    # static copy served by Next.js at /logo.svg
-├── docs/openapi.yaml
+├── docs/openapi.yaml                  # Auto-generated from Zod schemas (11 paths, 21 schemas)
 ├── Dockerfile + docker-compose.yml
 └── .github/workflows/
-    ├── ci.yml                         # type-check, lint, test (Node + Python), build + smoke
+    ├── ci.yml                         # type-check, lint, test (Node 20+22 matrix + Python), build + smoke
     └── publish.yml                    # npm + PyPI publish on vX.Y.Z tag
 ```
 
@@ -1303,11 +1317,11 @@ agent-identity/
 The publish workflow fires automatically on a version tag push:
 
 ```bash
-git tag v0.11.0
-git push origin v0.11.0
+git tag v0.12.0
+git push origin v0.12.0
 ```
 
-This stamps all 21 workspace `package.json` versions from the tag (20 npm packages + 1 Python SDK), builds core ESM + CJS, publishes all `@datacules/*` packages to npm with provenance, and publishes the Python wheel to PyPI. A GitHub Release with auto-generated notes is created once both publish jobs succeed.
+This stamps all 22 workspace `package.json` versions from the tag (21 npm packages + 1 Python SDK), builds core ESM + CJS, publishes all `@datacules/*` packages to npm with provenance, and publishes the Python wheel to PyPI. A GitHub Release with auto-generated notes is created once both publish jobs succeed.
 
 See `.github/workflows/publish.yml` and `CONTRIBUTING.md` for setup instructions.
 
