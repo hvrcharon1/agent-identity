@@ -6,6 +6,96 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [0.13.0] — 2026-06-28
+
+### Added
+
+- **auth.md v0.6.0 full alignment** (`packages/stores/authmd`, `packages/core`)
+
+  Full alignment with [workos/auth.md v0.6.0](https://github.com/workos/auth.md) (merged 2026-06-10):
+
+  - **RFC 9728 discovery** — `discoverService()` now returns `DiscoveryResult` containing
+    `agentAuth`, `tokenEndpoint`, and `revocationEndpoint` instead of a bare `AgentAuthBlock`.
+  - **Field compat resolvers** — `resolveIdentityEndpoint()`, `resolveClaimEndpoint()`,
+    `resolveEventsEndpoint()` accept both v0.6.0 names (`identity_endpoint`, `claim_endpoint`,
+    `events_endpoint`) and legacy names (`register_uri`, `claim_uri`, `revocation_uri`).
+    Exported from `packages/stores/authmd`.
+  - **`requested_credential_type` removed** from all registration request bodies (id-jag,
+    service-auth, verified-email, anonymous).
+  - **JWT-bearer token exchange** (RFC 7523) — ID-JAG registration now returns an
+    `identity_assertion` JWT which is exchanged at `/oauth2/token` for an `access_token`.
+    New private `exchangeAssertion()` method handles this step.
+  - **401 `interaction_required`** — ID-JAG registration stores the RFC 8628-shaped ceremony
+    block (`user_code`, `verification_uri`, `expires_in`, `interval`) in pending state and
+    returns null; caller polls via new `pollClaimCeremony()`.
+  - **401 `login_required`** — signals stale `auth_time`; store returns null without setting
+    pending state.
+  - **`pollClaimCeremony(ref)`** — new public method; POSTs to `/oauth2/token` with
+    `grant_type=urn:workos:agent-auth:grant-type:claim`; handles `authorization_pending`
+    (return null), `expired_token` (throw), and success (return credential).
+  - **`getPendingCeremony(ref)`** — new public method; returns the RFC 8628 ceremony block
+    for rendering a QR code or user-code prompt in the calling UI.
+  - **`service_auth` top-level registration** — sends `{ type: 'service_auth', login_hint }`
+    per auth.md PR #15 (retained from v0.11.1 but now wired to `pollClaimCeremony()`).
+  - **`SeceventJwtVerifier`** — `RevocationListener` now accepts
+    `application/secevent+jwt` (RFC 8935) in addition to legacy `application/logout+jwt`;
+    returns 202 Accepted with no body on success per RFC 8935 §2.4; verifier type renamed
+    to `SecEventJwtVerifier` with `LogoutJwtVerifier` kept as a deprecated alias.
+  - **`Credential.identityAssertion`** — new optional field on the core `Credential` type
+    stores the service-signed assertion after token exchange.
+  - **`'service-auth'` in `AgentAuthMdMethodSchema`** — Zod schema now validates all four
+    method names.
+  - **New/updated types** — `CeremonyBlock`, `TokenResponse`, `TokenErrorResponse`,
+    `PendingClaimState` added to `packages/stores/authmd`; all exported from package barrel.
+
+- **Publish workflow: idempotent release creation** (`.github/workflows/publish.yml`)
+
+  `Create GitHub Release` step now checks `gh release view` before calling
+  `gh release create`, eliminating the HTTP 422 "tag_name already exists" failure that
+  occurred when the release was created manually before the workflow's `github-release` job ran.
+
+- **Publish workflow: Redis store** — `@datacules/agent-identity-store-redis` added to
+  version-stamp, LICENSE-copy, build, and publish steps (was omitted since v0.12.0).
+
+### Changed
+
+- `RevocationListener` response for successful SET delivery changed from `200 { status: 'ok' }`
+  to `202 Accepted` with no body, per RFC 8935 §2.4.
+
+---
+
+## [0.12.0] — 2026-06-28
+
+### Added
+
+- **Redis budget store** (`@datacules/agent-identity-store-redis`) — sliding-window hourly
+  counters, concurrent session tracking, and daily spend aggregation using Redis sorted sets.
+  Implements `BudgetStore`; drop-in replacement for `MemoryBudgetStore` in high-throughput
+  deployments.
+- **OpenAPI auto-generation** — `scripts/generate-openapi.ts` generates `docs/openapi.yaml`
+  from Zod schemas via zod-to-openapi v7 (11 paths, 21 schemas). Run `npm run generate:openapi`.
+- **API route unit tests** — 31 Vitest cases covering all `src/app/api/` routes: health,
+  resolve, approve, break-glass, budget, anomaly, attest.
+- **Node 22 CI matrix** — `ci.yml` now validates against both Node 20 and Node 22.
+- **App connector configs** — `.mcp.json`, `.cursor/mcp.json`, `.codex/config.toml`,
+  `.windsurf/mcp.json` for Claude Code, Cursor, Codex, and Windsurf.
+
+### Changed
+
+- **App-layer consolidation** — `src/lib/{decision,router,providers,types}.ts` replaced
+  with thin re-export barrels from `@datacules/agent-identity`, eliminating ~900 lines of
+  manually-synced duplicate code.
+- **`ApprovalTab` and `BudgetTab`** wired to real API endpoints with polling, loading
+  states, and graceful fallback (previously client-side-only with hardcoded seed data).
+- **OpenAPI spec** regenerated from Zod schemas (replaces hand-maintained version).
+
+### Fixed
+
+- Consumer-readiness fixes across all 20 packages (npm publish pipeline).
+- Vitest alias ordering for `@datacules/agent-identity/schemas` subpath resolution.
+
+---
+
 ## [0.11.1] — 2026-06-28
 
 ### Added

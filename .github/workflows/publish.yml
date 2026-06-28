@@ -1,10 +1,17 @@
 name: Publish
 
 # Fires on version tags: v1.0.0, v0.3.2, etc.
+# Also dispatchable manually to re-publish a specific tag (e.g. after a workflow fix).
 on:
   push:
     tags:
       - "v[0-9]+.[0-9]+.[0-9]+"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to publish (e.g. v0.13.0)"
+        required: true
+        type: string
 
 jobs:
   # ─── Publish all @datacules/* npm packages ────────────────────────────────────────────
@@ -16,6 +23,8 @@ jobs:
       id-token: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
 
       - uses: actions/setup-node@v4
         with:
@@ -24,7 +33,10 @@ jobs:
 
       - name: Extract version from tag
         id: tag
-        run: echo "VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+        run: |
+          TAG="${{ github.event.inputs.tag || github.ref_name }}"
+          echo "VERSION=${TAG#v}" >> "$GITHUB_OUTPUT"
+          echo "TAG_NAME=$TAG" >> "$GITHUB_OUTPUT"
 
       - name: Install workspace dependencies
         run: npm install --legacy-peer-deps
@@ -452,6 +464,8 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
 
       - uses: actions/setup-python@v5
         with:
@@ -459,7 +473,10 @@ jobs:
 
       - name: Extract version from tag
         id: tag
-        run: echo "VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+        run: |
+          TAG="${{ github.event.inputs.tag || github.ref_name }}"
+          echo "VERSION=${TAG#v}" >> "$GITHUB_OUTPUT"
+          echo "TAG_NAME=$TAG" >> "$GITHUB_OUTPUT"
 
       - name: Stamp version in pyproject.toml
         working-directory: packages/python-sdk
@@ -496,16 +513,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
           fetch-depth: 0
 
       - name: Create release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if gh release view "$GITHUB_REF_NAME" > /dev/null 2>&1; then
-            echo "Release $GITHUB_REF_NAME already exists — skipping creation"
+          TAG="${{ github.event.inputs.tag || github.ref_name }}"
+          if gh release view "$TAG" > /dev/null 2>&1; then
+            echo "Release $TAG already exists — skipping creation"
           else
-            gh release create "$GITHUB_REF_NAME" \
-              --title "$GITHUB_REF_NAME" \
+            gh release create "$TAG" \
+              --title "$TAG" \
               --generate-notes
           fi
