@@ -37,6 +37,9 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
+# Local dev workaround directory (npm 11 workspace hoisting bug)
+.vitest-tmp/
+
 # Python SDK build artifacts (packages/python-sdk)
 *.egg-info/
 __pycache__/

@@ -30,9 +30,9 @@ export default defineConfig({
       '@': path.resolve(__dirname, './src'),
       // Resolve workspace package imports to source during vitest runs
       // so tests don't require a prior `npm run build:packages`.
-      '@datacules/agent-identity':              path.resolve(__dirname, './packages/core/src/index.ts'),
       '@datacules/agent-identity/schemas':      path.resolve(__dirname, './packages/core/src/schemas.ts'),
       '@datacules/agent-identity/react':        path.resolve(__dirname, './packages/core/src/react/index.ts'),
+      '@datacules/agent-identity':              path.resolve(__dirname, './packages/core/src/index.ts'),
       // Audit package — hash-chain logging
       '@datacules/agent-identity-audit':        path.resolve(__dirname, './packages/audit/src/index.ts'),
       // Compliance package — ChainVerifier, ComplianceReportGenerator, MemoryReportStore
@@ -49,6 +49,8 @@ export default defineConfig({
       '@datacules/agent-identity-store-libsql': path.resolve(__dirname, './packages/stores/libsql/src/index.ts'),
       // Dynamic / JIT provisioner store — resolved to source
       '@datacules/agent-identity-store-dynamic': path.resolve(__dirname, './packages/stores/dynamic/src/index.ts'),
+      // Redis budget store — resolved to source
+      '@datacules/agent-identity-store-redis': path.resolve(__dirname, './packages/stores/redis/src/index.ts'),
       // Token exchange integration — resolved to source
       '@datacules/agent-identity-token-exchange': path.resolve(__dirname, './packages/integrations/token-exchange/src/index.ts'),
     },

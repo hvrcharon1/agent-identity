@@ -1,8 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 
-// ─── Types (mirrors packages/core/src/types.ts) ───────────────────────────────
+// ─── Types ───────────────────────────────────────────────────────────────────
 
 type ApprovalStatus = 'pending' | 'approved' | 'rejected' | 'timeout' | 'break_glass';
 
@@ -25,7 +25,7 @@ interface ApprovalRequest {
   expiresAt: string;
 }
 
-// ─── Seed data ────────────────────────────────────────────────────────────────
+// ─── Seed data (used as fallback when API returns empty) ─────────────────────
 
 const SEED_REQUESTS: ApprovalRequest[] = [
   {
@@ -114,23 +114,125 @@ export function ApprovalTab() {
   const [justification, setJustification] = useState('');
   const [breakGlassMode, setBreakGlassMode] = useState(false);
   const [filter, setFilter] = useState<'all' | 'pending' | 'resolved'>('pending');
+  const [loading, setLoading] = useState(false);
+
+  const pollRequest = useCallback(async (requestId: string) => {
+    try {
+      const res = await fetch(`/api/approve/${encodeURIComponent(requestId)}`);
+      if (!res.ok) return null;
+      const data = await res.json();
+      return data.request as ApprovalRequest;
+    } catch {
+      return null;
+    }
+  }, []);
+
+  useEffect(() => {
+    const pending = requests.filter((r) => r.status === 'pending');
+    if (pending.length === 0) return;
+
+    const interval = setInterval(async () => {
+      for (const req of pending) {
+        const updated = await pollRequest(req.requestId);
+        if (updated && updated.status !== 'pending') {
+          setRequests((prev) =>
+            prev.map((r) => (r.requestId === updated.requestId ? updated : r))
+          );
+        }
+      }
+    }, 5000);
+
+    return () => clearInterval(interval);
+  }, [requests, pollRequest]);
+
+  async function resolveRequest(requestId: string, action: 'approve' | 'reject', by = 'dashboard-user') {
+    setLoading(true);
+    try {
+      const res = await fetch('/api/approve', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          requestId,
+          action,
+          resolvedBy: by,
+          justification: justification || undefined,
+        }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setRequests((prev) =>
+          prev.map((r) => (r.requestId === requestId ? data.request : r))
+        );
+      } else {
+        setRequests((prev) =>
+          prev.map((r) =>
+            r.requestId === requestId
+              ? { ...r, status: action === 'approve' ? 'approved' : 'rejected', resolvedAt: new Date().toISOString(), resolvedBy: by, justification: justification || undefined }
+              : r
+          )
+        );
+      }
+    } catch {
+      setRequests((prev) =>
+        prev.map((r) =>
+          r.requestId === requestId
+            ? { ...r, status: action === 'approve' ? 'approved' : 'rejected', resolvedAt: new Date().toISOString(), resolvedBy: by, justification: justification || undefined }
+            : r
+        )
+      );
+    } finally {
+      setSelected(null);
+      setJustification('');
+      setBreakGlassMode(false);
+      setLoading(false);
+    }
+  }
+
+  async function breakGlassOverride(requestId: string) {
+    setLoading(true);
+    try {
+      const res = await fetch('/api/approve/break-glass', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          requestId,
+          operator: 'break-glass-operator',
+          justification: justification || 'Emergency break-glass override',
+        }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setRequests((prev) =>
+          prev.map((r) => (r.requestId === requestId ? data.request : r))
+        );
+      } else {
+        setRequests((prev) =>
+          prev.map((r) =>
+            r.requestId === requestId
+              ? { ...r, status: 'break_glass' as ApprovalStatus, resolvedAt: new Date().toISOString(), resolvedBy: 'break-glass-operator', justification: justification || 'Emergency break-glass override' }
+              : r
+          )
+        );
+      }
+    } catch {
+      setRequests((prev) =>
+        prev.map((r) =>
+          r.requestId === requestId
+            ? { ...r, status: 'break_glass' as ApprovalStatus, resolvedAt: new Date().toISOString(), resolvedBy: 'break-glass-operator', justification: justification || 'Emergency break-glass override' }
+            : r
+        )
+      );
+    } finally {
+      setSelected(null);
+      setJustification('');
+      setBreakGlassMode(false);
+      setLoading(false);
+    }
+  }
 
   const pending  = requests.filter((r) => r.status === 'pending');
   const resolved = requests.filter((r) => r.status !== 'pending');
   const visible  = filter === 'all' ? requests : filter === 'pending' ? pending : resolved;
-
-  function resolveRequest(requestId: string, status: ApprovalStatus, by = 'dashboard-user') {
-    setRequests((prev) =>
-      prev.map((r) =>
-        r.requestId === requestId
-          ? { ...r, status, resolvedAt: new Date().toISOString(), resolvedBy: by, justification: justification || undefined }
-          : r
-      )
-    );
-    setSelected(null);
-    setJustification('');
-    setBreakGlassMode(false);
-  }
 
   return (
     <div className="space-y-6">
@@ -196,7 +298,7 @@ export function ApprovalTab() {
                 </p>
                 <p className="text-xs text-gray-400 mt-0.5">
                   Credential: <span className="font-mono">{req.credentialId}</span>
-                  {' \u00b7 '}Rule: <span className="font-mono">{req.ruleId}</span>
+                  {' · '}Rule: <span className="font-mono">{req.ruleId}</span>
                 </p>
               </div>
               <div className="text-right shrink-0">
@@ -220,8 +322,8 @@ export function ApprovalTab() {
                   />
                 </div>
                 <div className="flex gap-2 flex-wrap">
-                  <button onClick={() => resolveRequest(req.requestId, 'approved')} className="px-3 py-1.5 bg-green-600 text-white text-xs rounded-md hover:bg-green-700 transition-colors">Approve</button>
-                  <button onClick={() => resolveRequest(req.requestId, 'rejected')} className="px-3 py-1.5 bg-red-600 text-white text-xs rounded-md hover:bg-red-700 transition-colors">Reject</button>
+                  <button disabled={loading} onClick={() => resolveRequest(req.requestId, 'approve')} className="px-3 py-1.5 bg-green-600 text-white text-xs rounded-md hover:bg-green-700 transition-colors disabled:opacity-50">Approve</button>
+                  <button disabled={loading} onClick={() => resolveRequest(req.requestId, 'reject')} className="px-3 py-1.5 bg-red-600 text-white text-xs rounded-md hover:bg-red-700 transition-colors disabled:opacity-50">Reject</button>
                   <button
                     onClick={() => setBreakGlassMode((v) => !v)}
                     className={`px-3 py-1.5 text-xs rounded-md border transition-colors ${
@@ -235,7 +337,7 @@ export function ApprovalTab() {
                   <div className="bg-purple-50 border border-purple-200 rounded-md p-3 space-y-2">
                     <p className="text-xs text-purple-700 font-medium">Break-glass override</p>
                     <p className="text-xs text-purple-600">Bypasses normal approval flow. This action is logged as a non-deletable audit entry and will appear in compliance reports.</p>
-                    <button onClick={() => resolveRequest(req.requestId, 'break_glass', 'break-glass-operator')} className="px-3 py-1.5 bg-purple-600 text-white text-xs rounded-md hover:bg-purple-700 transition-colors">Confirm break-glass override</button>
+                    <button disabled={loading} onClick={() => breakGlassOverride(req.requestId)} className="px-3 py-1.5 bg-purple-600 text-white text-xs rounded-md hover:bg-purple-700 transition-colors disabled:opacity-50">Confirm break-glass override</button>
                   </div>
                 )}
               </div>
@@ -260,6 +362,7 @@ export function ApprovalTab() {
           {[
             { method: 'POST', path: '/api/approve',             desc: 'Approve or reject a pending request' },
             { method: 'POST', path: '/api/approve/break-glass', desc: 'Emergency override — non-deletable audit entry' },
+            { method: 'GET',  path: '/api/approve/:requestId',  desc: 'Poll approval status by request ID' },
           ].map((e) => (
             <div key={e.path} className="flex items-start gap-2">
               <span className="text-xs font-mono font-bold text-blue-600">{e.method}</span>

@@ -1,0 +1,50 @@
+{
+  "name": "@datacules/agent-identity-store-redis",
+  "version": "0.11.0",
+  "private": false,
+  "description": "Redis budget store for @datacules/agent-identity — sliding-window counters for high-frequency multi-replica deployments",
+  "author": "Datacules LLC <hello@datacules.com>",
+  "license": "SEE LICENSE IN LICENSE",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/hvrcharon1/agent-identity.git",
+    "directory": "packages/stores/redis"
+  },
+  "main": "./dist/cjs/index.js",
+  "module": "./dist/esm/index.js",
+  "types": "./dist/types/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/esm/index.js",
+      "require": "./dist/cjs/index.js",
+      "types": "./dist/types/index.d.ts"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json && tsc -p tsconfig.cjs.json",
+    "type-check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "ioredis": "^5.4.0"
+  },
+  "peerDependencies": {
+    "@datacules/agent-identity": "^0.11.0"
+  },
+  "devDependencies": {
+    "@datacules/agent-identity": "*",
+    "typescript": "^5"
+  },
+  "keywords": [
+    "agent-identity",
+    "redis",
+    "budget-store",
+    "rate-limiting",
+    "sliding-window",
+    "ai-agents"
+  ]
+}
