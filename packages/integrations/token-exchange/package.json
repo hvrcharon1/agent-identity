@@ -34,7 +34,7 @@
     "@datacules/agent-identity": "*",
     "@types/node": "^20",
     "typescript": "^5",
-    "vitest": "^1.6.0"
+    "vitest": "^4.1.10"
   },
   "peerDependencies": {
     "@datacules/agent-identity": "^0.11.0"
