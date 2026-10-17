@@ -49,7 +49,7 @@
   "devDependencies": {
     "@datacules/agent-identity": "*",
     "@datacules/agent-identity-compliance": "*",
-    "tsup": "^8.0.0",
+    "tsup": "^9.0.0",
     "typescript": "^5"
   },
   "engines": {
